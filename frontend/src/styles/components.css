@@ -1,0 +1,314 @@
+/*
+  Component layer.
+
+  Form anatomy, table anatomy and the state treatments from the design handoff.
+  The state treatments are the substance of the system — each is
+  non-negotiable and each has a visible consequence.
+*/
+
+/* ------------------------------------------------------------------------ */
+/* Buttons — outlined, never filled                                          */
+/* ------------------------------------------------------------------------ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--input-height);
+  padding: 6px 14px;
+  border-radius: var(--radius-input);
+  border: 1px solid var(--divider);
+  background: transparent;
+  color: var(--ink-85);
+  font-size: var(--size-body);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--input-border-hover);
+  color: var(--ink);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  border-color: var(--accent);
+  color: var(--accent-light);
+}
+
+.btn--primary:hover:not(:disabled) {
+  border-color: var(--accent-light);
+  color: var(--accent-light);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Form anatomy                                                              */
+/* ------------------------------------------------------------------------ */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field__label {
+  font-size: 12px;
+  color: var(--ink-70);
+}
+
+.input {
+  min-height: var(--input-height);
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-input);
+  color: var(--ink);
+  font-family: var(--face-ui);
+  font-size: var(--size-body);
+  transition: border-color 120ms ease;
+}
+
+.input:hover {
+  border-color: var(--input-border-hover);
+}
+
+.input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* Field-level error: the border turns Breach and the message sits directly
+   beneath, prefixed with a glyph so it reads without colour. */
+.input--error {
+  border-color: var(--breach);
+}
+
+.field__error {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: var(--size-secondary);
+  color: var(--breach);
+}
+
+.field__error::before {
+  content: '\25B2';
+  font-size: 9px;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Warning vs error — structurally different, not differently worded         */
+/* ------------------------------------------------------------------------ */
+
+/* Advisories are advisory. They sit beside the thing they concern, keep every
+   action live, and never block. Dashed border, because a dashed border is not
+   a wall. */
+.advisory {
+  border: 1px dashed var(--carry);
+  border-radius: var(--radius-advisory);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.advisory__label {
+  font-size: var(--size-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--carry);
+}
+
+.advisory__body {
+  font-size: var(--size-body);
+  color: var(--ink-85);
+}
+
+/* Errors block, and say that nothing was saved. Solid bar, solid fill. */
+.error-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--breach);
+  background: var(--breach-wash);
+  border-radius: 0 var(--radius-advisory) var(--radius-advisory) 0;
+}
+
+.error-banner__label {
+  font-size: var(--size-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--breach);
+}
+
+.error-banner__body {
+  font-size: var(--size-body);
+  color: var(--ink-85);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Month completeness — four states, not two                                 */
+/* ------------------------------------------------------------------------ */
+
+/* An 11px square carries the state, so it reads without colour. */
+.glyph {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  border-radius: 2px;
+}
+
+.glyph--complete {
+  background: var(--ink);
+}
+
+.glyph--incomplete {
+  background: linear-gradient(90deg, var(--carry) 50%, transparent 50%);
+  border: 1px solid var(--carry);
+}
+
+.glyph--missing {
+  border: 1px solid var(--breach);
+}
+
+.glyph--outside {
+  border: 1px dashed var(--ink-30);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Money                                                                     */
+/* ------------------------------------------------------------------------ */
+
+/* Money never appears as a bare number. The currency code is inseparable from
+   the amount — one size down, 50% ink, immediately after the figure. */
+.money {
+  font-family: var(--face-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.money__code {
+  margin-left: 5px;
+  font-size: 0.82em;
+  color: var(--ink-55);
+}
+
+/* Semantic, and always accompanied by a sign or a word. */
+.money--rise {
+  color: var(--rise);
+}
+
+.money--breach {
+  color: var(--breach);
+}
+
+/* A stale figure is one carried forward because none was entered. It must
+   never be mistaken for a figure the user typed. */
+.stale {
+  color: var(--ink-45);
+  border-bottom: 1px dotted var(--carry);
+}
+
+.stale::after {
+  content: 'c';
+  vertical-align: super;
+  font-size: 0.66em;
+  color: var(--carry);
+  margin-left: 2px;
+}
+
+/* Rate provenance — three values, visible on every rate. `exact` is unmarked:
+   the common case earns no ink. */
+.provenance--triangulated::after {
+  content: 't';
+  vertical-align: super;
+  font-size: 0.66em;
+  color: var(--accent-light);
+  margin-left: 2px;
+}
+
+.provenance--carried::after {
+  content: 'c';
+  vertical-align: super;
+  font-size: 0.66em;
+  color: var(--carry);
+  margin-left: 2px;
+}
+
+/* Where no rate exists on any date, the account is excluded from the
+   translated total and never shown as zero. */
+.excluded {
+  color: var(--breach);
+  font-size: var(--size-secondary);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Table anatomy                                                             */
+/* ------------------------------------------------------------------------ */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  font-size: var(--size-col);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--track-col);
+  color: var(--ink-60);
+  text-align: left;
+  padding: var(--cell-pad);
+  border-bottom: 1px solid var(--row-rule);
+}
+
+.table td {
+  font-size: var(--size-cell);
+  padding: var(--cell-pad);
+  height: var(--row-height);
+  border-bottom: 1px solid var(--row-rule);
+}
+
+.table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.table .numeric {
+  text-align: right;
+  font-family: var(--face-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.table .secondary {
+  color: var(--ink-55);
+  font-size: var(--size-secondary);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Panels                                                                    */
+/* ------------------------------------------------------------------------ */
+
+.panel {
+  padding: var(--panel-pad);
+  border-radius: var(--radius-panel);
+}
+
+.panel__heading {
+  font-family: var(--face-display);
+  font-size: var(--size-panel);
+  margin-bottom: 12px;
+}
+
+.label {
+  font-size: var(--size-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--ink-55);
+}

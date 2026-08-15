@@ -1,0 +1,2039 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/nocturne-b6fbd6c8-5954-451a-80d0-710a5cdc7e85/styles.css">
+<script src="_ds/nocturne-b6fbd6c8-5954-451a-80d0-710a5cdc7e85/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Domine:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{--sig-carry:#c9a15e;--sig-breach:#d1756a;--sig-rise:#6fae90;--num:"IBM Plex Mono",ui-monospace,monospace;--disp:"Domine",Georgia,serif;--mark:"Instrument Serif",Georgia,serif}
+body{margin:0;background:#0f111c;color:#e9e9ed;font-family:Inter,system-ui,sans-serif}
+a{color:#9184d9}a:hover{color:#b5abfc}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(233,233,237,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}
+.dv-tid{font:600 10px var(--num);padding:3px 7px;background:#9184d9;color:#161826;border-radius:4px;text-decoration:none}
+.dv-tname{font:400 13px/1.2 Inter,sans-serif;color:#e9e9ed}
+.dv-opts{display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:500 10.5px var(--num);padding:3px 7px;background:rgba(233,233,237,.1);color:#e9e9ed;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 Inter,sans-serif;color:rgba(233,233,237,.55)}
+.dv-card{background:#161826;border:1px solid rgba(233,233,237,.1);border-radius:10px;box-shadow:0 18px 44px rgba(0,0,0,.5);overflow:hidden;position:relative}
+.dv-opt:target .dv-oid{background:#9184d9;color:#161826}
+.dv-next{margin:22px 0 0;font:12px/1.5 Inter,sans-serif;color:rgba(233,233,237,.5)}
+</style></helmet>
+
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">The ten screens on the ledger spine from <a class="dv-oid" href="#1a">1a</a> — spine right, latest month at top</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">01</a>Dashboard — rail shown in its hover-expanded state</div>
+<div class="dv-card" data-screen-label="01 Dashboard" style="width:1440px">
+<div style="display:flex;min-height:900px">
+<div style="width:208px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 10px;display:flex;flex-direction:column;gap:2px">
+<div style="font-family:var(--mark);font-size:22px;line-height:1;color:#9184d9;margin:0 8px 14px">Financial Hub</div>
+<sc-for list="{{ nav.dash }}" as="n" hint-placeholder-count="8">
+<div style="display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:6px;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+<span style="font:13px Inter;flex:1;color:{{ n.labelColor }}">{{ n.label }}</span>
+<span style="font-family:var(--num);font-size:10px;padding:1px 6px;border-radius:9px;background:{{ n.badgeBg }};color:{{ n.badgeColor }}">{{ n.badge }}</span>
+</div>
+</sc-for>
+<div style="height:1px;background:rgba(233,233,237,.12);margin:10px 8px"></div>
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.3);padding:0 8px 4px">States</div>
+<sc-for list="{{ stateNav }}" as="s" hint-placeholder-count="5">
+<div style="display:flex;align-items:center;gap:10px;height:26px;padding:0 8px;font:12px Inter;color:rgba(233,233,237,.45)"><span style="width:5px;height:5px;border-radius:50%;background:rgba(233,233,237,.28)"></span>{{ s }}</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Dashboard</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Obeys the reporting currency. Fixed to the current month — the date range does not apply here.</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Reporting</span><div class="seg"><label class="seg-opt"><input type="radio" name="rc1" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rc1"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rc1"><span>MYR</span></label></div></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="padding:20px 28px 28px;display:flex;flex-direction:column;gap:20px">
+
+<div style="display:flex;gap:28px;align-items:flex-start">
+<div style="width:330px;flex:none">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Net worth · 31 Aug 2026</div>
+<div style="font-family:var(--num);font-size:31px;line-height:1.1;letter-spacing:-.01em">{{ nwTotal }} <span style="font-size:15px;color:rgba(233,233,237,.5)">USD</span></div>
+<div style="display:flex;gap:14px;margin-top:8px;font-family:var(--num);font-size:13px">
+<span style="color:#6fae90">{{ nwChg }} USD</span><span style="color:#6fae90">{{ nwPct }}</span><span style="color:rgba(233,233,237,.4)">vs July {{ nwPrior }}</span>
+</div>
+<div style="margin-top:12px;padding:9px 11px;border-radius:8px;background:rgba(201,161,94,.09);font:11.5px/1.45 Inter;color:rgba(233,233,237,.75)">
+Rates as at <span style="font-family:var(--num)">24 Aug 2026</span> — oldest contributing. <a href="#2n" style="color:#b5abfc">Per-currency detail</a>
+</div>
+<div style="margin-top:8px;font:11.5px/1.45 Inter;color:#d1756a">Excludes 1 account — no USD/SGD rate exists. Standard Chartered SG holds 12,300.00 SGD; it is not counted and not zeroed.</div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;justify-content:space-between;font:11px Inter;color:rgba(233,233,237,.4);margin-bottom:6px"><span>Sep 2024</span><span>24 months</span><span>Aug 2026</span></div>
+<svg viewBox="0 0 1000 120" preserveAspectRatio="none" style="width:100%;height:132px;display:block">
+<polyline points="{{ nwPoints }}" fill="none" stroke="#9184d9" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="height:1px;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 48px,rgba(233,233,237,.16) calc(100% - 48px),transparent)"></div>
+</div>
+</div>
+
+<div style="border:1px solid rgba(201,161,94,.35);border-radius:10px;padding:16px 18px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+<div style="font-family:var(--disp);font-size:19px">Outstanding tasks · August 2026</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5)">Everything blocking a complete close, and where to fix it</div>
+</div>
+<sc-for list="{{ tasks }}" as="t" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid rgba(233,233,237,.07)">
+<span style="width:26px;text-align:right;font-family:var(--num);font-size:15px;color:{{ t.tone }}">{{ t.n }}</span>
+<span style="flex:1;font:13px Inter;color:rgba(233,233,237,.85)">{{ t.t }}</span>
+<a href="#2b" style="font:12px Inter;color:#b5abfc;text-decoration:none">{{ t.to }} →</a>
+</div>
+</sc-for>
+</div>
+
+<div style="display:flex;gap:24px;align-items:flex-start">
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:6px">Cash flow · August 2026</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.45);margin-bottom:6px">A parallel ledger. These figures do not affect any account balance.</div>
+<table class="table">
+<thead><tr><th>Currency</th><th style="text-align:right">Income</th><th style="text-align:right">Expense</th><th style="text-align:right">Net</th></tr></thead>
+<tbody>
+<sc-for list="{{ cashRows }}" as="c" hint-placeholder-count="3">
+<tr><td style="font-family:var(--num);font-size:12px">{{ c.cur }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ c.inc }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ c.exp }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ c.color }}">{{ c.net }}</td></tr>
+</sc-for>
+</tbody></table>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:6px">Investments</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.45);margin-bottom:6px">Cost basis only. Stated per currency and never combined.</div>
+<table class="table">
+<thead><tr><th>Currency</th><th style="text-align:right">Holdings</th><th style="text-align:right">Cost basis</th><th style="text-align:right">Realised 2026</th></tr></thead>
+<tbody>
+<tr><td style="font-family:var(--num);font-size:12px">USD</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">2</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">59,900.00</td><td style="text-align:right;font-family:var(--num);font-size:12.5px;color:#6fae90">+3,012.60</td></tr>
+<tr><td style="font-family:var(--num);font-size:12px">AUD</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">2</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">61,275.80</td><td style="text-align:right;font-family:var(--num);font-size:12.5px;color:#d1756a">−579.50</td></tr>
+<tr><td style="font-family:var(--num);font-size:12px">MYR</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">1</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">92,600.00</td><td style="text-align:right;font-family:var(--num);font-size:12.5px;color:rgba(233,233,237,.4)">—</td></tr>
+</tbody></table>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;gap:16px;padding:11px 14px;border-radius:8px;background:#232532">
+<span style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5)">Backup</span>
+<span style="width:8px;height:8px;border-radius:50%;background:#6fae90"></span>
+<span style="font:12.5px Inter">Last written <span style="font-family:var(--num)">31 Aug 2026</span> · 04:12</span>
+<span style="font:12px Inter;color:rgba(233,233,237,.5);font-family:var(--num)">/Volumes/Archive/financial-hub/</span>
+<span style="flex:1"></span>
+<a href="#2j" style="font:12px Inter;color:#b5abfc;text-decoration:none">Settings →</a>
+</div>
+
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">02</a>Month Close — the inputs work: type, tab, blur to save</div>
+<div class="dv-card" data-screen-label="02 Month Close" style="width:1440px">
+<div style="display:flex;min-height:900px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.close }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Month Close · August 2026</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Entry is in each account's own currency. Neither the reporting currency nor the date range applies to this screen.</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Reporting</span><div class="seg" style="opacity:.4"><label class="seg-opt"><input type="radio" name="rc2" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rc2"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rc2"><span>MYR</span></label></div></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:10px 28px;background:rgba(201,161,94,.07);border-bottom:1px solid rgba(233,233,237,.08)">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px solid var(--sig-carry);background:linear-gradient(90deg,var(--sig-carry) 50%,transparent 50%)"></span>
+<span style="font:500 12px Inter;color:var(--sig-carry)">Incomplete</span>
+<span style="font-family:var(--num);font-size:12px;color:rgba(233,233,237,.7)">{{ doneF }} of 20 balances · 3 of 4 rates</span>
+<span style="font:11.5px Inter;color:rgba(233,233,237,.5);flex:1">Remaining: {{ remainF }}. A partly closed month is a legitimate state.</span>
+<span style="font:11px Inter;color:rgba(233,233,237,.45)">Autosaves on blur. There is no save button.</span>
+</div>
+{{ ratesFinal }}
+<div style="padding:6px 28px 30px">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:16px 0 8px">2 · Balances as at 31 August 2026</div>
+<table class="table" style="font-size:13px">
+<thead><tr><th style="width:26px"></th><th>Account</th><th style="width:132px">Type</th><th style="width:52px">Cur</th><th style="text-align:right;width:160px">July 2026</th><th style="text-align:right;width:180px">August 2026</th><th style="width:74px"></th></tr></thead>
+<tbody>
+<sc-for list="{{ rowsF }}" as="r" hint-placeholder-count="20">
+<tr>
+<td style="color:rgba(233,233,237,.3);font-family:var(--num);font-size:10px">{{ r.n }}</td>
+<td style="font-size:13px">{{ r.name }}</td>
+<td style="font-size:11.5px;color:rgba(233,233,237,.55)">{{ r.type }}</td>
+<td style="font-family:var(--num);font-size:11px;color:rgba(233,233,237,.55)">{{ r.cur }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.priorColor }}">{{ r.prior }}<sup style="font-size:9px;color:var(--sig-carry);margin-left:2px">{{ r.mark }}</sup></td>
+<td style="text-align:right;padding:2px 8px"><input class="input" value="{{ r.val }}" onChange="{{ r.onChange }}" onBlur="{{ r.onBlur }}" style="text-align:right;font-family:var(--num);font-size:12.5px;min-height:28px;padding:3px 8px;background:{{ r.inputBg }};border-color:{{ r.inputBorder }}"></td>
+<td style="font:10.5px Inter;color:{{ r.savedColor }}">{{ r.savedLabel }}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+<div style="margin-top:14px;font:11.5px Inter;color:rgba(233,233,237,.45)">Liabilities are entered as positive figures. The system applies the sign — the four liability accounts above reduce net worth by 2,038.90 USD, 351,900.00 USD and 12,970.00 USD in the translated total.</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2c">
+<div class="dv-olabel"><a class="dv-oid" href="#2c">03</a>Net worth trend — slice toggles are the whole interaction; there is no drill-down</div>
+<div class="dv-card" data-screen-label="03 Net worth" style="width:1440px">
+<div style="display:flex;min-height:900px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.trend }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Net worth</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Obeys both the reporting currency and the date range. Both are in the URL — this view is bookmarkable.</div>
+</div>
+<div style="display:flex;align-items:flex-end;gap:10px">
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Range</span><div class="seg"><label class="seg-opt"><input type="radio" name="dr" ><span>12m</span></label><label class="seg-opt"><input type="radio" name="dr" checked><span>24m</span></label><label class="seg-opt"><input type="radio" name="dr"><span>All</span></label><label class="seg-opt"><input type="radio" name="dr"><span>Sep 24 – Aug 26</span></label></div></div>
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Reporting</span><div class="seg"><label class="seg-opt"><input type="radio" name="rc3" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rc3"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rc3"><span>MYR</span></label></div></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="padding:18px 28px 28px">
+<div style="display:flex;align-items:flex-end;gap:34px;margin-bottom:14px">
+<div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:6px">Total · 31 Aug 2026</div>
+<div style="font-family:var(--num);font-size:29px;line-height:1">{{ nwTotal }} <span style="font-size:14px;color:rgba(233,233,237,.5)">USD</span></div>
+</div>
+<div style="font-family:var(--num);font-size:13px;padding-bottom:4px"><span style="color:#6fae90">{{ nwChg }} USD · {{ nwPct }}</span> <span style="color:rgba(233,233,237,.4)">month on month</span></div>
+<div style="flex:1"></div>
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Slice</span>
+<div class="seg"><label class="seg-opt"><input type="radio" name="sl" checked><span>Account type</span></label><label class="seg-opt"><input type="radio" name="sl"><span>Liquidity tier</span></label><label class="seg-opt"><input type="radio" name="sl"><span>Currency</span></label><label class="seg-opt"><input type="radio" name="sl"><span>Account</span></label></div></div>
+</div>
+<svg viewBox="0 0 1000 120" preserveAspectRatio="none" style="width:100%;height:190px;display:block">
+<polyline points="{{ nwPoints }}" fill="none" stroke="#9184d9" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="height:1px;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 48px,rgba(233,233,237,.16) calc(100% - 48px),transparent)"></div>
+<div style="display:flex;justify-content:space-between;font:11px Inter;color:rgba(233,233,237,.4);margin:6px 0 22px"><span>Sep 2024</span><span>Aug 2025</span><span>Aug 2026</span></div>
+<div style="display:flex;gap:34px;align-items:flex-start">
+<div style="flex:1.15;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:6px">Sliced by account type · 31 Aug 2026</div>
+<table class="table">
+<thead><tr><th>Account type</th><th style="width:80px">Side</th><th style="text-align:right;width:170px">Value (USD)</th></tr></thead>
+<tbody>
+<sc-for list="{{ typeSlice }}" as="t" hint-placeholder-count="9">
+<tr><td style="font-size:13px">{{ t.name }}</td><td style="font:11.5px Inter;color:rgba(233,233,237,.45)">{{ t.kind }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ t.color }}">{{ t.v }}</td></tr>
+</sc-for>
+<tr><td style="font:500 13px Inter">Net worth</td><td></td><td style="text-align:right;font-family:var(--num);font-size:13.5px">{{ nwTotal }}</td></tr>
+</tbody></table>
+<div style="margin-top:8px;font:11.5px/1.45 Inter;color:#d1756a">Excludes Standard Chartered SG — no USD/SGD rate exists. Its 12,300.00 SGD is held, not zeroed.</div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:6px">Month on month</div>
+<table class="table">
+<thead><tr><th>Month</th><th style="text-align:right">Net worth</th><th style="text-align:right">Change</th><th style="text-align:right;width:74px">%</th></tr></thead>
+<tbody>
+<sc-for list="{{ nwRows }}" as="r" hint-placeholder-count="12">
+<tr><td style="font-family:var(--num);font-size:12px">{{ r.m }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ r.total }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.color }}">{{ r.chg }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.color }}">{{ r.pct }}</td></tr>
+</sc-for>
+</tbody></table>
+</div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2d">
+<div class="dv-olabel"><a class="dv-oid" href="#2d">04</a>Account detail — opened from a name in <a class="dv-oid" href="#2e">05</a>; the driving question answered in the first line</div>
+<div class="dv-card" data-screen-label="04 Account detail" style="width:1440px">
+<div style="display:flex;min-height:840px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.acct }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font:11px Inter;color:rgba(233,233,237,.4);margin-bottom:6px"><a href="#2e" style="color:#b5abfc;text-decoration:none">Accounts</a> <span style="color:rgba(233,233,237,.3)">/</span> CBA NetBank Saver</div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">CBA NetBank Saver</div>
+<div style="display:flex;gap:8px;margin-top:8px">
+<span class="tag tag-neutral">Savings/Deposit</span><span class="tag tag-neutral">Short</span><span class="tag tag-outline">Open</span><span class="tag tag-neutral">AUD</span><span style="font:11.5px Inter;color:rgba(233,233,237,.45);align-self:center">Opened 04 Feb 2016</span>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Reporting</span><div class="seg" style="opacity:.4"><label class="seg-opt"><input type="radio" name="rc4" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rc4"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rc4"><span>MYR</span></label></div></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="padding:20px 28px 28px">
+<div style="display:flex;gap:34px;align-items:flex-start">
+<div style="width:330px;flex:none">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">Balance · 31 Aug 2026</div>
+<div style="font-family:var(--num);font-size:31px;line-height:1.05">27,380.00 <span style="font-size:15px;color:rgba(233,233,237,.5)">AUD</span></div>
+<div style="margin-top:10px;font:14px/1.5 Inter">Increasing. <span style="color:rgba(233,233,237,.6)">Up in ten of the last twelve months.</span></div>
+<div style="display:flex;flex-direction:column;gap:5px;margin-top:12px;font-family:var(--num);font-size:12.5px">
+<div style="display:flex;justify-content:space-between"><span style="font:11.5px Inter;color:rgba(233,233,237,.5)">Month on month</span><span style="color:#6fae90">+440.00 AUD · +1.63%</span></div>
+<div style="display:flex;justify-content:space-between"><span style="font:11.5px Inter;color:rgba(233,233,237,.5)">Twelve months</span><span style="color:#6fae90">+6,490.00 AUD · +31.07%</span></div>
+<div style="display:flex;justify-content:space-between"><span style="font:11.5px Inter;color:rgba(233,233,237,.5)">Stale months in range</span><span style="color:#c9a15e">2</span></div>
+</div>
+<div style="margin-top:14px;font:11.5px/1.45 Inter;color:rgba(233,233,237,.45)">Shown in AUD, the account's own currency. The reporting-currency control does not apply here. Balances are entered snapshots; the system cannot say why a balance moved.</div>
+</div>
+<div style="flex:1;min-width:0">
+<svg viewBox="0 0 620 120" preserveAspectRatio="none" style="width:100%;height:150px;display:block">
+<polyline points="{{ acctPoints }}" fill="none" stroke="#9184d9" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="height:1px;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 48px,rgba(233,233,237,.16) calc(100% - 48px),transparent)"></div>
+<div style="display:flex;justify-content:space-between;font:11px Inter;color:rgba(233,233,237,.4);margin-top:6px"><span>Sep 2025</span><span>Aug 2026</span></div>
+<table class="table" style="margin-top:16px">
+<thead><tr><th>Month</th><th style="text-align:right">Balance (AUD)</th><th style="text-align:right">Change</th><th style="text-align:right;width:74px">%</th><th style="width:120px">Source</th></tr></thead>
+<tbody>
+<sc-for list="{{ acctRows }}" as="r" hint-placeholder-count="12">
+<tr><td style="font-family:var(--num);font-size:12px">{{ r.m }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ r.bal }}<sup style="font-size:9px;color:{{ r.staleColor }};margin-left:2px">{{ r.stale }}</sup></td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.color }}">{{ r.chg }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.color }}">{{ r.pct }}</td>
+<td style="font:11px Inter;color:{{ r.staleColor }}">{{ r.stale }}</td></tr>
+</sc-for>
+</tbody></table>
+</div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<div class="dv-opt" id="2e">
+<div class="dv-olabel"><a class="dv-oid" href="#2e">05</a>Accounts — its own tab. Close is the action; Delete appears only where no balance exists</div>
+<div class="dv-card" data-screen-label="05 Accounts" style="width:1440px">
+<div style="display:flex;min-height:880px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.admin }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Accounts</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Neither view control applies here. Twenty accounts, nine types, no grouping above them. An account name opens its detail; everything is managed from this table.</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px"><button class="btn btn-secondary" style="font-size:12px">Export CSV</button><button class="btn btn-primary" style="font-size:12px">New account</button></div>
+</div>
+<div style="padding:16px 28px 28px">
+<div style="border:1px solid rgba(201,161,94,.35);border-radius:10px;padding:13px 15px;margin-bottom:16px">
+<div style="font:500 10px Inter;letter-spacing:.08em;text-transform:uppercase;color:#c9a15e;margin-bottom:4px">Advisory · historic restatement</div>
+<div style="font:12.5px/1.5 Inter;color:rgba(233,233,237,.8)">Changing <span style="font-family:var(--num)">Gold bullion</span> from Physical Asset to Investment/Brokerage restates every month back to Oct 2021. Twenty-three months of the by-type slice will change. Nothing is blocked; the change saves either way.</div>
+<div style="display:flex;gap:8px;margin-top:9px"><button class="btn btn-secondary" style="font-size:11px;padding:3px 9px">Reclassify and restate</button><button class="btn btn-ghost" style="font-size:11px">Leave as Physical Asset</button></div>
+</div>
+<table class="table">
+<thead><tr><th>Account</th><th style="width:150px">Type</th><th style="width:88px">Liquidity</th><th style="width:78px">Status</th><th style="width:96px">Currency</th><th style="width:110px">Opened</th><th style="width:100px">Closed</th><th style="width:150px">Actions</th></tr></thead>
+<tbody>
+<sc-for list="{{ accountRows }}" as="a" hint-placeholder-count="20">
+<tr>
+<td><a href="#2d" style="font-size:13px;color:#e9e9ed;text-decoration:none;border-bottom:1px solid rgba(145,132,217,.45)">{{ a.name }}</a></td>
+<td style="font-size:11.5px;color:rgba(233,233,237,.65)">{{ a.type }}</td>
+<td style="font-size:11.5px;color:rgba(233,233,237,.65)">{{ a.tier }}</td>
+<td style="font:11.5px Inter;color:{{ a.statusColor }}">{{ a.status }}</td>
+<td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.6)">{{ a.cur }} {{ a.lockMark }}</td>
+<td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.6)">{{ a.opened }}</td>
+<td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.3)">—</td>
+<td><span style="display:flex;gap:10px;font:11.5px Inter"><a href="#2e" style="color:#b5abfc;text-decoration:none">Edit</a><a href="#2e" style="color:#b5abfc;text-decoration:none">Dormant</a><a href="#2e" style="color:{{ a.actionColor }};text-decoration:none">{{ a.action }}</a></span></td>
+</tr>
+</sc-for>
+</tbody></table>
+<div style="margin-top:10px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">A padlock beside the currency means balances exist and the currency can no longer change. Delete is offered only for IBKR brokerage, which has no balance history; every other account offers Close. Deletes are soft.</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2f">
+<div class="dv-olabel"><a class="dv-oid" href="#2f">06</a>Cash flow — entry tab. A parallel ledger; no transfer affordance exists anywhere</div>
+<div class="dv-card" data-screen-label="06 Cash flow entry" style="width:1440px">
+<div style="display:flex;min-height:820px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.cash }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 0;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Cash flow</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin:5px 0 12px">Transactions are recorded in their own currency. Nothing here changes an account balance.</div>
+<div style="display:flex;gap:0">
+<div style="padding:8px 14px;font:500 13px Inter;border-bottom:2px solid #9184d9">Entry</div>
+<a href="#2g" style="padding:8px 14px;font:13px Inter;color:rgba(233,233,237,.5);border-bottom:2px solid transparent;text-decoration:none">Category report</a>
+<a href="#2l" style="padding:8px 14px;font:13px Inter;color:rgba(233,233,237,.5);border-bottom:2px solid transparent;text-decoration:none">Categories</a>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding-bottom:12px"><button class="btn btn-secondary" style="font-size:12px">Export CSV</button></div>
+</div>
+<div style="padding:18px 28px 28px;display:flex;gap:28px;align-items:flex-start">
+<div style="flex:1.5;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">New transaction</div>
+<div style="display:flex;gap:10px;align-items:flex-end;padding:14px;border-radius:10px;background:#232532">
+<div class="field" style="width:118px"><label>Date</label><input class="input" value="28 Aug 2026" style="font-family:var(--num);font-size:12.5px"></div>
+<div class="field" style="width:110px"><label>Amount</label><input class="input" value="62.40" style="font-family:var(--num);font-size:12.5px;text-align:right"></div>
+<div class="field" style="width:76px"><label>Currency</label><input class="input" value="AUD" style="font-family:var(--num);font-size:12.5px"></div>
+<div class="field" style="flex:1"><label>Child category</label><input class="input" value="Food · Groceries" style="font-size:12.5px"></div>
+<div class="field" style="flex:1"><label>Note (optional)</label><input class="input" placeholder="" style="font-size:12.5px"></div>
+<button class="btn btn-primary" style="font-size:12px;height:36px">Add</button>
+</div>
+<div style="margin-top:10px;border:1px dashed rgba(201,161,94,.5);border-radius:9px;padding:11px 13px">
+<div style="font:500 10px Inter;letter-spacing:.08em;text-transform:uppercase;color:#c9a15e;margin-bottom:3px">Advisory · probable duplicate</div>
+<div style="font:12.5px/1.45 Inter;color:rgba(233,233,237,.8)">A transaction of <span style="font-family:var(--num)">62.40 AUD</span> in Food · Groceries already exists on 28 Aug 2026. Adding this one is allowed.</div>
+<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-secondary" style="font-size:11px;padding:3px 9px">Add anyway</button><button class="btn btn-ghost" style="font-size:11px">Show the other</button></div>
+</div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:22px 0 6px">August 2026 · 28 transactions</div>
+<table class="table">
+<thead><tr><th style="width:110px">Date</th><th style="text-align:right;width:110px">Amount</th><th style="width:52px">Cur</th><th>Category</th><th style="width:150px">Note</th></tr></thead>
+<tbody>
+<sc-for list="{{ txRows }}" as="t" hint-placeholder-count="5">
+<tr><td style="font-family:var(--num);font-size:12px">{{ t.d }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ t.a }}</td>
+<td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.55)">{{ t.cur }}</td>
+<td style="font-size:12.5px">{{ t.cat }}</td>
+<td style="font:11.5px Inter;color:rgba(233,233,237,.5)">{{ t.note }}</td></tr>
+</sc-for>
+</tbody></table>
+</div>
+<div style="width:390px;flex:none">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">Recurring · awaiting confirmation</div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.45);margin-bottom:10px">Proposed from what you have entered before. Nothing is posted until you confirm it.</div>
+<sc-for list="{{ proposals }}" as="p" hint-placeholder-count="2">
+<div style="border:1px solid rgba(233,233,237,.14);border-radius:9px;padding:12px 13px;margin-bottom:10px;background:#1b1d2b">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<span style="font:13px Inter">{{ p.cat }}</span>
+<span style="font-family:var(--num);font-size:13px">{{ p.a }} <span style="font-size:10.5px;color:rgba(233,233,237,.5)">{{ p.cur }}</span></span>
+</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.45);margin-top:4px">Due {{ p.d }} · {{ p.src }}</div>
+<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" style="font-size:11px;padding:3px 9px">Confirm</button><button class="btn btn-secondary" style="font-size:11px;padding:3px 9px">Edit</button><button class="btn btn-ghost" style="font-size:11px">Skip</button></div>
+</div>
+</sc-for>
+<div style="margin-top:18px;padding:12px 13px;border-radius:9px;background:#232532;font:11.5px/1.5 Inter;color:rgba(233,233,237,.6)">Moving money between your own accounts is not a transaction. It has no record here — the effect appears as two balance changes at the next close.</div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2g">
+<div class="dv-olabel"><a class="dv-oid" href="#2g">06b</a>Cash flow — category report tab</div>
+<div class="dv-card" data-screen-label="06b Category report" style="width:1440px">
+<div style="display:flex;min-height:760px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.cash }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 0;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Cash flow</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin:5px 0 12px">Obeys the date range. Amounts stay in the currency they were entered in and are not translated.</div>
+<div style="display:flex;gap:0">
+<a href="#2f" style="padding:8px 14px;font:13px Inter;color:rgba(233,233,237,.5);border-bottom:2px solid transparent;text-decoration:none">Entry</a>
+<div style="padding:8px 14px;font:500 13px Inter;border-bottom:2px solid #9184d9">Category report</div>
+<a href="#2l" style="padding:8px 14px;font:13px Inter;color:rgba(233,233,237,.5);border-bottom:2px solid transparent;text-decoration:none">Categories</a>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding-bottom:12px">
+<div class="seg"><label class="seg-opt"><input type="radio" name="cr" checked><span>Aug 2026</span></label><label class="seg-opt"><input type="radio" name="cr"><span>12m</span></label><label class="seg-opt"><input type="radio" name="cr"><span>24m</span></label></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="padding:18px 28px 28px;display:flex;gap:30px;align-items:flex-start">
+<div style="flex:1.4;min-width:0">
+<table class="table">
+<thead><tr><th style="width:130px">Parent</th><th>Child</th><th style="width:52px">Cur</th><th style="text-align:right;width:110px">Income</th><th style="text-align:right;width:110px">Expense</th><th style="text-align:right;width:120px">Net</th></tr></thead>
+<tbody>
+<sc-for list="{{ catRows }}" as="c" hint-placeholder-count="11">
+<tr><td style="font:500 12.5px Inter;color:rgba(233,233,237,.8)">{{ c.p }}</td>
+<td style="font-size:12.5px">{{ c.c }}</td>
+<td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.55)">{{ c.cur }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ c.inc }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ c.exp }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ c.color }}">{{ c.net }}</td></tr>
+</sc-for>
+</tbody></table>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">Category trend · Food · Groceries · AUD</div>
+<svg viewBox="0 0 620 120" preserveAspectRatio="none" style="width:100%;height:140px;display:block">
+<polyline points="{{ acctPoints }}" fill="none" stroke="#9184d9" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="height:1px;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 48px,rgba(233,233,237,.16) calc(100% - 48px),transparent)"></div>
+<div style="display:flex;justify-content:space-between;font:11px Inter;color:rgba(233,233,237,.4);margin-top:6px"><span>Sep 2025</span><span>Aug 2026</span></div>
+<div style="margin-top:16px;font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:6px">Totals by currency</div>
+<table class="table">
+<thead><tr><th>Currency</th><th style="text-align:right">Income</th><th style="text-align:right">Expense</th><th style="text-align:right">Net</th></tr></thead>
+<tbody>
+<sc-for list="{{ cashRows }}" as="c" hint-placeholder-count="3">
+<tr><td style="font-family:var(--num);font-size:12px">{{ c.cur }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ c.inc }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ c.exp }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ c.color }}">{{ c.net }}</td></tr>
+</sc-for>
+</tbody></table>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2h">
+<div class="dv-olabel"><a class="dv-oid" href="#2h">07</a>Investments — cost basis only; the FIFO queue gets the room</div>
+<div class="dv-card" data-screen-label="07 Investments" style="width:1440px">
+<div style="display:flex;min-height:900px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.inv }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Investments</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Every figure stays in its holding's own currency. The reporting-currency control is the one thing this screen ignores — nothing here is translated or combined across currencies.</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div class="seg" style="opacity:.4"><label class="seg-opt"><input type="radio" name="rc7" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rc7"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rc7"><span>MYR</span></label></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="padding:18px 28px 28px">
+<div style="display:flex;gap:30px;align-items:flex-start">
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">Holdings</div>
+<table class="table">
+<thead><tr><th style="width:76px">Holding</th><th>Name</th><th style="text-align:right;width:110px">Quantity</th><th style="text-align:right;width:120px">Cost basis</th><th style="width:46px">Cur</th><th style="width:56px">Lots</th></tr></thead>
+<tbody>
+<sc-for list="{{ holdings }}" as="h" hint-placeholder-count="5">
+<tr><td style="font-family:var(--num);font-size:12.5px">{{ h.n }}</td>
+<td style="font-size:12.5px;color:rgba(233,233,237,.75)">{{ h.d }} {{ h.flagMark }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ h.q }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ h.cb }}</td>
+<td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.55)">{{ h.cur }}</td>
+<td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.55)">{{ h.lots }}</td></tr>
+</sc-for>
+</tbody></table>
+<div style="margin-top:10px;border:1px dashed rgba(201,161,94,.5);border-radius:9px;padding:11px 13px">
+<div style="font:500 10px Inter;letter-spacing:.08em;text-transform:uppercase;color:#c9a15e;margin-bottom:3px">Advisory · history invalidated</div>
+<div style="font:12.5px/1.45 Inter;color:rgba(233,233,237,.8)">An edited purchase on 12 Nov 2024 leaves ASB with a sale of 4,000 units before any lot covers it. The queue below it is flagged, not blocked — figures still display and entry still works.</div>
+<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-secondary" style="font-size:11px;padding:3px 9px">Open the ASB queue</button></div>
+</div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:22px 0 8px">Buy / sell</div>
+<div style="display:flex;gap:10px;align-items:flex-end;padding:14px;border-radius:10px;background:#232532;flex-wrap:wrap">
+<div class="seg"><label class="seg-opt"><input type="radio" name="bs" checked><span>Buy</span></label><label class="seg-opt"><input type="radio" name="bs"><span>Sell</span></label></div>
+<div class="field" style="width:104px"><label>Date</label><input class="input" value="05 Jun 2026" style="font-family:var(--num);font-size:12.5px"></div>
+<div class="field" style="width:84px"><label>Holding</label><input class="input" value="VOO" style="font-family:var(--num);font-size:12.5px"></div>
+<div class="field" style="width:94px"><label>Quantity</label><input class="input" value="30.0000" style="font-family:var(--num);font-size:12.5px;text-align:right"></div>
+<div class="field" style="width:100px"><label>Unit cost</label><input class="input" value="445.61" style="font-family:var(--num);font-size:12.5px;text-align:right"></div>
+<div class="field" style="width:84px"><label>Fees</label><input class="input" value="0.00" style="font-family:var(--num);font-size:12.5px;text-align:right"></div>
+<button class="btn btn-primary" style="font-size:12px;height:36px">Record</button>
+</div>
+<div style="margin-top:8px;font:11.5px Inter;color:rgba(233,233,237,.45)">Corporate actions: fees, splits and reinvestment only.</div>
+</div>
+<div style="width:470px;flex:none">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:4px">Open-lot FIFO queue · VOO · USD</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.45);margin-bottom:8px">Oldest lot sells first. Quantities remaining after every sale recorded to date.</div>
+<table class="table">
+<thead><tr><th>Purchased</th><th style="text-align:right">Remaining qty</th><th style="text-align:right">Unit cost</th><th style="text-align:right">Remaining basis</th></tr></thead>
+<tbody>
+<sc-for list="{{ lots }}" as="l" hint-placeholder-count="4">
+<tr><td style="font-family:var(--num);font-size:12px">{{ l.d }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ l.q }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ l.u }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ l.rb }}</td></tr>
+</sc-for>
+<tr><td style="font:500 12.5px Inter">Total</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">96.0000</td><td></td><td style="text-align:right;font-family:var(--num);font-size:13px">41,280.00</td></tr>
+</tbody></table>
+</div>
+</div>
+<div style="display:flex;gap:30px;margin-top:26px;align-items:flex-start">
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:0 0 8px">Realised gains · USD</div>
+<table class="table">
+<thead><tr><th>Sold</th><th>Holding</th><th style="text-align:right">Proceeds</th><th style="text-align:right">Fees</th><th style="text-align:right">Cost basis</th><th style="text-align:right">Gross</th><th style="text-align:right;width:44px">Tax</th><th style="text-align:right">Net</th></tr></thead>
+<tbody>
+<sc-for list="{{ gainsUSD }}" as="g" hint-placeholder-count="2">
+<tr><td style="font-family:var(--num);font-size:11.5px">{{ g.d }}</td><td style="font-family:var(--num);font-size:11.5px">{{ g.h }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12px">{{ g.pr }}</td><td style="text-align:right;font-family:var(--num);font-size:12px">{{ g.f }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12px">{{ g.cb }}</td><td style="text-align:right;font-family:var(--num);font-size:12px;color:#6fae90">{{ g.g }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12px;color:#c9a15e">{{ g.tx }}%</td><td style="text-align:right;font-family:var(--num);font-size:12px">{{ g.ng }}</td></tr>
+</sc-for>
+<tr><td colspan="5" style="font:500 12.5px Inter">USD total</td><td style="text-align:right;font-family:var(--num);font-size:12.5px;color:#6fae90">+3,012.60</td><td></td><td style="text-align:right;font-family:var(--num);font-size:12.5px">+2,259.45</td></tr>
+</tbody></table>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:0 0 8px">Realised gains · AUD</div>
+<table class="table">
+<thead><tr><th>Sold</th><th>Holding</th><th style="text-align:right">Proceeds</th><th style="text-align:right">Fees</th><th style="text-align:right">Cost basis</th><th style="text-align:right">Gross</th><th style="text-align:right;width:44px">Tax</th><th style="text-align:right">Net</th></tr></thead>
+<tbody>
+<sc-for list="{{ gainsAUD }}" as="g" hint-placeholder-count="1">
+<tr><td style="font-family:var(--num);font-size:11.5px">{{ g.d }}</td><td style="font-family:var(--num);font-size:11.5px">{{ g.h }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12px">{{ g.pr }}</td><td style="text-align:right;font-family:var(--num);font-size:12px">{{ g.f }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12px">{{ g.cb }}</td><td style="text-align:right;font-family:var(--num);font-size:12px;color:#d1756a">{{ g.g }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12px;color:rgba(233,233,237,.4)">{{ g.tx }}%</td><td style="text-align:right;font-family:var(--num);font-size:12px;color:#d1756a">{{ g.ng }}</td></tr>
+</sc-for>
+</tbody></table>
+<div style="margin-top:12px;padding:11px 13px;border-radius:9px;background:#232532;font:11.5px/1.5 Inter;color:rgba(233,233,237,.65)">Estimated tax is a percentage you type. The net figure is indicative only — it is your own estimate and reflects no jurisdiction's rules. Currencies are never summed together; there is no combined total on this screen and no market value anywhere in the system.</div>
+</div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2i">
+<div class="dv-olabel"><a class="dv-oid" href="#2i">08</a>FX rates — bulk entry for one date, provenance on every row</div>
+<div class="dv-card" data-screen-label="08 FX rates" style="width:1440px">
+<div style="display:flex;min-height:820px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.fx }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">FX rates</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Obeys the date range. Rates are stored against USD; any other pair is triangulated through it.</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px"><button class="btn btn-secondary" style="font-size:12px">Export CSV</button></div>
+</div>
+<div style="padding:18px 28px 28px;display:flex;gap:30px;align-items:flex-start">
+<div style="flex:1.2;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">Bulk entry · one date, every pair</div>
+<div style="padding:14px;border-radius:10px;background:#232532">
+<div class="field" style="width:150px;margin-bottom:10px"><label>As at</label><input class="input" value="31 Aug 2026" style="font-family:var(--num);font-size:12.5px"></div>
+<div style="display:flex;gap:12px;flex-wrap:wrap">
+<div class="field" style="width:130px"><label>USD / AUD</label><input class="input" value="1.5142" style="font-family:var(--num);font-size:12.5px;text-align:right"></div>
+<div class="field" style="width:130px"><label>USD / MYR</label><input class="input" value="4.2180" style="font-family:var(--num);font-size:12.5px;text-align:right;border-color:rgba(201,161,94,.6)"></div>
+<div class="field" style="width:130px"><label>USD / SGD</label><input class="input" placeholder="no rate on record" style="font-family:var(--num);font-size:12.5px;text-align:right"></div>
+<div style="display:flex;align-items:flex-end"><button class="btn btn-primary" style="font-size:12px;height:36px">Save all</button></div>
+</div>
+<div style="margin-top:12px;border:1px dashed rgba(201,161,94,.5);border-radius:9px;padding:11px 13px">
+<div style="font:500 10px Inter;letter-spacing:.08em;text-transform:uppercase;color:#c9a15e;margin-bottom:3px">Advisory · rate variance</div>
+<div style="font:12.5px/1.45 Inter;color:rgba(233,233,237,.8)">USD/MYR at <span style="font-family:var(--num)">4.2180</span> is 16.6% from the last recorded <span style="font-family:var(--num)">3.6180</span> on 24 Aug 2026. It will save as entered.</div>
+</div>
+</div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:22px 0 8px">Daily rates</div>
+<table class="table">
+<thead><tr><th style="width:110px">Pair</th><th style="text-align:right;width:110px">Rate</th><th style="width:120px">As at</th><th>Provenance</th><th style="width:70px"></th></tr></thead>
+<tbody>
+<sc-for list="{{ fxRows }}" as="f" hint-placeholder-count="4">
+<tr><td style="font-family:var(--num);font-size:12.5px">{{ f.p }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ f.color }}">{{ f.r }}<sup style="font-size:9px;margin-left:2px">{{ f.m }}</sup></td>
+<td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.6)">{{ f.asat }}</td>
+<td style="font:11.5px Inter;color:{{ f.pc }}">{{ f.prov }}</td>
+<td><a href="#2i" style="font:11.5px Inter;color:#b5abfc;text-decoration:none">Edit</a></td></tr>
+</sc-for>
+</tbody></table>
+<div style="margin-top:10px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">Every rate carries its provenance: entered exactly, carried forward from an earlier date, or triangulated through USD. Absence is stated, never filled with a zero.</div>
+</div>
+<div style="width:430px;flex:none">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">Missing and stale</div>
+<div style="border:1px solid rgba(233,233,237,.14);border-radius:10px;padding:14px">
+<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid rgba(233,233,237,.07)">
+<span style="width:9px;height:9px;border-radius:2px;border:1.5px solid #d1756a"></span>
+<span style="flex:1;font:12.5px Inter">USD / SGD</span><span style="font:11.5px Inter;color:#d1756a">no rate on record</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid rgba(233,233,237,.07)">
+<span style="width:9px;height:9px;border-radius:2px;background:linear-gradient(90deg,#c9a15e 50%,transparent 50%);border:1.5px solid #c9a15e"></span>
+<span style="flex:1;font:12.5px Inter">USD / MYR</span><span style="font:11.5px Inter;color:#c9a15e">7 days old · threshold 7</span></div>
+<div style="display:flex;align-items:center;gap:12px;padding:7px 0">
+<span style="width:9px;height:9px;border-radius:2px;background:rgba(233,233,237,.6);border:1.5px solid rgba(233,233,237,.6)"></span>
+<span style="flex:1;font:12.5px Inter">USD / AUD</span><span style="font:11.5px Inter;color:rgba(233,233,237,.5)">current</span></div>
+</div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:22px 0 8px">USD / AUD · 12 months</div>
+<svg viewBox="0 0 620 120" preserveAspectRatio="none" style="width:100%;height:150px;display:block">
+<polyline points="{{ fxPoints }}" fill="none" stroke="#9184d9" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="height:1px;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 48px,rgba(233,233,237,.16) calc(100% - 48px),transparent)"></div>
+<div style="display:flex;justify-content:space-between;font:11px Inter;color:rgba(233,233,237,.4);margin-top:6px"><span>Sep 2025 · 1.5410</span><span>Aug 2026 · 1.5142</span></div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2l">
+<div class="dv-olabel"><a class="dv-oid" href="#2l">09</a>Categories — the third Cash flow tab. Two levels; a used category is deactivated, never deleted</div>
+<div class="dv-card" data-screen-label="09 Categories" style="width:1440px">
+<div style="display:flex;min-height:700px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.cash }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Cash flow</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin:5px 0 12px">Neither view control applies. Transactions attach to child categories only. Seeded on first run, editable thereafter.</div>
+<div style="display:flex;gap:0">
+<a href="#2f" style="padding:8px 14px;font:13px Inter;color:rgba(233,233,237,.5);border-bottom:2px solid transparent;text-decoration:none">Entry</a>
+<a href="#2g" style="padding:8px 14px;font:13px Inter;color:rgba(233,233,237,.5);border-bottom:2px solid transparent;text-decoration:none">Category report</a>
+<div style="padding:8px 14px;font:500 13px Inter;border-bottom:2px solid #9184d9">Categories</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px;padding-bottom:12px"><button class="btn btn-secondary" style="font-size:12px">Export CSV</button><button class="btn btn-primary" style="font-size:12px">New parent</button></div>
+</div>
+<div style="padding:20px 28px 28px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px">
+<sc-for list="{{ categories }}" as="c" hint-placeholder-count="6">
+<div style="border:1px solid rgba(233,233,237,.12);border-radius:10px;padding:14px 16px">
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+<span style="font:500 14px Inter">{{ c.p }}</span>
+<a href="#2l" style="font:11.5px Inter;color:#b5abfc;text-decoration:none">Add child</a>
+</div>
+<sc-for list="{{ c.kids }}" as="k" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid rgba(233,233,237,.06)">
+<span style="flex:1;font:12.5px Inter;color:{{ k.color }}">{{ k.name }}</span>
+<span style="font:10.5px Inter;color:rgba(233,233,237,.4)">{{ k.state }}</span>
+<a href="#2l" style="font:11px Inter;color:{{ k.actionColor }};text-decoration:none">{{ k.action }}</a>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<div style="padding:0 28px 28px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45);max-width:820px">A child category with no transactions attached can be deleted outright. Once it has been used it can only be deactivated — Transport · Rideshare above is deactivated, so it no longer appears in entry but its history stays intact.</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2j">
+<div class="dv-olabel"><a class="dv-oid" href="#2j">10</a>Settings — with the non-field error banner shown against a failed password change</div>
+<div class="dv-card" data-screen-label="10 Settings" style="width:1440px">
+<div style="display:flex;min-height:700px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.set }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Settings</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">These are the defaults every other screen starts from.</div>
+</div>
+<div style="padding:20px 28px 28px;max-width:900px">
+<div style="border-left:3px solid #d1756a;background:rgba(209,117,106,.1);border-radius:8px;padding:12px 14px;margin-bottom:22px">
+<div style="font:500 10px Inter;letter-spacing:.08em;text-transform:uppercase;color:#d1756a;margin-bottom:3px">Error</div>
+<div style="font:12.5px/1.45 Inter;color:rgba(233,233,237,.85)">The current password is not correct. Nothing on this screen was saved.</div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:26px 40px">
+<div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Reporting</div>
+<div class="field" style="margin-bottom:12px"><label>Default reporting currency</label><div class="seg"><label class="seg-opt"><input type="radio" name="drc" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="drc"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="drc"><span>MYR</span></label></div></div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.45);margin-bottom:16px">A display choice only. Stored balances are always USD and never rewritten.</div>
+<div class="field" style="margin-bottom:12px"><label>Timezone — applied to every date in the system</label><input class="input" value="Australia/Melbourne" style="font-size:12.5px;max-width:280px"></div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.45)">All dates are plain calendar dates with no time component. One timezone, fixed, used for every interpretation.</div>
+</div>
+<div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Rates</div>
+<div class="field" style="margin-bottom:12px"><label>Staleness threshold (days)</label><input class="input" value="7" style="font-family:var(--num);font-size:12.5px;max-width:100px;text-align:right"></div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.45);margin-bottom:22px">A rate older than this is marked stale wherever it contributes to a translated figure.</div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Password</div>
+<div class="field" style="margin-bottom:10px"><label>Current password</label><input class="input" type="password" value="123456" style="max-width:280px;border-color:#d1756a"><div style="font:11px Inter;color:#d1756a;margin-top:4px">▲ Does not match.</div></div>
+<div class="field" style="margin-bottom:10px"><label>New password</label><input class="input" type="password" value="1234567890" style="max-width:280px"></div>
+<button class="btn btn-primary" style="font-size:12px">Change password</button>
+</div>
+<div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Backup</div>
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span style="width:8px;height:8px;border-radius:50%;background:#6fae90"></span><span style="font:13px Inter">Written <span style="font-family:var(--num)">31 Aug 2026</span> · 04:12</span></div>
+<div class="field" style="margin-bottom:10px"><label>Destination</label><input class="input" value="/Volumes/Archive/financial-hub/" style="font-family:var(--num);font-size:12.5px;max-width:320px"></div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.45)">Status and destination only. Backups are taken outside the application; there is nothing to run or restore from here.</div>
+</div>
+<div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Data out</div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.45);margin-bottom:10px">CSV export is available from every table and report in the application. There is no import path.</div>
+<button class="btn btn-secondary" style="font-size:12px">Export everything as CSV</button>
+</div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2m">
+<div class="dv-olabel"><a class="dv-oid" href="#2m">S1</a>First run — empty. An invitation to create accounts and close a month, nothing else</div>
+<div class="dv-card" data-screen-label="S1 First run" style="width:1440px">
+<div style="display:flex;min-height:700px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.dash }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }};opacity:.55">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Dashboard</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Reporting currency USD. No months on record yet.</div>
+</div>
+<div style="padding:34px 28px">
+<div style="max-width:560px">
+<div style="font-family:var(--disp);font-size:32px;line-height:1.15;margin-bottom:10px">Nothing is recorded yet.</div>
+<div style="font:13.5px/1.6 Inter;color:rgba(233,233,237,.65)">Two steps stand between here and a first net worth figure. Categories are already seeded; everything else is yours to enter.</div>
+<div style="display:flex;flex-direction:column;gap:10px;margin:24px 0 0">
+<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid rgba(145,132,217,.4);border-radius:10px">
+<span style="font-family:var(--num);font-size:15px;color:#b5abfc">1</span>
+<div style="flex:1"><div style="font:500 13.5px Inter">Create your accounts</div><div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:2px">Nine types, four liquidity tiers, one currency each — fixed once a balance exists.</div></div>
+<button class="btn btn-primary" style="font-size:12px">New account</button>
+</div>
+<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid rgba(233,233,237,.12);border-radius:10px">
+<span style="font-family:var(--num);font-size:15px;color:rgba(233,233,237,.4)">2</span>
+<div style="flex:1"><div style="font:500 13.5px Inter;color:rgba(233,233,237,.55)">Close your first month</div><div style="font:11.5px Inter;color:rgba(233,233,237,.4);margin-top:2px">Available once at least one account exists.</div></div>
+<button class="btn btn-secondary" style="font-size:12px" disabled>Month Close</button>
+</div>
+</div>
+<div style="margin-top:26px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.4)">Balances are monthly snapshots you type. The system will never derive them from transactions, and there is no import path — this is the only way data gets in.</div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spineEmpty }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+<div style="padding:10px 12px;font:10.5px/1.4 Inter;color:rgba(233,233,237,.3)">All outside range — no account has opened yet.</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2n">
+<div class="dv-olabel"><a class="dv-oid" href="#2n">S2</a>Stale rates — the as-at line expanded to per-currency detail</div>
+<div class="dv-card" data-screen-label="S2 Stale rates" style="width:1440px">
+<div style="display:flex;min-height:640px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.dash }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Dashboard</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">At least one contributing rate is stale, so the figure states its oldest as-at date.</div>
+</div>
+<div style="padding:24px 28px;display:flex;gap:40px;align-items:flex-start">
+<div style="width:430px;flex:none">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Net worth · 31 Aug 2026</div>
+<div style="font-family:var(--num);font-size:31px;line-height:1.1">{{ nwTotal }} <span style="font-size:15px;color:rgba(233,233,237,.5)">USD</span></div>
+<div style="margin-top:12px;border:1px solid rgba(201,161,94,.4);border-radius:9px;overflow:hidden">
+<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(201,161,94,.09)">
+<span style="width:9px;height:9px;border-radius:2px;background:linear-gradient(90deg,#c9a15e 50%,transparent 50%);border:1.5px solid #c9a15e"></span>
+<span style="font:12.5px Inter;flex:1">Rates as at <span style="font-family:var(--num)">24 Aug 2026</span> — the oldest contributing</span>
+<span style="font:11.5px Inter;color:#b5abfc">Collapse</span>
+</div>
+<div style="padding:4px 12px 10px">
+<sc-for list="{{ fxRows }}" as="f" hint-placeholder-count="4">
+<div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px solid rgba(233,233,237,.06)">
+<span style="font-family:var(--num);font-size:11.5px;width:76px;color:rgba(233,233,237,.7)">{{ f.p }}</span>
+<span style="font-family:var(--num);font-size:12px;color:{{ f.color }};width:64px;text-align:right">{{ f.r }}<sup style="font-size:9px;margin-left:2px">{{ f.m }}</sup></span>
+<span style="font-family:var(--num);font-size:11px;color:rgba(233,233,237,.5);width:92px;text-align:right">{{ f.asat }}</span>
+<span style="font:10.5px Inter;color:{{ f.pc }};flex:1;text-align:right">{{ f.prov }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="margin-top:12px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">When every contributing rate is fresh this block is not drawn at all — no as-at date, no disclosure, nothing. Compare <a href="#2o" style="color:#b5abfc">S3</a>.</div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Outstanding tasks</div>
+<sc-for list="{{ tasks }}" as="t" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid rgba(233,233,237,.07)">
+<span style="width:26px;text-align:right;font-family:var(--num);font-size:15px;color:{{ t.tone }}">{{ t.n }}</span>
+<span style="flex:1;font:13px Inter;color:rgba(233,233,237,.85)">{{ t.t }}</span>
+<a href="#2i" style="font:12px Inter;color:#b5abfc;text-decoration:none">{{ t.to }} →</a>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2o">
+<div class="dv-olabel"><a class="dv-oid" href="#2o">S3</a>Complete month — nothing stale, no as-at date, no tasks. The quiet state</div>
+<div class="dv-card" data-screen-label="S3 Complete month" style="width:1440px">
+<div style="display:flex;min-height:600px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.dash }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Dashboard</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">July 2026 · every balance entered, every rate fresh.</div>
+</div>
+<div style="padding:24px 28px;display:flex;gap:40px;align-items:flex-start">
+<div style="width:400px;flex:none">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Net worth · 31 Jul 2026</div>
+<div style="font-family:var(--num);font-size:31px;line-height:1.1">{{ nwPrior }} <span style="font-size:15px;color:rgba(233,233,237,.5)">USD</span></div>
+<div style="display:flex;gap:14px;margin-top:8px;font-family:var(--num);font-size:13px"><span style="color:#6fae90">+4,120.55 USD</span><span style="color:#6fae90">+1.39%</span><span style="color:rgba(233,233,237,.4)">vs June</span></div>
+<div style="margin-top:16px;display:flex;align-items:center;gap:10px">
+<span style="width:11px;height:11px;border-radius:2px;background:rgba(233,233,237,.6);border:1.5px solid rgba(233,233,237,.6)"></span>
+<span style="font:500 12.5px Inter">Complete</span>
+<span style="font-family:var(--num);font-size:12px;color:rgba(233,233,237,.5)">20 of 20 balances · 4 of 4 rates</span>
+</div>
+<div style="margin-top:16px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">No as-at date is shown because none is needed. No exclusion notice, because nothing is excluded. Silence is the signal.</div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Outstanding tasks</div>
+<div style="padding:16px 0;font:13px Inter;color:rgba(233,233,237,.5);border-bottom:1px solid rgba(233,233,237,.07)">Nothing outstanding for July 2026.</div>
+<div style="margin-top:20px;display:flex;justify-content:space-between;font:11px Inter;color:rgba(233,233,237,.4);margin-bottom:6px"><span>Sep 2024</span><span>Jul 2026</span></div>
+<svg viewBox="0 0 1000 120" preserveAspectRatio="none" style="width:100%;height:130px;display:block">
+<polyline points="{{ nwPoints }}" fill="none" stroke="#9184d9" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="height:1px;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 48px,rgba(233,233,237,.16) calc(100% - 48px),transparent)"></div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spineDone }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2p">
+<div class="dv-olabel"><a class="dv-oid" href="#2p">S4</a>Excluded account — out of the translated total, stated on the figure, never zeroed</div>
+<div class="dv-card" data-screen-label="S4 Excluded account" style="width:1440px">
+<div style="display:flex;min-height:620px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ nav.trend }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Net worth</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">One account cannot be translated. The total says so on its face.</div>
+</div>
+<div style="padding:24px 28px;display:flex;gap:40px;align-items:flex-start">
+<div style="width:430px;flex:none">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:10px">Total · 31 Aug 2026</div>
+<div style="font-family:var(--num);font-size:31px;line-height:1.1">{{ nwTotal }} <span style="font-size:15px;color:rgba(233,233,237,.5)">USD</span></div>
+<div style="margin-top:10px;border-left:3px solid #d1756a;padding:9px 12px;background:rgba(209,117,106,.1);border-radius:0 8px 8px 0">
+<div style="font:12.5px/1.5 Inter;color:rgba(233,233,237,.85)">Excludes 1 of 20 accounts. No USD/SGD rate exists on any date, so Standard Chartered SG cannot be translated and is not counted in this figure.</div>
+</div>
+<div style="margin-top:14px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">Enter a USD/SGD rate on <a href="#2i" style="color:#b5abfc">FX rates</a> and the account joins the total. Until then the balance is held and displayed in its own currency — it is never shown as zero and never silently dropped.</div>
+</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">Contributing accounts · Savings/Deposit</div>
+<table class="table">
+<thead><tr><th>Account</th><th style="width:52px">Cur</th><th style="text-align:right;width:150px">Own currency</th><th style="text-align:right;width:150px">In USD</th><th style="width:190px">Rate</th></tr></thead>
+<tbody>
+<tr><td style="font-size:13px">CBA NetBank Saver</td><td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.55)">AUD</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">27,380.00</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">18,081.36</td><td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.55)">1.5142 · 31 Aug</td></tr>
+<tr><td style="font-size:13px">CIMB FastSaver</td><td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.55)">MYR</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">41,960.00</td><td style="text-align:right;font-family:var(--num);font-size:12.5px;color:#c9a15e">9,947.84<sup style="font-size:9px">c</sup></td><td style="font-family:var(--num);font-size:11.5px;color:#c9a15e">4.2180 · carried 24 Aug</td></tr>
+<tr><td style="font-size:13px">CIMB term deposit</td><td style="font-family:var(--num);font-size:11.5px;color:rgba(233,233,237,.55)">MYR</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">60,000.00</td><td style="text-align:right;font-family:var(--num);font-size:12.5px;color:#c9a15e">14,224.75<sup style="font-size:9px">c</sup></td><td style="font-family:var(--num);font-size:11.5px;color:#c9a15e">4.2180 · carried 24 Aug</td></tr>
+<tr><td style="font-size:13px;color:#d1756a">Standard Chartered SG</td><td style="font-family:var(--num);font-size:11.5px;color:#d1756a">SGD</td><td style="text-align:right;font-family:var(--num);font-size:12.5px">12,300.00</td><td style="text-align:right;font:11.5px Inter;color:#d1756a">excluded — no rate</td><td style="font-family:var(--num);font-size:11.5px;color:#d1756a">—</td></tr>
+</tbody></table>
+<div style="margin-top:10px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">The excluded row keeps its own-currency figure and its place in the table. Only the translated column withholds a number.</div>
+</div>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2q">
+<div class="dv-olabel"><a class="dv-oid" href="#2q">S5</a>Mid-close — screen <a class="dv-oid" href="#2b">02</a> is already in this state; here is the readout in all four</div>
+<div class="dv-card" data-screen-label="S5 Completeness readouts" style="width:1240px;padding:26px 30px 30px">
+<div style="font-family:var(--disp);font-size:22px;margin-bottom:4px">The completeness readout, Month Close</div>
+<div style="font:12px/1.5 Inter;color:rgba(233,233,237,.5);max-width:760px;margin-bottom:20px">Persistent, pinned below the header, never a modal and never a blocker. The glyph carries the state without the colour; the figures say exactly what remains.</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:16px;padding:11px 16px;background:rgba(201,161,94,.07);border-radius:8px">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px solid #c9a15e;background:linear-gradient(90deg,#c9a15e 50%,transparent 50%)"></span>
+<span style="font:500 12px Inter;color:#c9a15e;width:110px">Incomplete</span>
+<span style="font-family:var(--num);font-size:12px;color:rgba(233,233,237,.7);width:230px">6 of 20 balances · 3 of 4 rates</span>
+<span style="font:11.5px Inter;color:rgba(233,233,237,.55);flex:1">Some entered, some absent. A partly closed month is legitimate — leave and come back.</span>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:11px 16px;background:rgba(209,117,106,.08);border-radius:8px">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px solid #d1756a"></span>
+<span style="font:500 12px Inter;color:#d1756a;width:110px">Missing</span>
+<span style="font-family:var(--num);font-size:12px;color:rgba(233,233,237,.7);width:230px">0 of 20 balances · 0 of 4 rates</span>
+<span style="font:11.5px Inter;color:rgba(233,233,237,.55);flex:1">The month exists and nothing has been entered against it.</span>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:11px 16px;background:rgba(233,233,237,.04);border-radius:8px">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px dashed rgba(233,233,237,.35)"></span>
+<span style="font:500 12px Inter;color:rgba(233,233,237,.5);width:110px">Outside range</span>
+<span style="font-family:var(--num);font-size:12px;color:rgba(233,233,237,.45);width:230px">—</span>
+<span style="font:11.5px Inter;color:rgba(233,233,237,.5);flex:1">Before the first account opened. Not a fault, and never counted as one.</span>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:11px 16px;background:rgba(233,233,237,.04);border-radius:8px">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px solid rgba(233,233,237,.6);background:rgba(233,233,237,.6)"></span>
+<span style="font:500 12px Inter;width:110px">Complete</span>
+<span style="font-family:var(--num);font-size:12px;color:rgba(233,233,237,.7);width:230px">20 of 20 balances · 4 of 4 rates</span>
+<span style="font:11.5px Inter;color:rgba(233,233,237,.55);flex:1">Everything present. The bar loses its tint and says nothing further.</span>
+</div>
+</div>
+<div style="margin-top:22px;font:11.5px/1.6 Inter;color:rgba(233,233,237,.45);max-width:900px">Responsive behaviour, for reference: <a href="#2a" style="color:#b5abfc">01</a>, <a href="#2c" style="color:#b5abfc">03</a>, <a href="#2d" style="color:#b5abfc">04</a> and <a href="#2g" style="color:#b5abfc">06b</a> reflow to tablet — the ledger spine moves under the header as a horizontal month strip and the two-column bodies stack. <a href="#2b" style="color:#b5abfc">02</a>, <a href="#2e" style="color:#b5abfc">05</a>, <a href="#2f" style="color:#b5abfc">06</a>, <a href="#2h" style="color:#b5abfc">07</a>, <a href="#2i" style="color:#b5abfc">08</a> and <a href="#2j" style="color:#b5abfc">10</a> are data entry and stay desktop-only by design.</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2r">
+<div class="dv-olabel"><a class="dv-oid" href="#2r">T1</a>Dashboard at 834px — spine becomes a horizontal month strip, panels stack</div>
+<div class="dv-card" data-screen-label="T1 Dashboard tablet" style="width:834px">
+<div style="display:flex;min-height:900px">
+<div style="width:52px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:3px">
+<div style="font-family:var(--mark);font-size:19px;line-height:1;color:#9184d9;margin-bottom:10px">FH</div>
+<sc-for list="{{ nav.dash }}" as="n" hint-placeholder-count="8">
+<div style="width:32px;height:30px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="padding:16px 20px 12px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="font-family:var(--disp);font-size:24px;line-height:1.05">Dashboard</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+<div class="seg"><label class="seg-opt"><input type="radio" name="rct1" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rct1"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rct1"><span>MYR</span></label></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="display:flex;gap:2px;overflow:hidden;padding:8px 20px;border-bottom:1px solid rgba(233,233,237,.08);background:#131523">
+<sc-for list="{{ spineAsc }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:3px 7px;border-radius:5px;background:{{ m.bg }}">
+<span style="width:8px;height:8px;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:9.5px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+<div style="padding:18px 20px 24px;display:flex;flex-direction:column;gap:18px">
+<div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:8px">Net worth · 31 Aug 2026</div>
+<div style="font-family:var(--num);font-size:27px;line-height:1.1">{{ nwTotal }} <span style="font-size:14px;color:rgba(233,233,237,.5)">USD</span></div>
+<div style="display:flex;gap:12px;margin-top:6px;font-family:var(--num);font-size:12.5px"><span style="color:#6fae90">{{ nwChg }} USD</span><span style="color:#6fae90">{{ nwPct }}</span></div>
+<svg viewBox="0 0 1000 120" preserveAspectRatio="none" style="width:100%;height:110px;display:block;margin-top:12px">
+<polyline points="{{ nwPoints }}" fill="none" stroke="#9184d9" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="height:1px;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 48px,rgba(233,233,237,.16) calc(100% - 48px),transparent)"></div>
+<div style="margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(201,161,94,.09);font:11.5px/1.45 Inter;color:rgba(233,233,237,.75)">Rates as at <span style="font-family:var(--num)">24 Aug 2026</span> — oldest contributing. <a href="#2n" style="color:#b5abfc">Per-currency detail</a></div>
+<div style="margin-top:6px;font:11.5px/1.45 Inter;color:#d1756a">Excludes 1 account — no USD/SGD rate exists.</div>
+</div>
+<div style="border:1px solid rgba(201,161,94,.35);border-radius:10px;padding:14px 15px">
+<div style="font-family:var(--disp);font-size:17px;margin-bottom:8px">Outstanding tasks · August 2026</div>
+<sc-for list="{{ tasks }}" as="t" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(233,233,237,.07)">
+<span style="width:22px;text-align:right;font-family:var(--num);font-size:14px;color:{{ t.tone }}">{{ t.n }}</span>
+<span style="flex:1;font:12.5px/1.35 Inter;color:rgba(233,233,237,.85)">{{ t.t }}</span>
+<a href="#2b" style="font:11.5px Inter;color:#b5abfc;text-decoration:none">{{ t.to }} →</a>
+</div>
+</sc-for>
+</div>
+<div>
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:6px">Cash flow · August 2026</div>
+<table class="table">
+<thead><tr><th>Currency</th><th style="text-align:right">Income</th><th style="text-align:right">Expense</th><th style="text-align:right">Net</th></tr></thead>
+<tbody>
+<sc-for list="{{ cashRows }}" as="c" hint-placeholder-count="3">
+<tr><td style="font-family:var(--num);font-size:12px">{{ c.cur }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ c.inc }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ c.exp }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ c.color }}">{{ c.net }}</td></tr>
+</sc-for>
+</tbody></table>
+</div>
+<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;background:#232532">
+<span style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5)">Backup</span>
+<span style="width:8px;height:8px;border-radius:50%;background:#6fae90"></span>
+<span style="font:12px Inter">Written <span style="font-family:var(--num)">31 Aug 2026</span></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2s">
+<div class="dv-olabel"><a class="dv-oid" href="#2s">T2</a>Account detail at 834px — summary above chart above table, no columns dropped</div>
+<div class="dv-card" data-screen-label="T2 Account detail tablet" style="width:834px">
+<div style="display:flex;min-height:860px">
+<div style="width:52px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:3px">
+<div style="font-family:var(--mark);font-size:19px;line-height:1;color:#9184d9;margin-bottom:10px">FH</div>
+<sc-for list="{{ nav.acct }}" as="n" hint-placeholder-count="8">
+<div style="width:32px;height:30px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="padding:16px 20px 12px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="font-family:var(--disp);font-size:24px;line-height:1.05">CBA NetBank Saver</div>
+<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+<span class="tag tag-neutral">Savings/Deposit</span><span class="tag tag-neutral">Short</span><span class="tag tag-outline">Open</span><span class="tag tag-neutral">AUD</span>
+</div>
+</div>
+<div style="display:flex;gap:2px;overflow:hidden;padding:8px 20px;border-bottom:1px solid rgba(233,233,237,.08);background:#131523">
+<sc-for list="{{ spineAsc }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:3px 7px;border-radius:5px;background:{{ m.bg }}">
+<span style="width:8px;height:8px;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:9.5px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+<div style="padding:18px 20px 24px">
+<div style="font-family:var(--num);font-size:27px;line-height:1.05">27,380.00 <span style="font-size:14px;color:rgba(233,233,237,.5)">AUD</span></div>
+<div style="margin-top:8px;font:13.5px/1.5 Inter">Increasing. <span style="color:rgba(233,233,237,.6)">Up in ten of the last twelve months.</span></div>
+<div style="display:flex;gap:24px;margin-top:10px;font-family:var(--num);font-size:12.5px">
+<span style="color:#6fae90">+440.00 AUD · +1.63% <span style="font:11px Inter;color:rgba(233,233,237,.45)">month</span></span>
+<span style="color:#6fae90">+6,490.00 AUD · +31.07% <span style="font:11px Inter;color:rgba(233,233,237,.45)">year</span></span>
+<span style="color:#c9a15e">2 stale months</span>
+</div>
+<svg viewBox="0 0 620 120" preserveAspectRatio="none" style="width:100%;height:120px;display:block;margin-top:14px">
+<polyline points="{{ acctPoints }}" fill="none" stroke="#9184d9" stroke-width="2" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="height:1px;background:linear-gradient(to right,transparent,rgba(233,233,237,.16) 48px,rgba(233,233,237,.16) calc(100% - 48px),transparent)"></div>
+<table class="table" style="margin-top:16px">
+<thead><tr><th>Month</th><th style="text-align:right">Balance (AUD)</th><th style="text-align:right">Change</th><th style="text-align:right;width:70px">%</th><th style="width:96px">Source</th></tr></thead>
+<tbody>
+<sc-for list="{{ acctRows }}" as="r" hint-placeholder-count="12">
+<tr><td style="font-family:var(--num);font-size:12px">{{ r.m }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px">{{ r.bal }}<sup style="font-size:9px;color:{{ r.staleColor }};margin-left:2px">{{ r.stale }}</sup></td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.color }}">{{ r.chg }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.color }}">{{ r.pct }}</td>
+<td style="font:11px Inter;color:{{ r.staleColor }}">{{ r.stale }}</td></tr>
+</sc-for>
+</tbody></table>
+<div style="margin-top:12px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">Shown in AUD, the account's own currency. Data entry screens do not reflow — they stay desktop-only by design.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<p class="dv-next">Try next: "tablet versions of the four reporting screens" · "make the spine clickable" · "more density on <a class="dv-oid" href="#2c">03</a>"</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Design system, then one screen three ways — pick the signature element and I roll it through the ten</span></div>
+
+<div class="dv-opts" style="margin-bottom:34px">
+<div class="dv-opt" id="1ds">
+<div class="dv-olabel"><a class="dv-oid" href="#1ds">DS</a>Foundations and state treatments — settled before any screen</div>
+<div class="dv-card" style="width:1440px;padding:0">
+
+<div style="padding:34px 40px 26px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:40px">
+<div>
+<div style="font:500 10px Inter,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#9184d9;margin-bottom:8px">Financial Hub — design system</div>
+<div style="font-family:var(--disp);font-size:44px;line-height:1;letter-spacing:-.01em">A private ledger, kept at a desk, in three currencies</div>
+</div>
+<div style="max-width:430px;font:13px/1.6 Inter,sans-serif;color:rgba(233,233,237,.6)">Built on Nocturne. Two extensions, both functional: <span style="font-family:var(--disp);font-size:15px">Domine</span> for screen titles, <span style="font-family:var(--mark);font-size:16px">Instrument Serif</span> for the wordmark alone, and <span style="font-family:var(--num);font-size:12px">IBM Plex Mono</span> for every figure — Inter's numerals are not a data face. Colour appears only where the domain demands it.</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid rgba(233,233,237,.1)">
+<div style="padding:26px 40px 30px;border-right:1px solid rgba(233,233,237,.1)">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:16px">Palette — six values, every one a role</div>
+<sc-for list="{{ palette }}" as="p" hint-placeholder-count="6">
+<div style="display:flex;align-items:center;gap:14px;padding:7px 0;border-bottom:1px solid rgba(233,233,237,.06)">
+<div style="width:34px;height:34px;border-radius:5px;flex:none;box-shadow:inset 0 0 0 1px rgba(233,233,237,.14);background:{{ p.hex }}"></div>
+<div style="width:96px;font:500 13px Inter">{{ p.name }}</div>
+<div style="width:86px;font:400 11.5px var(--num);color:rgba(233,233,237,.5)">{{ p.hex }}</div>
+<div style="flex:1;font:12px/1.4 Inter;color:rgba(233,233,237,.68)">{{ p.role }}</div>
+</div>
+</sc-for>
+<div style="margin-top:14px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">Carry, Breach and Rise are the only chromatic values in the interface. Nothing else is coloured. Every state that uses one also carries a shape or a word, so the meaning survives without the hue.</div>
+</div>
+
+<div style="padding:26px 40px 30px">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:16px">Type — three faces, strictly divided</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;gap:18px;align-items:baseline;border-bottom:1px solid rgba(233,233,237,.06);padding-bottom:12px">
+<div style="width:150px;font:11px Inter;color:rgba(233,233,237,.45)">Display · Domine<br>27 / 22px · titles only</div>
+<div style="font-family:var(--disp);font-size:28px;line-height:1">Month Close · August 2026</div>
+</div>
+<div style="display:flex;gap:18px;align-items:baseline;border-bottom:1px solid rgba(233,233,237,.06);padding-bottom:12px">
+<div style="width:150px;font:11px Inter;color:rgba(233,233,237,.45)">Interface · Inter 400/500<br>13px body · 10px caps labels</div>
+<div><div style="font:13px Inter">Liquidity tier · Short. Status Open. Currency locked once balances exist.</div><div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-top:6px">Outstanding tasks</div></div>
+</div>
+<div style="display:flex;gap:18px;align-items:baseline">
+<div style="width:150px;font:11px Inter;color:rgba(233,233,237,.45)">Data · IBM Plex Mono<br>13px · tabular · 2dp always</div>
+<div style="font-family:var(--num);font-size:13px;text-align:right;font-variant-numeric:tabular-nums">
+<div>128,430.00 <span style="font-size:10.5px;color:rgba(233,233,237,.5)">USD</span></div>
+<div>−388,200.00 <span style="font-size:10.5px;color:rgba(233,233,237,.5)">AUD</span></div>
+<div>1,860.00 <span style="font-size:10.5px;color:rgba(233,233,237,.5)">MYR</span></div>
+</div>
+</div>
+</div>
+<div style="margin-top:18px;font:11.5px/1.5 Inter;color:rgba(233,233,237,.45)">Density: 30px table rows, 8px cell padding, 40px screen gutters, 24px between panels. Figures right-aligned, currency code inseparable and one step dimmer. Negatives take a minus sign, never parentheses.</div>
+</div>
+</div>
+
+<div style="padding:26px 40px 34px">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin-bottom:18px">State treatments — the substance of the system</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:26px">
+
+<div>
+<div style="font:500 12px Inter;margin-bottom:4px">Entered vs stale</div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.5);margin-bottom:12px">A stale balance is carried from an earlier month. Dimmed, dotted underline in Carry, and a superscript mark. It can never be read as typed.</div>
+<div style="background:#232532;border-radius:8px;padding:12px 14px;font-family:var(--num);font-size:13px">
+<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font:11px Inter;color:rgba(233,233,237,.6)">Entered</span><span>26,940.00 <span style="font-size:10.5px;color:rgba(233,233,237,.5)">AUD</span></span></div>
+<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font:11px Inter;color:rgba(233,233,237,.6)">Stale</span><span style="color:rgba(233,233,237,.45);border-bottom:1px dotted var(--sig-carry);padding-bottom:1px">720,000.00 <span style="font-size:10.5px">MYR</span><sup style="color:var(--sig-carry);font-size:9px;margin-left:2px">c</sup></span></div>
+<div style="margin-top:8px;font:10.5px Inter;color:rgba(233,233,237,.45)"><sup style="color:var(--sig-carry)">c</sup> carried from Mar 2026 — 5 months</div>
+</div>
+</div>
+
+<div>
+<div style="font:500 12px Inter;margin-bottom:4px">Month completeness — four</div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.5);margin-bottom:12px">A filled glyph, not a colour alone. Outside Range is not a problem; Missing and Incomplete are, differently.</div>
+<div style="background:#232532;border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:9px">
+<sc-for list="{{ completeness }}" as="c" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:9px">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px {{ c.border }} {{ c.color }};background:{{ c.fill }}"></span>
+<span style="font:500 12px Inter;width:96px">{{ c.name }}</span>
+<span style="font:11px Inter;color:rgba(233,233,237,.5)">{{ c.note }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div>
+<div style="font:500 12px Inter;margin-bottom:4px">Warning vs error</div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.5);margin-bottom:12px">Warnings are advisory, sit beside the thing, keep both actions live, and never block. Errors carry a solid bar and stop the save.</div>
+<div style="display:flex;flex-direction:column;gap:9px">
+<div style="background:#232532;border-radius:8px;padding:10px 12px;border:1px dashed rgba(201,161,94,.5)">
+<div style="font:500 11px Inter;color:var(--sig-carry);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">Advisory</div>
+<div style="font:11.5px/1.4 Inter;color:rgba(233,233,237,.75)">Probable duplicate — same amount, category and date as a transaction entered 4 minutes ago.</div>
+<div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-secondary" style="font-size:11px;padding:3px 9px">Keep both</button><button class="btn btn-ghost" style="font-size:11px">Open the other</button></div>
+</div>
+<div style="background:rgba(209,117,106,.1);border-radius:8px;padding:10px 12px;border-left:3px solid var(--sig-breach)">
+<div style="font:500 11px Inter;color:var(--sig-breach);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">Error</div>
+<div style="font:11.5px/1.4 Inter;color:rgba(233,233,237,.8)">Close date is before the open date. Nothing was saved.</div>
+</div>
+<div>
+<div style="font:11px Inter;color:rgba(233,233,237,.6);margin-bottom:4px">Field-level</div>
+<input class="input" value="31/02/2026" style="border-color:var(--sig-breach);font-family:var(--num);font-size:12.5px">
+<div style="font:11px Inter;color:var(--sig-breach);margin-top:4px">▲ Not a calendar date.</div>
+</div>
+</div>
+</div>
+
+<div>
+<div style="font:500 12px Inter;margin-bottom:4px">Rate provenance</div>
+<div style="font:11.5px/1.45 Inter;color:rgba(233,233,237,.5);margin-bottom:12px">Every rate says how it got here. Exact is unmarked — the common case earns no ink. Absent is not zero.</div>
+<div style="background:#232532;border-radius:8px;padding:12px 14px;font-family:var(--num);font-size:12.5px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ provenance }}" as="r" hint-placeholder-count="4">
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+<span style="font:11px Inter;color:rgba(233,233,237,.6);width:66px">{{ r.pair }}</span>
+<span style="color:{{ r.color }}">{{ r.value }}<sup style="font-size:9px;margin-left:2px">{{ r.mark }}</sup></span>
+<span style="font:10.5px Inter;color:rgba(233,233,237,.45);flex:1;text-align:right">{{ r.note }}</span>
+</div>
+</sc-for>
+</div>
+<div style="margin-top:10px;background:#232532;border-radius:8px;padding:10px 12px">
+<div style="font:11px Inter;color:rgba(233,233,237,.6);margin-bottom:4px">Excluded from a total</div>
+<div style="font-family:var(--num);font-size:15px">1,284,905.44 <span style="font-size:11px;color:rgba(233,233,237,.5)">USD</span></div>
+<div style="font:11px/1.4 Inter;color:var(--sig-breach);margin-top:4px">Excludes 1 account — no USD/SGD rate exists. The balance is held, not zeroed.</div>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opts">
+
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Ledger spine — a month rail down the left of every screen, the same timeline everywhere</div>
+<div class="dv-card" data-screen-label="Month Close — spine" style="width:1440px">
+<div style="display:flex;min-height:920px">
+<sc-if value="{{ true }}" hint-placeholder-val="{{ true }}">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ rail }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+</sc-if>
+<div style="flex:1;min-width:0;display:flex">
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Month Close · August 2026</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Entry is in each account's own currency. The reporting-currency control does not apply to this screen.</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Reporting</span><div class="seg"><label class="seg-opt"><input type="radio" name="rcA" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rcA"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rcA"><span>MYR</span></label></div></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:10px 28px;background:rgba(201,161,94,.07);border-bottom:1px solid rgba(233,233,237,.08);position:sticky;top:0">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px solid var(--sig-carry);background:linear-gradient(90deg,var(--sig-carry) 50%,transparent 50%)"></span>
+<span style="font:500 12px Inter;color:var(--sig-carry)">Incomplete</span>
+<span style="font:12px Inter;color:rgba(233,233,237,.7);font-family:var(--num);font-size:12px">{{ doneA }} of 20 balances · 3 of 4 rates</span>
+<span style="font:11.5px Inter;color:rgba(233,233,237,.5);flex:1">Remaining: {{ remainA }}. No USD/SGD rate — one account will be excluded from translated totals.</span>
+<span style="font:11px Inter;color:rgba(233,233,237,.45)">Autosaves on blur. There is no save button.</span>
+</div>
+{{ ratesA }}
+<div style="padding:6px 28px 30px">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:16px 0 8px">2 · Balances as at 31 August 2026</div>
+<table class="table" style="font-size:13px">
+<thead><tr><th style="width:26px"></th><th>Account</th><th style="width:132px">Type</th><th style="width:52px">Cur</th><th style="text-align:right;width:160px">July 2026</th><th style="text-align:right;width:180px">August 2026</th><th style="width:74px"></th></tr></thead>
+<tbody>
+<sc-for list="{{ rowsA }}" as="r" hint-placeholder-count="20">
+<tr>
+<td style="color:rgba(233,233,237,.3);font-family:var(--num);font-size:10px">{{ r.n }}</td>
+<td style="font-size:13px">{{ r.name }}</td>
+<td style="font-size:11.5px;color:rgba(233,233,237,.55)">{{ r.type }}</td>
+<td style="font-family:var(--num);font-size:11px;color:rgba(233,233,237,.55)">{{ r.cur }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.priorColor }}">{{ r.prior }}<sup style="font-size:9px;color:var(--sig-carry);margin-left:2px">{{ r.mark }}</sup></td>
+<td style="text-align:right;padding:2px 8px"><input class="input" value="{{ r.val }}" onChange="{{ r.onChange }}" onBlur="{{ r.onBlur }}" style="text-align:right;font-family:var(--num);font-size:12.5px;min-height:28px;padding:3px 8px;background:{{ r.inputBg }};border-color:{{ r.inputBorder }}"></td>
+<td style="font:10.5px Inter;color:{{ r.savedColor }}">{{ r.savedLabel }}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</div>
+<div style="width:100px;flex:none;border-left:1px solid rgba(233,233,237,.08);padding:16px 0 0;background:#131523">
+<div style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.35);padding:0 12px 10px">Ledger</div>
+<sc-for list="{{ spine }}" as="m" hint-placeholder-count="14">
+<div style="display:flex;align-items:center;gap:7px;padding:5px 12px;background:{{ m.bg }};border-right:2px solid {{ m.edge }}">
+<span style="width:9px;height:9px;flex:none;border-radius:2px;border:1.5px {{ m.border }} {{ m.color }};background:{{ m.fill }}"></span>
+<span style="font-family:var(--num);font-size:11px;color:{{ m.text }}">{{ m.label }}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Provenance marks — a hanging notation column; every figure states where it came from</div>
+<div class="dv-card" data-screen-label="Month Close — marks" style="width:1440px">
+<div style="display:flex;min-height:920px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ rail }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Month Close · August 2026</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Entry is in each account's own currency. The reporting-currency control does not apply to this screen.</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Reporting</span><div class="seg"><label class="seg-opt"><input type="radio" name="rcB" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rcB"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rcB"><span>MYR</span></label></div></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:10px 28px;background:rgba(201,161,94,.07);border-bottom:1px solid rgba(233,233,237,.08)">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px solid var(--sig-carry);background:linear-gradient(90deg,var(--sig-carry) 50%,transparent 50%)"></span>
+<span style="font:500 12px Inter;color:var(--sig-carry)">Incomplete</span>
+<span style="font-family:var(--num);font-size:12px;color:rgba(233,233,237,.7)">{{ doneB }} of 20 balances · 3 of 4 rates</span>
+<span style="font:11.5px Inter;color:rgba(233,233,237,.5);flex:1">Remaining: {{ remainB }}. No USD/SGD rate — one account will be excluded from translated totals.</span>
+<span style="font:11px Inter;color:rgba(233,233,237,.45)">Autosaves on blur. There is no save button.</span>
+</div>
+<div style="display:flex;align-items:center;gap:22px;padding:8px 28px;border-bottom:1px solid rgba(233,233,237,.08);background:#13152140">
+<span style="font:500 9px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.4)">Notation</span>
+<sc-for list="{{ legend }}" as="l" hint-placeholder-count="5">
+<span style="display:inline-flex;align-items:baseline;gap:6px"><span style="font-family:var(--num);font-size:12px;color:{{ l.color }}">{{ l.glyph }}</span><span style="font:11px Inter;color:rgba(233,233,237,.55)">{{ l.label }}</span></span>
+</sc-for>
+</div>
+{{ ratesB }}
+<div style="padding:6px 28px 30px">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:16px 0 8px">2 · Balances as at 31 August 2026</div>
+<table class="table" style="font-size:13px">
+<thead><tr><th style="width:30px"></th><th>Account</th><th style="width:132px">Type</th><th style="width:52px">Cur</th><th style="text-align:right;width:170px">July 2026</th><th style="text-align:right;width:180px">August 2026</th><th style="width:110px">Provenance</th></tr></thead>
+<tbody>
+<sc-for list="{{ rowsB }}" as="r" hint-placeholder-count="20">
+<tr>
+<td style="font-family:var(--num);font-size:12px;color:{{ r.glyphColor }};text-align:center">{{ r.glyph }}</td>
+<td style="font-size:13px">{{ r.name }}</td>
+<td style="font-size:11.5px;color:rgba(233,233,237,.55)">{{ r.type }}</td>
+<td style="font-family:var(--num);font-size:11px;color:rgba(233,233,237,.55)">{{ r.cur }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.priorColor }}">{{ r.prior }}</td>
+<td style="text-align:right;padding:2px 8px"><input class="input" value="{{ r.val }}" onChange="{{ r.onChange }}" onBlur="{{ r.onBlur }}" style="text-align:right;font-family:var(--num);font-size:12.5px;min-height:28px;padding:3px 8px;background:{{ r.inputBg }};border-color:{{ r.inputBorder }}"></td>
+<td style="font:10.5px Inter;color:{{ r.provColor }}">{{ r.prov }}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Sparkline grammar — the same 24-month micro-chart from table cell to full report</div>
+<div class="dv-card" data-screen-label="Month Close — sparklines" style="width:1440px">
+<div style="display:flex;min-height:920px">
+<div style="width:56px;flex:none;background:#12141f;border-right:1px solid rgba(233,233,237,.08);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:4px">
+<div style="font-family:var(--mark);font-size:21px;line-height:1;color:#9184d9;margin-bottom:12px">FH</div>
+<sc-for list="{{ rail }}" as="n" hint-placeholder-count="8">
+<div style="width:34px;height:32px;border-radius:6px;display:grid;place-items:center;background:{{ n.bg }};margin-top:{{ n.mt }}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{ n.stroke }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ n.d }}"></path></svg>
+</div>
+</sc-for>
+<div style="width:22px;height:1px;background:rgba(233,233,237,.14);margin:8px 0"></div>
+<sc-for list="{{ railStates }}" as="s" hint-placeholder-count="5">
+<div style="width:6px;height:6px;border-radius:50%;background:rgba(233,233,237,.22);margin:3px 0"></div>
+</sc-for>
+</div>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:18px 28px 14px;border-bottom:1px solid rgba(233,233,237,.1)">
+<div>
+<div style="font-family:var(--disp);font-size:27px;line-height:1.05">Month Close · August 2026</div>
+<div style="font:11.5px Inter;color:rgba(233,233,237,.5);margin-top:5px">Entry is in each account's own currency. The reporting-currency control does not apply to this screen.</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 9px Inter;letter-spacing:.12em;text-transform:uppercase;color:rgba(233,233,237,.4)">Reporting</span><div class="seg"><label class="seg-opt"><input type="radio" name="rcC" checked><span>USD</span></label><label class="seg-opt"><input type="radio" name="rcC"><span>AUD</span></label><label class="seg-opt"><input type="radio" name="rcC"><span>MYR</span></label></div></div>
+<button class="btn btn-secondary" style="font-size:12px">Export CSV</button>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:10px 28px;background:rgba(201,161,94,.07);border-bottom:1px solid rgba(233,233,237,.08)">
+<span style="width:11px;height:11px;flex:none;border-radius:2px;border:1.5px solid var(--sig-carry);background:linear-gradient(90deg,var(--sig-carry) 50%,transparent 50%)"></span>
+<span style="font:500 12px Inter;color:var(--sig-carry)">Incomplete</span>
+<span style="font-family:var(--num);font-size:12px;color:rgba(233,233,237,.7)">{{ doneC }} of 20 balances · 3 of 4 rates</span>
+<span style="font:11.5px Inter;color:rgba(233,233,237,.5);flex:1">Remaining: {{ remainC }}. No USD/SGD rate — one account will be excluded from translated totals.</span>
+<span style="font:11px Inter;color:rgba(233,233,237,.45)">Autosaves on blur. There is no save button.</span>
+</div>
+{{ ratesC }}
+<div style="padding:6px 28px 30px">
+<div style="font:500 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,233,237,.5);margin:16px 0 8px">2 · Balances as at 31 August 2026</div>
+<table class="table" style="font-size:13px">
+<thead><tr><th style="width:26px"></th><th>Account</th><th style="width:120px">Type</th><th style="width:46px">Cur</th><th style="width:150px">24 months</th><th style="text-align:right;width:150px">July 2026</th><th style="text-align:right;width:180px">August 2026</th><th style="width:70px"></th></tr></thead>
+<tbody>
+<sc-for list="{{ rowsC }}" as="r" hint-placeholder-count="20">
+<tr>
+<td style="color:rgba(233,233,237,.3);font-family:var(--num);font-size:10px">{{ r.n }}</td>
+<td style="font-size:13px">{{ r.name }}</td>
+<td style="font-size:11.5px;color:rgba(233,233,237,.55)">{{ r.type }}</td>
+<td style="font-family:var(--num);font-size:11px;color:rgba(233,233,237,.55)">{{ r.cur }}</td>
+<td>{{ r.spark }}</td>
+<td style="text-align:right;font-family:var(--num);font-size:12.5px;color:{{ r.priorColor }}">{{ r.prior }}<sup style="font-size:9px;color:var(--sig-carry);margin-left:2px">{{ r.mark }}</sup></td>
+<td style="text-align:right;padding:2px 8px"><input class="input" value="{{ r.val }}" onChange="{{ r.onChange }}" onBlur="{{ r.onBlur }}" style="text-align:right;font-family:var(--num);font-size:12.5px;min-height:28px;padding:3px 8px;background:{{ r.inputBg }};border-color:{{ r.inputBorder }}"></td>
+<td style="font:10.5px Inter;color:{{ r.savedColor }}">{{ r.savedLabel }}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "go with <a class="dv-oid" href="#1a">1a</a>, build the ten" · "<a class="dv-oid" href="#1b">1b</a> but the marks live in the figure, not a column" · "combine the spine from <a class="dv-oid" href="#1a">1a</a> with the sparklines from <a class="dv-oid" href="#1c">1c</a>"</p>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1560,&quot;height&quot;:1100}}">
+const CARRY = "#c9a15e", BREACH = "#d1756a", RISE = "#6fae90", DIM = "rgba(233,233,237,.45)", TEXT = "#e9e9ed";
+
+const ACCOUNTS = [
+  ["CBA Everyday", "Current/Checking", "AUD", 4182.55, 0, 1],
+  ["CBA NetBank Saver", "Savings/Deposit", "AUD", 26940.00, 0, 1],
+  ["Maybank Current", "Current/Checking", "MYR", 8320.40, 0, 1],
+  ["CIMB FastSaver", "Savings/Deposit", "MYR", 41205.00, 0, 1],
+  ["Wise multi-currency", "Current/Checking", "USD", 3845.12, 0, 1],
+  ["Standard Chartered SG", "Savings/Deposit", "SGD", 12300.00, 0, 1],
+  ["IBKR brokerage", "Investment/Brokerage", "USD", 128430.00, 0, 0],
+  ["Vanguard AU", "Investment/Brokerage", "AUD", 61275.80, 0, 0],
+  ["ASB unit trust", "Investment/Brokerage", "MYR", 92600.00, 0, 0],
+  ["AustralianSuper", "Pension/Retirement", "AUD", 214880.00, 0, 0],
+  ["EPF (KWSP)", "Pension/Retirement", "MYR", 187450.00, 1, 0],
+  ["Mont Kiara apartment", "Property", "MYR", 720000.00, 1, 0],
+  ["Gold bullion", "Physical Asset", "USD", 18900.00, 1, 0],
+  ["Watch collection", "Physical Asset", "AUD", 14500.00, 1, 0],
+  ["CIMB term deposit", "Savings/Deposit", "MYR", 60000.00, 0, 0],
+  ["Amex Explorer", "Credit Card", "AUD", 2417.35, 0, 0],
+  ["Maybank Visa", "Credit Card", "MYR", 1860.00, 0, 0],
+  ["CBA home loan", "Loan/Mortgage", "AUD", 388200.00, 0, 0],
+  ["Mont Kiara mortgage", "Loan/Mortgage", "MYR", 402750.00, 0, 0],
+  ["HECS-HELP", "Other Liability", "AUD", 19640.00, 0, 0]
+];
+
+const NEW_VALS = [3960.18, 27380.00, 9145.60, 41960.00, 4102.44, 12300.00];
+
+const fmt = (n) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+class Component extends DCLogic {
+  state = { vals: {}, saved: {} };
+
+  seeded(i) {
+    const out = [];
+    let x = (i + 3) * 9301 % 233280;
+    for (let k = 0; k < 24; k++) {
+      x = (x * 9301 + 49297) % 233280;
+      out.push(6 + Math.round((x / 233280) * 16) + Math.round(k * 0.35));
+    }
+    return out;
+  }
+
+  rows(v) {
+    const R = React.createElement;
+    return ACCOUNTS.map((a, i) => {
+      const key = v + ":" + i;
+      const pre = i < 6 ? fmt(NEW_VALS[i]) : "";
+      const typed = this.state.vals[key];
+      const val = typed === undefined ? pre : typed;
+      const isSaved = this.state.saved[key] || (typed === undefined && pre !== "");
+      const stale = a[4] === 1;
+      const spark = R("div", { style: { display: "flex", alignItems: "flex-end", gap: "1px", height: "24px" } },
+        this.seeded(i).map((h, k) => R("div", {
+          key: k,
+          style: {
+            width: "4px", height: h + "px", borderRadius: "1px",
+            background: k === 23 ? "#9184d9" : (k >= 21 && stale ? CARRY : "rgba(233,233,237,.28)")
+          }
+        })));
+      return {
+        n: String(i + 1).padStart(2, "0"),
+        name: a[0], type: a[1], cur: a[2],
+        prior: fmt(a[3]) + "  " + a[2],
+        priorColor: stale ? DIM : "rgba(233,233,237,.85)",
+        mark: stale ? "c" : "",
+        glyph: stale ? "c" : "·",
+        glyphColor: stale ? CARRY : "rgba(233,233,237,.25)",
+        prov: stale ? "carried · Mar 2026" : "entered",
+        provColor: stale ? CARRY : "rgba(233,233,237,.4)",
+        spark: spark,
+        val: val,
+        inputBg: isSaved ? "rgba(111,174,144,.07)" : "#232532",
+        inputBorder: isSaved ? "rgba(111,174,144,.4)" : "rgba(233,233,237,.16)",
+        savedLabel: isSaved ? "saved" : "—",
+        savedColor: isSaved ? RISE : "rgba(233,233,237,.3)",
+        onChange: (e) => { const t = e.target.value; this.setState((s) => ({ vals: Object.assign({}, s.vals, { [key]: t }) })); },
+        onBlur: () => { if ((this.state.vals[key] || pre) !== "") this.setState((s) => ({ saved: Object.assign({}, s.saved, { [key]: true }) })); }
+      };
+    });
+  }
+
+  count(v) {
+    let n = 0;
+    for (let i = 0; i < 20; i++) {
+      const key = v + ":" + i;
+      const typed = this.state.vals[key];
+      const val = typed === undefined ? (i < 6 ? "x" : "") : typed;
+      if (val !== "") n++;
+    }
+    return n;
+  }
+
+  remaining(v) {
+    const done = this.count(v);
+    return done >= 20 ? "none" : (20 - done) + " accounts, USD/SGD rate";
+  }
+
+  ratesBlock(v) {
+    const R = React.createElement;
+    const rates = [
+      ["USD / AUD", "1.5142", "", "exact · 31 Aug 2026", TEXT, ""],
+      ["USD / MYR", "4.2180", "", "exact · 31 Aug 2026", TEXT, ""],
+      ["AUD / MYR", "2.7855", "t", "triangulated through USD · 31 Aug 2026", "#b5abfc", ""],
+      ["USD / SGD", "—", "", "no rate on record", BREACH, "missing"]
+    ];
+    const label = (t) => R("div", { style: { font: "500 10px Inter, sans-serif", letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(233,233,237,.5)", margin: "16px 0 8px" } }, t);
+    const head = R("tr", null,
+      ["Pair", "Rate", "Provenance", "As at", "Entered this pass"].map((h, i) =>
+        R("th", { key: i, style: { textAlign: i === 1 ? "right" : "left", width: i === 0 ? "120px" : i === 1 ? "120px" : i === 4 ? "220px" : "auto" } }, h)));
+    const body = rates.map((r, i) => R("tr", { key: i },
+      R("td", { style: { fontFamily: 'var(--num)', fontSize: "12.5px" } }, r[0]),
+      R("td", { style: { textAlign: "right", fontFamily: 'var(--num)', fontSize: "12.5px", color: r[4] } }, r[1], r[2] ? R("sup", { style: { fontSize: "9px", marginLeft: "2px" } }, r[2]) : null),
+      R("td", { style: { font: "11.5px Inter, sans-serif", color: r[5] === "missing" ? BREACH : "rgba(233,233,237,.55)" } }, r[3].split(" · ")[0]),
+      R("td", { style: { font: "11.5px Inter, sans-serif", color: "rgba(233,233,237,.55)" } }, r[3].split(" · ")[1] || "—"),
+      R("td", null, r[5] === "missing"
+        ? R("span", { style: { font: "11.5px Inter, sans-serif", color: BREACH } }, "Standard Chartered SG will be excluded")
+        : R("input", { className: "input", defaultValue: i === 1 ? "4.2180" : "", placeholder: i === 3 ? "" : "enter", style: { textAlign: "right", fontFamily: 'var(--num)', fontSize: "12.5px", minHeight: "28px", padding: "3px 8px", width: "140px" } }))));
+    const warn = R("div", { style: { margin: "8px 0 0", padding: "9px 12px", border: "1px dashed rgba(201,161,94,.5)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "12px", maxWidth: "760px" } },
+      R("span", { style: { font: "500 10px Inter, sans-serif", letterSpacing: ".08em", textTransform: "uppercase", color: CARRY } }, "Advisory"),
+      R("span", { style: { font: "11.5px Inter, sans-serif", color: "rgba(233,233,237,.75)", flex: 1 } }, "USD/MYR entered at 4.2180 — 16.6% from last month's 3.6180. Saved; check it if that was not intended."),
+      R("button", { className: "btn btn-ghost", style: { fontSize: "11px" } }, "Dismiss"));
+    return R("div", { style: { padding: "0 28px" } }, label("1 · Exchange rates required for this month"),
+      R("table", { className: "table" }, R("thead", null, head), R("tbody", null, body)), warn);
+  }
+
+  data() {
+    const M = ["Sep 25","Oct 25","Nov 25","Dec 25","Jan 26","Feb 26","Mar 26","Apr 26","May 26","Jun 26","Jul 26","Aug 26"];
+    const series = [];
+    for (let i = 0; i < 24; i++) series.push(236000 + i * 2900 + ((i * 7919) % 1700) - 700);
+    series[23] = 307632.26; series[22] = 301455.80;
+    const min = Math.min.apply(null, series), max = Math.max.apply(null, series);
+    const pts = series.map((v, i) => (i * (1000 / 23)).toFixed(1) + "," + (110 - ((v - min) / (max - min)) * 96).toFixed(1)).join(" ");
+    const nwRows = M.map((m, i) => {
+      const v = series[12 + i], p = series[11 + i], d = v - p;
+      return { m: m, total: fmt(v), chg: (d < 0 ? "−" : "+") + fmt(Math.abs(d)), pct: (d < 0 ? "−" : "+") + (Math.abs(d) / p * 100).toFixed(2) + "%", color: d < 0 ? BREACH : RISE };
+    }).reverse();
+    const acctSeries = [21400, 22150, 22040, 23310, 24020, 23880, 24960, 25610, 25480, 26120, 26940, 27380];
+    const amin = Math.min.apply(null, acctSeries), amax = Math.max.apply(null, acctSeries);
+    const acctPts = acctSeries.map((v, i) => (i * (620 / 11)).toFixed(1) + "," + (108 - ((v - amin) / (amax - amin)) * 92).toFixed(1)).join(" ");
+    const acctRows = M.map((m, i) => {
+      const v = acctSeries[i], p = i ? acctSeries[i - 1] : 20890, d = v - p;
+      return { m: m, bal: fmt(v), chg: (d < 0 ? "−" : "+") + fmt(Math.abs(d)), pct: (d < 0 ? "−" : "+") + (Math.abs(d) / p * 100).toFixed(2) + "%", color: d < 0 ? BREACH : RISE, stale: (i === 4 || i === 8) ? "c" : "", staleColor: (i === 4 || i === 8) ? CARRY : "transparent" };
+    }).reverse();
+    const fxPts = [1.5410,1.5288,1.5352,1.5201,1.5164,1.5240,1.5118,1.5072,1.5195,1.5223,1.5106,1.5142]
+      .map((v, i) => (i * (620 / 11)).toFixed(1) + "," + (100 - ((v - 1.50) / 0.05) * 80).toFixed(1)).join(" ");
+    return {
+      nwPoints: pts, nwTotal: "307,632.26", nwPrior: "301,455.80", nwChg: "+6,176.46", nwPct: "+2.05%",
+      nwRows: nwRows, acctPoints: acctPts, acctRows: acctRows, fxPoints: fxPts,
+      months12: M.slice().reverse(),
+      tasks: [
+        { n: "14", t: "accounts without an August balance", to: "Month Close", tone: CARRY },
+        { n: "1", t: "currency pair has no rate on record — USD/SGD", to: "FX Rates", tone: BREACH },
+        { n: "1", t: "rate is stale — USD/MYR last entered 24 Aug, threshold 7 days", to: "FX Rates", tone: CARRY },
+        { n: "2", t: "recurring proposals awaiting confirmation", to: "Cash Flow", tone: CARRY }
+      ],
+      typeSlice: [
+        ["Current/Checking", "12,180.44", 0], ["Savings/Deposit", "41,860.12", 0], ["Investment/Brokerage", "234,910.60", 0],
+        ["Pension/Retirement", "186,420.00", 0], ["Property", "170,700.00", 0], ["Physical Asset", "28,470.00", 0],
+        ["Credit Card", "−2,038.90", 1], ["Loan/Mortgage", "−351,900.00", 1], ["Other Liability", "−12,970.00", 1]
+      ].map((r) => ({ name: r[0], v: r[1], color: r[2] ? BREACH : "rgba(233,233,237,.9)", kind: r[2] ? "liability" : "asset" })),
+      tierSlice: [["Instant", "10,141.54"], ["Short", "39,899.02"], ["Long", "213,120.70"], ["Locked", "44,471.00"]].map((r) => ({ name: r[0], v: r[1] })),
+      curSlice: [["USD", "151,330.00"], ["AUD", "−18,441.30"], ["MYR", "174,743.56"]].map((r) => ({ name: r[0], v: r[1], color: r[1][0] === "−" ? BREACH : "rgba(233,233,237,.9)" })),
+      cashRows: [
+        { cur: "AUD", inc: "9,420.00", exp: "6,185.40", net: "+3,234.60", color: RISE },
+        { cur: "MYR", inc: "0.00", exp: "4,310.75", net: "−4,310.75", color: BREACH },
+        { cur: "USD", inc: "1,250.00", exp: "380.00", net: "+870.00", color: RISE }
+      ],
+      catRows: [
+        { p: "Housing", c: "Rent", inc: "—", exp: "3,200.00", cur: "AUD", net: "−3,200.00" },
+        { p: "", c: "Utilities", inc: "—", exp: "285.40", cur: "AUD", net: "−285.40" },
+        { p: "Food", c: "Groceries", inc: "—", exp: "1,140.20", cur: "AUD", net: "−1,140.20" },
+        { p: "", c: "Eating out", inc: "—", exp: "620.00", cur: "AUD", net: "−620.00" },
+        { p: "Transport", c: "Fuel", inc: "—", exp: "210.00", cur: "AUD", net: "−210.00" },
+        { p: "", c: "Public transport", inc: "—", exp: "96.00", cur: "AUD", net: "−96.00" },
+        { p: "Income", c: "Salary", inc: "9,420.00", exp: "—", cur: "AUD", net: "+9,420.00" },
+        { p: "", c: "Interest", inc: "1,250.00", exp: "—", cur: "USD", net: "+1,250.00" },
+        { p: "Malaysia", c: "Condo maintenance", inc: "—", exp: "1,850.00", cur: "MYR", net: "−1,850.00" },
+        { p: "", c: "Utilities", inc: "—", exp: "460.75", cur: "MYR", net: "−460.75" },
+        { p: "", c: "Family", inc: "—", exp: "2,000.00", cur: "MYR", net: "−2,000.00" }
+      ].map((r) => ({ p: r.p, c: r.c, inc: r.inc, exp: r.exp, cur: r.cur, net: r.net, color: r.net[0] === "+" ? RISE : BREACH })),
+      txRows: [
+        { d: "28 Aug 2026", a: "62.40", cur: "AUD", cat: "Food · Groceries", note: "Woolworths", dup: 0 },
+        { d: "28 Aug 2026", a: "62.40", cur: "AUD", cat: "Food · Groceries", note: "", dup: 1 },
+        { d: "27 Aug 2026", a: "1,850.00", cur: "MYR", cat: "Malaysia · Condo maintenance", note: "Q3", dup: 0 },
+        { d: "26 Aug 2026", a: "9,420.00", cur: "AUD", cat: "Income · Salary", note: "", dup: 0 },
+        { d: "24 Aug 2026", a: "96.00", cur: "AUD", cat: "Transport · Public transport", note: "Myki", dup: 0 }
+      ],
+      proposals: [
+        { d: "1 Sep 2026", a: "3,200.00", cur: "AUD", cat: "Housing · Rent", src: "monthly since Feb 2025" },
+        { d: "1 Sep 2026", a: "460.75", cur: "MYR", cat: "Malaysia · Utilities", src: "monthly since Aug 2025" }
+      ],
+      holdings: [
+        { n: "VOO", d: "Vanguard S&P 500 ETF", q: "96.0000", cb: "41,280.00", cur: "USD", lots: "4", flag: 0 },
+        { n: "AAPL", d: "Apple Inc.", q: "140.0000", cb: "18,620.00", cur: "USD", lots: "3", flag: 0 },
+        { n: "VTS.AX", d: "Vanguard US Total Market", q: "420.0000", cb: "42,180.60", cur: "AUD", lots: "5", flag: 0 },
+        { n: "VAS.AX", d: "Vanguard Australian Shares", q: "310.0000", cb: "19,095.20", cur: "AUD", lots: "2", flag: 0 },
+        { n: "ASB", d: "Amanah Saham Bumiputera", q: "51,000.0000", cb: "92,600.00", cur: "MYR", lots: "6", flag: 1 }
+      ].map((h) => ({ n: h.n, d: h.d, q: h.q, cb: h.cb, cur: h.cur, lots: h.lots, flagMark: h.flag ? "— flagged" : "" })),
+      lots: [
+        { d: "14 Mar 2024", q: "20.0000", u: "398.20", rb: "7,964.00" },
+        { d: "09 Aug 2024", q: "16.0000", u: "421.55", rb: "6,744.80" },
+        { d: "17 Jan 2025", q: "30.0000", u: "440.10", rb: "13,203.00" },
+        { d: "05 Jun 2026", q: "30.0000", u: "445.61", rb: "13,368.20" }
+      ],
+      gainsUSD: [
+        { d: "12 Feb 2026", h: "AAPL", pr: "9,840.00", f: "12.00", cb: "8,110.00", g: "+1,718.00", tx: "25", ng: "+1,288.50" },
+        { d: "30 Jun 2026", h: "VOO", pr: "14,200.00", f: "0.00", cb: "12,905.40", g: "+1,294.60", tx: "25", ng: "+970.95" }
+      ],
+      gainsAUD: [
+        { d: "18 Apr 2026", h: "VAS.AX", pr: "6,410.00", f: "9.50", cb: "6,980.00", g: "−579.50", tx: "0", ng: "−579.50" }
+      ],
+      fxRows: [
+        { p: "USD / AUD", r: "1.5142", m: "", asat: "31 Aug 2026", prov: "exact", color: TEXT, pc: "rgba(233,233,237,.55)" },
+        { p: "USD / MYR", r: "4.2180", m: "c", asat: "24 Aug 2026", prov: "carried forward", color: CARRY, pc: CARRY },
+        { p: "AUD / MYR", r: "2.7855", m: "t", asat: "31 Aug 2026", prov: "triangulated through USD", color: "#b5abfc", pc: "#b5abfc" },
+        { p: "USD / SGD", r: "—", m: "", asat: "—", prov: "no rate on record", color: BREACH, pc: BREACH }
+      ],
+      accountRows: ACCOUNTS.map((a, i) => ({
+        name: a[0], type: a[1], cur: a[2],
+        tier: ["Instant", "Short", "Instant", "Short", "Instant", "Short", "Long", "Long", "Long", "Locked", "Locked", "Locked", "Short", "Long", "Locked", "Instant", "Instant", "Long", "Long", "Locked"][i],
+        status: i === 5 ? "Dormant" : "Open",
+        statusColor: i === 5 ? CARRY : "rgba(233,233,237,.6)",
+        opened: ["04 Feb 2016","04 Feb 2016","19 Jul 2018","19 Jul 2018","02 Mar 2021","11 Nov 2019","23 Sep 2020","14 Jan 2019","06 Jun 2017","12 Mar 2014","19 Jul 2018","28 Oct 2021","15 Dec 2022","01 Jul 2015","09 Sep 2023","17 May 2018","19 Jul 2018","28 Oct 2021","28 Oct 2021","01 Mar 2013"][i],
+        lockMark: i === 6 ? "" : "ᴸ",
+        actionColor: i === 6 ? BREACH : "#b5abfc",
+        locked: i === 6 ? 0 : 1,
+        action: i === 6 ? "Delete" : "Close",
+        actionNote: i === 6 ? "no balances on record" : "has balance history"
+      })),
+      categories: [
+        { p: "Housing", kids: [["Rent", "used", 0], ["Utilities", "used", 0], ["Repairs", "unused", 0]] },
+        { p: "Food", kids: [["Groceries", "used", 0], ["Eating out", "used", 0]] },
+        { p: "Transport", kids: [["Fuel", "used", 0], ["Public transport", "used", 0], ["Rideshare", "deactivated", 1]] },
+        { p: "Income", kids: [["Salary", "used", 0], ["Interest", "used", 0], ["Dividends", "used", 0]] },
+        { p: "Malaysia", kids: [["Condo maintenance", "used", 0], ["Utilities", "used", 0], ["Family", "used", 0]] },
+        { p: "Health", kids: [["Insurance", "used", 0], ["Medical", "unused", 0]] }
+      ].map((c) => ({
+        p: c.p,
+        kids: c.kids.map((k) => ({
+          name: k[0],
+          state: k[1] === "used" ? "in use" : k[1] === "unused" ? "no transactions" : "deactivated",
+          color: k[2] ? "rgba(233,233,237,.35)" : "rgba(233,233,237,.85)",
+          action: k[2] ? "Reactivate" : k[1] === "used" ? "Deactivate" : "Delete",
+          actionColor: k[1] === "unused" ? BREACH : "#b5abfc"
+        }))
+      }))
+    };
+  }
+
+  renderVals() {
+    const icon = (d) => d;
+    const nav = [
+      ["M3 3h7v7H3zM14 3h7v4h-7zM14 10h7v11h-7zM3 13h7v8H3z", 0],
+      ["M3 17l5-6 4 3 6-8M17 6h4v4", 0],
+      ["M4 6h16M4 12h16M4 18h10M18 15v6M15 18h6", 0],
+      ["M4 5h16v15H4M4 9h16M8 3v4M16 3v4M8.5 14.5l2 2 4-4", 1],
+      ["M3 8h14l-3-3M21 16H7l3 3", 0],
+      ["M4 20V10M10 20V4M16 20v-8M22 20h-20", 0],
+      ["M3 6h8M7 6v12M13 18h8M17 18V6", 0],
+      ["M12 9a3 3 0 100 6 3 3 0 000-6M12 2v2M12 20v2M5 5l1.5 1.5M17.5 17.5L19 19M2 12h2M20 12h2M5 19l1.5-1.5M17.5 6.5L19 5", 0]
+    ];
+    const months = ["Sep 24","Oct 24","Nov 24","Dec 24","Jan 25","Feb 25","Mar 25","Apr 25","May 25","Jun 25","Jul 25","Aug 25","Sep 25","Oct 25","Nov 25","Dec 25","Jan 26","Feb 26","Mar 26","Apr 26","May 26","Jun 26","Jul 26","Aug 26"];
+    return {
+      palette: [
+        { name: "Ground", hex: "#161826", role: "Page and rail. Surfaces lift to #232532; nothing else." },
+        { name: "Ink", hex: "#e9e9ed", role: "Figures and labels, stepped to 85 / 55 / 30% for hierarchy." },
+        { name: "Accent", hex: "#9184d9", role: "Interactive only — focus, current month, triangulated rate." },
+        { name: "Carry", hex: CARRY, role: "Stale, carried, incomplete, advisory. Always with a mark." },
+        { name: "Breach", hex: BREACH, role: "Missing, excluded, error, decrease. Never decorative." },
+        { name: "Rise", hex: RISE, role: "Saved, and increase in a change column. Nothing else." }
+      ],
+      completeness: [
+        { name: "Complete", note: "every account and rate present", border: "solid", color: "rgba(233,233,237,.6)", fill: "rgba(233,233,237,.6)" },
+        { name: "Incomplete", note: "some balances entered, some absent", border: "solid", color: CARRY, fill: "linear-gradient(90deg," + CARRY + " 50%,transparent 50%)" },
+        { name: "Missing", note: "the month exists, nothing entered", border: "solid", color: BREACH, fill: "transparent" },
+        { name: "Outside Range", note: "before the first account opened — not a fault", border: "dashed", color: "rgba(233,233,237,.3)", fill: "transparent" }
+      ],
+      provenance: [
+        { pair: "USD / AUD", value: "1.5142", mark: "", note: "exact — entered 31 Aug", color: TEXT },
+        { pair: "USD / MYR", value: "4.2180", mark: "c", note: "carried from 24 Aug", color: CARRY },
+        { pair: "AUD / MYR", value: "2.7855", mark: "t", note: "triangulated via USD", color: "#b5abfc" },
+        { pair: "USD / SGD", value: "—", mark: "", note: "no rate on record", color: BREACH }
+      ],
+      legend: [
+        { glyph: "·", label: "entered", color: "rgba(233,233,237,.35)" },
+        { glyph: "c", label: "carried", color: CARRY },
+        { glyph: "t", label: "triangulated", color: "#b5abfc" },
+        { glyph: "—", label: "no rate", color: BREACH },
+        { glyph: "✓", label: "saved this pass", color: RISE }
+      ],
+      rail: nav.map((n) => ({ d: n[0], bg: n[1] ? "rgba(145,132,217,.18)" : "transparent", stroke: n[1] ? "#b5abfc" : "rgba(233,233,237,.45)" })),
+      nav: (() => {
+        const labels = ["Dashboard", "Net worth", "Accounts", "Month Close", "Cash flow", "Investments", "FX rates", "Settings"];
+        const badges = ["", "", "", "14", "2", "", "2", ""];
+        const active = { dash: 0, trend: 1, admin: 2, acct: 2, close: 3, cash: 4, cat: 4, inv: 5, fx: 6, set: 7 };
+        const out = {};
+        Object.keys(active).forEach((k) => {
+          const ki = active[k];
+          out[k] = nav.map((n, i) => ({
+            d: n[0], bg: i === ki ? "rgba(145,132,217,.18)" : "transparent",
+            stroke: i === ki ? "#b5abfc" : "rgba(233,233,237,.45)",
+            mt: i === 7 ? "auto" : "0",
+            label: labels[i], badge: badges[i],
+            labelColor: i === ki ? "#e9e9ed" : "rgba(233,233,237,.6)",
+            badgeBg: badges[i] ? "rgba(201,161,94,.18)" : "transparent",
+            badgeColor: badges[i] ? CARRY : "transparent"
+          }));
+        });
+        return out;
+      })(),
+      spineAsc: months.slice(10).map((m, i, arr) => {
+        const active = i === arr.length - 1;
+        return {
+          label: m, bg: active ? "rgba(145,132,217,.14)" : "transparent",
+          edge: active ? "#9184d9" : "transparent",
+          text: active ? "#e9e9ed" : "rgba(233,233,237,.5)",
+          border: "solid",
+          color: active ? CARRY : "rgba(233,233,237,.45)",
+          fill: active ? "linear-gradient(90deg," + CARRY + " 50%,transparent 50%)" : "rgba(233,233,237,.45)"
+        };
+      }),
+      spineEmpty: months.slice(10).reverse().map((m) => ({
+        label: m, bg: "transparent", edge: "transparent", text: "rgba(233,233,237,.3)",
+        border: "dashed", color: "rgba(233,233,237,.3)", fill: "transparent"
+      })),
+      spineDone: months.slice(10).reverse().map((m, i) => ({
+        label: m, bg: i === 0 ? "rgba(145,132,217,.14)" : "transparent",
+        edge: i === 0 ? "#9184d9" : "transparent",
+        text: i === 0 ? "#e9e9ed" : "rgba(233,233,237,.5)",
+        border: "solid", color: "rgba(233,233,237,.6)", fill: "rgba(233,233,237,.6)"
+      })),
+      railStates: [1, 2, 3, 4, 5],
+      stateNav: ["First run", "Mid-close", "Complete month", "Stale rates", "Excluded account"],
+      spine: months.slice(10).reverse().map((m, i, arr) => {
+        const active = i === 0;
+        const prior = i === 1;
+        return {
+          label: m, bg: active ? "rgba(145,132,217,.14)" : "transparent",
+          edge: active ? "#9184d9" : "transparent",
+          text: active ? "#e9e9ed" : "rgba(233,233,237,.5)",
+          border: "solid",
+          color: active ? CARRY : "rgba(233,233,237,.45)",
+          fill: active ? "linear-gradient(90deg," + CARRY + " 50%,transparent 50%)" : (prior ? "rgba(233,233,237,.45)" : "rgba(233,233,237,.45)")
+        };
+      }),
+      rowsA: this.rows("a"), rowsB: this.rows("b"), rowsC: this.rows("c"),
+      doneA: this.count("a"), doneB: this.count("b"), doneC: this.count("c"),
+      remainA: this.remaining("a"), remainB: this.remaining("b"), remainC: this.remaining("c"),
+      ratesA: this.ratesBlock("a"), ratesB: this.ratesBlock("b"), ratesC: this.ratesBlock("c"),
+      ratesFinal: this.ratesBlock("f"), rowsF: this.rows("f"), doneF: this.count("f"), remainF: this.remaining("f"),
+      ...this.data()
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+# Financial Hub
+
+A locally hosted, single-user net worth tracker. One person uses it: someone living
+between Australia and Malaysia, holding money in several currencies and reporting in USD.
+
+The system's spine is net worth. It exists to answer one question with confidence — *is
+the balance of this account increasing, and what is its trend?* — for any single account,
+in under thirty seconds.
+
+**Account balances are manually entered monthly snapshots, never derived from
+transactions.** The system can show *that* a balance moved; it generally cannot explain
+*why*. Nothing in the interface may imply otherwise.
+
+Three documents govern the work, and this file governs none of it — see
+[`documentation/`](documentation/) for the BRD (what), the HLD (how) and the BUILD_PLAN
+(sequencing, and where the HLD's assumed environment differs from the real one).
+
+---
+
+## Status — Stage 0
+
+Foundations. Nothing financial. The objective is a running, backed-up, authenticated
+shell at `http://financial-hub.localhost` with the test harness proving itself against an
+empty database.
+
+| Stage | Contents | State |
+|---|---|---|
+| **0** | Repository, configuration, both topologies, auth, test harness, backup entrypoint | **in progress** |
+| 1 | `core` + `fx` — money, rate lookup, translation, completeness | not started |
+| 2 | `accounts` — Month Close, net worth, slices → **checkpoint: close one real month** | not started |
+| 3 | `cashflow` | not started |
+| 4 | `investments` — replay engine built in isolation first | not started |
+| 5 | Dashboard, CSV export, polish | not started |
+
+Do not build ahead of this sequence. Each stage exists because the next cannot be tested
+without it.
+
+---
+
+## The two numbers
+
+Everything else in this file is detail. These two are the ones that cause damage when
+confused:
+
+| | Development | Production |
+|---|---|---|
+| Django | **port 8001** (8000 belongs to `control-tower`) | container port 8000, published nowhere |
+| Database | `localhost:**5433**` → `financial_hub_dev` | `data-center:5432` → `financial_hub` |
+
+`data-center` publishes `0.0.0.0:5432` on this host, which is the same host the
+development server runs on. One mistyped digit in `.env` points a hot-reloading server,
+with `DEBUG` on and migrations pending, at a decade of real financial data.
+
+`config.settings.dev` refuses to start if it finds itself pointed at the production
+database or the production port, and `manage.py smoke_test` asks the server it actually
+connected to what its name is. Neither is a licence to be careless — see BUILD_PLAN P-04.
+
+---
+
+## Prerequisites
+
+Installed on the host, once:
+
+- **Python 3.12 or 3.13.** Django 5.2 LTS supports 3.10 upward.
+- **Node 20 or 22**, at a version Vite supports.
+- **Docker Desktop**, already present, with the `vibe-city` network and the two PostgreSQL
+  containers running.
+
+Databases and roles, created once on the shared instances:
+
+```sh
+# Development — data-center-test, port 5433
+docker exec -it data-center-test psql -U postgres -c "CREATE ROLE financial_hub LOGIN PASSWORD 'choose-one';"
+docker exec -it data-center-test psql -U postgres -c "CREATE DATABASE financial_hub_dev OWNER financial_hub;"
+
+# Django creates and drops test_financial_hub_dev itself, per run. The role needs to be
+# allowed to do so.
+docker exec -it data-center-test psql -U postgres -c "ALTER ROLE financial_hub CREATEDB;"
+
+# Production — data-center, port 5432. Take the extra second to read the container name.
+docker exec -it data-center psql -U postgres -c "CREATE ROLE financial_hub LOGIN PASSWORD 'choose-another';"
+docker exec -it data-center psql -U postgres -c "CREATE DATABASE financial_hub OWNER financial_hub;"
+```
+
+---
+
+## Development
+
+A local hot-reloading process on Windows. Only the database is containerised.
+
+### First time
+
+```sh
+cp .env.example .env
+# Fill in DJANGO_SECRET_KEY and POSTGRES_PASSWORD. Confirm POSTGRES_PORT is 5433.
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+
+python -m venv .venv
+.venv/Scripts/activate                     # PowerShell: .venv\Scripts\Activate.ps1
+pip install -r backend/requirements-dev.txt
+
+cd backend
+python manage.py migrate
+python manage.py createsuperuser            # the single user
+cd ../frontend
+npm install
+```
+
+### Every day
+
+Two terminals.
+
+```sh
+# Terminal 1 — Django on 8001
+cd backend && python manage.py runserver 8001
+
+# Terminal 2 — Vite, with HMR
+cd frontend && npm run dev
+```
+
+Open the **Vite** URL, not 8001. Vite proxies `/api` to Django so the browser sees one
+origin, which keeps the session cookie behaving in development exactly as it will in
+production — no CORS layer, no `django-cors-headers`, and no class of bug that appears
+only after deployment. Opening 8001 directly gets a 501 page explaining this.
+
+### Tests
+
+```sh
+cd backend && pytest
+```
+
+Runs against `data-center-test` at `localhost:5433`. Django creates and drops
+`test_financial_hub_dev` per run, so development data survives untouched.
+
+```sh
+pytest -m invariant        # the financial invariant suite, alone, in seconds
+pytest --no-cov            # skip the 80% gate while iterating
+```
+
+80% line coverage is the **floor**, not the goal. Coverage measures lines executed, not
+arithmetic proven: a FIFO replay can reach 100% from a single simple sale while never
+testing a partial lot consumption. The real controls are the named edge cases (BR-09,
+BR-16, BR-20) and the hand-worked scenarios at Stages 2 and 4.
+
+A faster, throwaway alternative to `data-center-test`:
+
+```sh
+docker compose -f compose.test.yaml up -d
+cd backend && POSTGRES_PORT=5434 POSTGRES_DB=financial_hub_ci pytest
+docker compose -f compose.test.yaml down
+```
+
+---
+
+## Production
+
+The `financial-hub` container joins `vibe-city`, **publishes no port**, and is reached
+only through `central-station` at `http://financial-hub.localhost`.
+
+### One-time platform changes
+
+```sh
+# 1. data-center sits on the default bridge network, where Docker's embedded DNS does not
+#    resolve container names. Non-destructive: no recreation, no downtime, and it keeps
+#    its existing bridge attachment and published port.
+docker network connect vibe-city data-center
+
+# 2. Install the vhost. NOT BEFORE the financial-hub container exists — proxy_pass to a
+#    literal hostname is resolved at nginx start, so an absent upstream stops nginx and
+#    takes control-tower.localhost down with it.
+cp docker/nginx/financial-hub.conf d:/Repositories/vibe-city/nginx/conf.d/
+docker compose -f d:/Repositories/vibe-city/compose.yaml exec central-station nginx -t
+docker compose -f d:/Repositories/vibe-city/compose.yaml exec central-station nginx -s reload
+```
+
+### Deploy
+
+Switch `.env` to the production profile (both blocks are documented in `.env.example`),
+then:
+
+```sh
+docker compose up -d --build
+docker compose logs -f financial-hub
+docker compose exec financial-hub python manage.py smoke_test
+```
+
+### What the entrypoint does, in this order
+
+**dump → prune to 30 → migrate → start Gunicorn.**
+
+The ordering is the point. Every schema change is preceded by a restorable snapshot taken
+seconds earlier, so a failed migration leaves the application down with the data intact
+and a fresh dump beside it.
+
+Under the shared-instance decision this dump is not merely good practice. `data-center`
+holds other tenants' databases, and nothing in this application can prevent someone
+else's `docker compose down -v`. The dump is the only backstop, which is why a dump
+failure stops the container rather than being logged and shrugged off.
+
+---
+
+## Backups and restore
+
+Dumps are compressed `pg_dump` custom-format files, one per container start, newest 30
+retained, written to the Windows folder named by `BACKUP_HOST_DIR`.
+
+**That folder must be replicated off-machine.** Unreplicated, one disk failure takes the
+live database and every dump together, and OI-12 stays open at Severe.
+
+### Restore, and machine migration — the same procedure
+
+1. Copy the repository to the target machine.
+2. Copy `.env` by hand. It does not travel with the repository.
+3. Copy the most recent dump.
+4. `docker compose up -d --build`.
+5. `docker compose exec -T financial-hub pg_restore --clean --if-exists --no-owner -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" < /backups/<file>.dump`
+6. `docker compose exec financial-hub python manage.py smoke_test`, and confirm a known
+   net worth figure is unchanged.
+
+Because disaster recovery and machine migration are the same procedure, every machine
+move rehearses the restore. **Execute it once deliberately before the first live close.**
+That act is what discharges DEP-02 and closes TR-03, and it is currently outstanding.
+
+---
+
+## Layout
+
+```
+backend/
+  config/          Django project. settings/{base,dev,prod,test}.py, guards.py
+  core/            money precision, soft delete, error shape, advisories, smoke test
+  accounts/        Stage 2 — Account, Balance, net worth, slices
+  cashflow/        Stage 3 — Category, Transaction, recurring
+  investments/     Stage 4 — Holding, transactions, FIFO replay engine
+  fx/              Stage 1 — ExchangeRate, rate lookup, triangulation
+frontend/
+  src/lib/         Money type, formatting, API client, view state
+  src/shell/       icon rail, header, ledger spine
+  src/screens/     Login, and placeholders until each stage lands
+docker/            Dockerfile, entrypoint.sh, nginx vhost
+documentation/     BRD, HLD, BUILD_PLAN, design handoff
+```
+
+**The three-layer rule is absolute.** Models hold structure and database constraints;
+services hold every business rule and calculation and are callable without HTTP; views
+authenticate, deserialise, call one service, serialise, return. There is exactly one place
+where net worth is defined, one where translation happens, one where FIFO is computed.
+
+---
+
+## Pinning dependencies
+
+`requirements.txt` and `package.json` carry ranges; the pins live in lock files (CON-13).
+After the first install, and after any deliberate upgrade:
+
+```sh
+pip freeze > backend/requirements.lock.txt      # the Dockerfile prefers this when present
+# package-lock.json is written by npm install and is committed
+```
+
+Rollback depends on those pins, and on the previous compose file being retained.
+
+---
+
+## Known-outstanding at Stage 0
+
+| | |
+|---|---|
+| **OI-12** (Severe) | `BACKUP_HOST_DIR` is unset. The folder must be nominated and must be replicated off-machine |
+| **TR-03** | The restore procedure has never been executed. Do it once before the first live close |
+| **OI-11** | Django 5.2's *formal* support statement for PostgreSQL 18 is unverified. The platform already runs 18.4, so this is practically settled but not asserted |
+| **P-04** | Accepted as a guarded risk: `data-center` keeps its `0.0.0.0:5432` publish; the settings guard and the smoke test are the tripwires |
+| Fonts | Loaded from Google's CDN with real fallback stacks. Self-hosting the four families is the right follow-up for a system meant to run untouched for a decade |

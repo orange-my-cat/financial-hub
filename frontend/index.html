@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Financial Hub</title>
+
+    <!--
+      Three faces, strictly divided: Instrument Serif for the wordmark, Domine
+      for display, Inter for interface, IBM Plex Mono for data.
+
+      These load from Google's CDN. Every fallback below is a real stack, so an
+      offline machine renders a slightly plainer application rather than a
+      broken one — but self-hosting the four families is the right follow-up
+      for a system meant to run untouched for a decade, and is noted in the
+      README as such.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Domine:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+name: financial-hub
+
+# Production only. Development is a local hot-reloading process on Windows and
+# does not appear here (BUILD_PLAN §2.3).
+#
+# There is no `db` service. Production uses the shared `data-center` PostgreSQL
+# instance already running on this machine (BUILD_PLAN §2.2, departure D6).
+# `data-center` sits on the default bridge network, where Docker's embedded DNS
+# does not resolve container names, so it must be attached to `vibe-city` once:
+#
+#     docker network connect vibe-city data-center
+#
+# This is non-destructive: no recreation, no downtime, and `data-center` keeps
+# its existing bridge attachment and published port.
+
+services:
+  financial-hub:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: financial-hub:1.0.0
+    container_name: financial-hub
+    restart: unless-stopped
+
+    # No `ports:`, deliberately. The application is unreachable except through
+    # central-station at http://financial-hub.localhost. This is a stronger
+    # posture than ADR-10's 127.0.0.1:8000, not a weaker one (BUILD_PLAN §2.1).
+
+    env_file:
+      - .env
+
+    volumes:
+      # Dumps land in a Windows folder outside the Docker VM's virtual disk.
+      # Set BACKUP_HOST_DIR in .env — OI-12 requires it be replicated
+      # off-machine, or RISK-02 is only half closed.
+      - ${BACKUP_HOST_DIR:?BACKUP_HOST_DIR must be set in .env — see OI-12}:/backups
+
+    networks:
+      - vibe-city
+
+    logging:
+      # `docker compose logs financial-hub` is the entire diagnostic story a
+      # single-user system needs (HLD §9.2).
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+networks:
+  vibe-city:
+    # Predates this file and is shared with central-station, control-tower and
+    # the database containers. Never created or destroyed from here.
+    external: true

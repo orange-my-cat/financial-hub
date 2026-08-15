@@ -1,0 +1,19 @@
+# Runtime dependencies — ranged input.
+#
+# CON-13 requires pinned versions. The pin lives in `requirements.lock.txt`,
+# generated from this file with `pip freeze` after the first install; the
+# Dockerfile installs from the lock when it exists and falls back to this file
+# only for the very first build. See README, "Pinning dependencies".
+#
+# The list is short on purpose. Quality attribute 4 is "runs untouched for
+# years", and every dependency here is one more thing that can be abandoned,
+# break on a Python upgrade, or need a security patch.
+#
+# Python 3.12 or 3.13. Django 5.2 LTS supports 3.10 upward.
+
+Django>=5.2,<5.3
+djangorestframework>=3.15,<4
+psycopg[binary]>=3.2,<4
+gunicorn>=23,<24
+whitenoise>=6.7,<7
+python-dotenv>=1.0,<2

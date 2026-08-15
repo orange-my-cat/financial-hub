@@ -1,0 +1,167 @@
+/*
+  Financial Hub — design tokens.
+
+  Lifted from documentation/design_handoff_financial_hub/. The handoff is high
+  fidelity: colours, typography, spacing and state treatments are final and
+  exact, so these values are transcribed rather than interpreted.
+
+  The one rule that governs all of them: colour is semantic only. Nothing is
+  coloured for decoration, and every coloured state also carries a glyph or a
+  word, so meaning survives without hue.
+*/
+
+:root {
+  /* -- The six colours, every one a role ---------------------------------- */
+
+  /* Ground — page and rail base. */
+  --ground: #161826;
+  --ground-rail: #12141f;
+  --ground-spine: #131523;
+  --surface: #232532;
+
+  /* Ink — figures and labels, stepped for hierarchy. */
+  --ink: #e9e9ed;
+  --ink-85: rgba(233, 233, 237, 0.85);
+  --ink-70: rgba(233, 233, 237, 0.7);
+  --ink-60: rgba(233, 233, 237, 0.6);
+  --ink-55: rgba(233, 233, 237, 0.55);
+  --ink-45: rgba(233, 233, 237, 0.45);
+  --ink-30: rgba(233, 233, 237, 0.3);
+
+  /* Accent — interactive only. Focus, current month, links, triangulated
+     rate. Never used for data. */
+  --accent: #9184d9;
+  --accent-light: #b5abfc;
+  --accent-wash: rgba(145, 132, 217, 0.14);
+
+  /* Carry — stale, carried, incomplete, advisory. Always paired with a glyph
+     or a word. */
+  --carry: #c9a15e;
+  --carry-border: rgba(201, 161, 94, 0.35);
+
+  /* Breach — missing, excluded, error, decrease. Never decorative. */
+  --breach: #d1756a;
+  --breach-wash: rgba(209, 117, 106, 0.1);
+
+  /* Rise — saved, and increase in a change column. Nothing else. */
+  --rise: #6fae90;
+  --rise-wash: rgba(111, 174, 144, 0.07);
+  --rise-border: rgba(111, 174, 144, 0.4);
+
+  /* -- Rules and hairlines ------------------------------------------------ */
+  --divider: rgba(233, 233, 237, 0.1);
+  --row-rule: rgba(233, 233, 237, 0.08);
+  --row-hover: rgba(233, 233, 237, 0.04);
+  --input-border: rgba(233, 233, 237, 0.16);
+  --input-border-hover: rgba(233, 233, 237, 0.45);
+
+  /* -- Typography — three faces, strictly divided ------------------------- */
+  --face-mark: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --face-display: 'Domine', Georgia, 'Times New Roman', serif;
+  --face-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --face-data: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --size-title: 27px;      /* screen titles, Domine */
+  --size-panel: 22px;      /* panel headings, Domine */
+  --size-hero: 31px;       /* hero totals, mono */
+  --size-body: 13px;       /* Inter body */
+  --size-cell: 12.5px;     /* table cells, both faces */
+  --size-secondary: 11.5px;
+  --size-label: 10px;      /* uppercase labels */
+  --size-col: 11px;        /* table column headers */
+
+  --track-label: 0.14em;
+  --track-col: 0.08em;
+
+  /* -- Spacing and density ------------------------------------------------ */
+  --gutter: 28px;
+  --gutter-tablet: 20px;
+  --panel-gap: 20px;
+  --panel-pad: 16px;
+  --cell-pad: 5.6px;
+  --row-height: 30px;
+
+  /* -- Radii -------------------------------------------------------------- */
+  --radius-chip: 5px;
+  --radius-rail: 6px;
+  --radius-panel: 10px;
+  --radius-input: 8px;
+  --radius-advisory: 9px;
+
+  /* -- The chrome --------------------------------------------------------- */
+  --rail-collapsed: 56px;
+  --rail-expanded: 208px;
+  --spine-width: 100px;
+  --header-height: 64px;
+
+  /* -- Inputs ------------------------------------------------------------- */
+  --input-height: 36px;
+  --input-height-grid: 28px;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Reset                                                                     */
+/* ------------------------------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--face-ui);
+  font-size: var(--size-body);
+  font-weight: 400;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Every figure in this system is tabular. Columns of numbers that do not line
+   up are columns that cannot be scanned, and scanning is the whole job. */
+.mono,
+input[type='text'],
+input[type='number'] {
+  font-family: var(--face-data);
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--face-display);
+  font-weight: 500;
+  line-height: 1.05;
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Keyboard focus is visible everywhere, because the dominant interaction is a
+   person typing twenty numbers without lifting their hands. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

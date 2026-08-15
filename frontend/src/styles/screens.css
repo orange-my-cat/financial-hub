@@ -1,0 +1,70 @@
+/* ------------------------------------------------------------------------ */
+/* Login                                                                     */
+/* ------------------------------------------------------------------------ */
+
+.login {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+}
+
+.login__card {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login__mark {
+  font-family: var(--face-mark);
+  font-size: 32px;
+  color: var(--accent);
+  line-height: 1.1;
+}
+
+.login__strap {
+  margin: -10px 0 4px;
+  font-size: var(--size-secondary);
+  color: var(--ink-55);
+}
+
+.login__submit {
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Placeholder                                                               */
+/* ------------------------------------------------------------------------ */
+
+.placeholder {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.placeholder__title {
+  font-family: var(--face-display);
+  font-size: var(--size-panel);
+}
+
+.placeholder__note {
+  margin: 0;
+  font-size: var(--size-body);
+  color: var(--ink-55);
+  line-height: 1.6;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Boot                                                                      */
+/* ------------------------------------------------------------------------ */
+
+.boot {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--ink-45);
+  font-size: var(--size-secondary);
+}

@@ -1,0 +1,49 @@
+name: financial-hub-test
+
+# Optional. The default test target is `data-center-test` at localhost:5433,
+# where Django creates and drops `test_financial_hub_dev` per run, leaving
+# development data intact (BUILD_PLAN §2.2).
+#
+# This file provides ADR-17's original arrangement instead: a throwaway
+# PostgreSQL on tmpfs, which is materially faster and leaves nothing behind.
+# Use it when the suite is being run in a tight loop.
+#
+#     docker compose -f compose.test.yaml up -d
+#     cd backend && POSTGRES_PORT=5434 POSTGRES_DB=financial_hub_ci pytest
+#     docker compose -f compose.test.yaml down
+#
+# Port 5434 is deliberate: it is one further from 5432 than 5433 is, and this
+# instance holds nothing, so a mistyped digit here costs nothing.
+
+services:
+  financial-hub-testdb:
+    image: postgres:18.4
+    container_name: financial-hub-testdb
+    restart: "no"
+    environment:
+      POSTGRES_DB: financial_hub_ci
+      POSTGRES_USER: financial_hub
+      POSTGRES_PASSWORD: financial_hub
+    ports:
+      - "127.0.0.1:5434:5432"
+    tmpfs:
+      # Never touches disk; nothing here survives a stop.
+      #
+      # Mounted at /var/lib/postgresql, not /var/lib/postgresql/data. The
+      # PostgreSQL 18 images place data in a major-version subdirectory so that
+      # `pg_upgrade --link` is not blocked by a mount-point boundary, and they
+      # refuse to start if they find a mount at the old path.
+      - /var/lib/postgresql:mode=1777
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - synchronous_commit=off
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financial_hub -d financial_hub_ci"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

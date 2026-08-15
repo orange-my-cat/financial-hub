@@ -1,0 +1,313 @@
+/*
+  The chrome: icon rail, header, ledger spine.
+*/
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail-collapsed) minmax(0, 1fr) var(--spine-width);
+  height: 100%;
+}
+
+/* The rail is fixed and therefore out of the grid's flow, so these two are
+   placed explicitly. Left to auto-placement they would fall into the 56px
+   column the rail only appears to occupy. */
+.shell__body {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shell__main {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--gutter);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Rail — 56px, expanding on hover to a 208px drawer                         */
+/* ------------------------------------------------------------------------ */
+
+/* Fixed rather than in-flow, so the drawer overlays the screen instead of
+   reflowing it. A layout that shifts under the cursor on hover is a layout
+   that cannot be clicked accurately. */
+.rail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 20;
+  width: var(--rail-collapsed);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground-rail);
+  border-right: 1px solid var(--divider);
+  transition: width 140ms ease;
+}
+
+.rail:hover,
+.rail:focus-within {
+  width: var(--rail-expanded);
+  box-shadow: 12px 0 32px rgba(0, 0, 0, 0.45);
+}
+
+.rail__mark {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-family: var(--face-mark);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.rail__mark--full {
+  font-size: 22px;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.rail__mark--short {
+  font-size: 21px;
+  position: absolute;
+  left: 16px;
+  transition: opacity 100ms ease;
+}
+
+.rail:hover .rail__mark--full,
+.rail:focus-within .rail__mark--full {
+  opacity: 1;
+  transition-delay: 40ms;
+}
+
+.rail:hover .rail__mark--short,
+.rail:focus-within .rail__mark--short {
+  opacity: 0;
+}
+
+.rail__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+}
+
+.rail__foot {
+  margin-top: auto;
+  padding: 8px;
+  border-top: 1px solid var(--divider);
+}
+
+.rail__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: var(--radius-rail);
+  color: var(--ink-55);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.rail__item:hover {
+  background: var(--row-hover);
+  color: var(--ink-85);
+  text-decoration: none;
+}
+
+.rail__item--active {
+  color: var(--ink);
+  background: var(--accent-wash);
+}
+
+.rail__icon {
+  flex: 0 0 20px;
+  display: flex;
+}
+
+.rail__label {
+  flex: 1;
+  font-size: var(--size-body);
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.rail:hover .rail__label,
+.rail:focus-within .rail__label {
+  opacity: 1;
+  transition-delay: 40ms;
+}
+
+.rail__badge {
+  font-size: var(--size-secondary);
+  color: var(--carry);
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.rail:hover .rail__badge,
+.rail:focus-within .rail__badge {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Header                                                                    */
+/* ------------------------------------------------------------------------ */
+
+.header {
+  flex: 0 0 var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 var(--gutter);
+  border-bottom: 1px solid var(--divider);
+}
+
+.header__title {
+  font-family: var(--face-display);
+  font-size: var(--size-title);
+}
+
+.header__controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* A control that does not apply to this screen renders inert rather than
+   disappearing. */
+.seg--inert,
+.range--inert {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.seg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seg__legend {
+  margin-right: 2px;
+}
+
+.seg__option {
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--ink-55);
+  font-size: var(--size-cell);
+  cursor: pointer;
+}
+
+.seg__option--on {
+  border-color: var(--accent);
+  color: var(--accent-light);
+}
+
+.range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range__value {
+  font-size: var(--size-cell);
+  color: var(--ink-70);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Ledger spine — 100px down the right edge of every screen                  */
+/* ------------------------------------------------------------------------ */
+
+.spine {
+  grid-column: 3;
+  width: var(--spine-width);
+  background: var(--ground-spine);
+  border-left: 1px solid var(--divider);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 0;
+}
+
+.spine__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 26px;
+  padding: 0 12px;
+  border-right: 2px solid transparent;
+}
+
+.spine__row--current {
+  background: var(--accent-wash);
+  border-right-color: var(--accent);
+}
+
+.spine__month {
+  font-size: var(--size-col);
+  color: var(--ink-55);
+}
+
+.spine__row--current .spine__month {
+  color: var(--ink);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Tablet — reporting screens reflow; data entry screens do not              */
+/* ------------------------------------------------------------------------ */
+
+@media (max-width: 1024px) {
+  .shell {
+    grid-template-columns: var(--rail-collapsed) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  .shell__body {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .shell__main {
+    padding: var(--gutter-tablet);
+  }
+
+  /* The spine becomes a horizontal strip below the header, running ascending
+     left to right — oldest at the left, current keyed at the right end. The
+     DOM keeps latest-first, so the direction is reversed here rather than the
+     data being re-sorted for a viewport. */
+  .spine {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-left: none;
+    border-bottom: 1px solid var(--divider);
+    padding: 0 var(--gutter-tablet);
+  }
+
+  .spine__row {
+    flex: 0 0 auto;
+    gap: 6px;
+    padding: 0 10px;
+    height: 34px;
+    border-right: none;
+    border-bottom: 2px solid transparent;
+  }
+
+  .spine__row--current {
+    border-bottom-color: var(--accent);
+  }
+}
