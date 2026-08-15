@@ -11,8 +11,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
+
+from core.currencies import BASE_CURRENCY, CURRENCY_CHOICES
 
 # ---------------------------------------------------------------------------
 # Precision — ADR-02
@@ -27,6 +30,10 @@ QUANTITY_DIGITS, QUANTITY_PLACES = 19, 10  # unit quantities and FX rates
 PRICE_DIGITS, PRICE_PLACES = 19, 8         # unit prices
 
 ZERO = Decimal("0")
+
+#: There is one settings row for the life of the system. Module-level because a
+#: nested Meta cannot see names from its enclosing class body.
+SETTINGS_SINGLETON_PK = 1
 
 
 def money_field(**kwargs) -> models.DecimalField:
@@ -130,3 +137,98 @@ class SoftDeleteModel(models.Model):
     def restore(self, using=None):
         self.deleted_at = None
         self.save(using=using, update_fields=["deleted_at", "updated_at"])
+
+
+# ---------------------------------------------------------------------------
+# Settings
+# ---------------------------------------------------------------------------
+
+
+class Settings(models.Model):
+    """The user's preferences. Exactly one row, for the life of the system.
+
+    These live in the database rather than in `.env` because they are user
+    choices rather than deployment facts (§9.3) — the staleness and variance
+    thresholds in particular have to be changeable without a deploy (OI-13).
+
+    Deliberately not a :class:`SoftDeleteModel`. Soft delete is the safety net
+    under an accidental deletion of *history*; this row is configuration, cannot
+    be created or deleted by the user, and a "deleted" settings row is not a
+    state the system has any meaning for.
+    """
+
+    SINGLETON_PK = SETTINGS_SINGLETON_PK
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=SETTINGS_SINGLETON_PK)
+
+    # A display choice only. Stored data is always USD and is never rewritten
+    # by changing this (BR-10).
+    reporting_currency = models.CharField(
+        max_length=3,
+        choices=CURRENCY_CHOICES,
+        default=BASE_CURRENCY,
+        help_text="Display only. The base and stored currency is always USD.",
+    )
+
+    # Used for exactly one thing: deciding what "today" means when defaulting a
+    # date field. It never adjusts a stored date (§9.4).
+    timezone = models.CharField(max_length=64, default="Asia/Kuala_Lumpur")
+
+    # A rate older than this many days on the date it is used is flagged stale
+    # and raises an outstanding task. Unlimited carry-forward is permitted —
+    # refusing to translate would make net worth uncomputable because of a lapse
+    # in typing (ADR-09).
+    rate_staleness_days = models.PositiveSmallIntegerField(
+        default=7,
+        validators=[MinValueValidator(1)],
+        help_text="A rate more than this many days old is flagged stale.",
+    )
+
+    # A new rate differing from its predecessor by more than this raises a
+    # non-blocking advisory. A misplaced decimal misstates every foreign balance
+    # for the month, and nothing else would catch it (ADR-08).
+    rate_variance_percent = quantity_field(
+        default=Decimal("10"),
+        validators=[MinValueValidator(Decimal("0.0000000001"))],
+        help_text="Advisory threshold for a rate that jumps against its predecessor.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "settings"
+        verbose_name_plural = "settings"
+        constraints = [
+            # One row, enforced by the database rather than by everyone
+            # remembering to call the accessor.
+            models.CheckConstraint(
+                condition=models.Q(id=SETTINGS_SINGLETON_PK),
+                name="core_settings_is_singleton",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(rate_staleness_days__gte=1),
+                name="core_settings_staleness_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(rate_variance_percent__gt=0),
+                name="core_settings_variance_positive",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Settings (reporting in {self.reporting_currency})"
+
+    def save(self, *args, **kwargs):
+        self.id = self.SINGLETON_PK
+        return super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "Settings":
+        """The one row, created with its defaults on first read.
+
+        Structure rather than a business rule, so it belongs here: there is no
+        decision being made, only the singleton being materialised.
+        """
+        instance, _ = cls.objects.get_or_create(pk=cls.SINGLETON_PK)
+        return instance

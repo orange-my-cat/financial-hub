@@ -6,8 +6,6 @@ the day one exists (ADR-12).
 
 Module routes are included here as their stages land:
 
-    Stage 1   fx/          rates, bulk entry, trend, missing-and-stale
-              settings/    reporting currency, thresholds
     Stage 2   accounts/    accounts, balances, month close, net worth, slices
     Stage 3   cashflow/    transactions, categories, recurring, category report
     Stage 4   investments/ holdings, transactions, open lots, realised gains
@@ -16,8 +14,9 @@ Module routes are included here as their stages land:
 
 from __future__ import annotations
 
-from django.urls import path
+from django.urls import include, path
 
+from core.api.settings_views import SettingsView
 from core.api.views import HealthView, SessionView, WhoAmIView
 
 app_name = "api"
@@ -26,4 +25,6 @@ urlpatterns = [
     path("health/", HealthView.as_view(), name="health"),
     path("session/", SessionView.as_view(), name="session"),
     path("me/", WhoAmIView.as_view(), name="me"),
+    path("settings/", SettingsView.as_view(), name="settings"),
+    path("fx/", include("fx.api.urls")),
 ]
