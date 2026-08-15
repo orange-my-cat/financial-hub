@@ -239,6 +239,13 @@ STORAGES = {
 # job (ADR-11). It only reads the folder, so the dashboard can say how old the
 # newest dump is and warn when it predates the newest data change.
 
+# The smoke test's fifth assertion: a month whose net worth must never change
+# again. Empty until a month has actually been closed — a figure asserted before
+# one exists would be asserting nothing (§11.5).
+SMOKE_TEST_MONTH = os.environ.get("SMOKE_TEST_MONTH", "").strip()
+SMOKE_TEST_NET_WORTH = os.environ.get("SMOKE_TEST_NET_WORTH", "").strip()
+SMOKE_TEST_CURRENCY = os.environ.get("SMOKE_TEST_CURRENCY", "USD").strip()
+
 BACKUP_DIR = os.environ.get("BACKUP_DIR", "").strip()
 BACKUP_RETAIN = int(os.environ.get("BACKUP_RETAIN", "30"))
 BACKUP_MAX_AGE_HOURS = int(os.environ.get("BACKUP_MAX_AGE_HOURS", "24"))

@@ -105,11 +105,62 @@ def test_backup_check_fails_when_the_folder_is_missing(tmp_path):
             _run()
 
 
-def test_the_net_worth_assertion_is_present_and_awaiting_stage_2():
+def test_the_net_worth_assertion_is_skipped_until_a_month_has_been_closed():
+    """A figure asserted before one exists would be asserting nothing."""
     output = _run()
 
     assert "known net worth unchanged" in output
-    assert "Stage 2" in output
+    assert "after the first close" in output
+
+
+def test_the_net_worth_assertion_passes_against_the_recorded_figure():
+    from decimal import Decimal
+
+    from accounts.models import Account, AccountType, Balance, LiquidityTier
+
+    account = Account.objects.create(
+        name="Everyday",
+        account_type=AccountType.CURRENT,
+        liquidity_tier=LiquidityTier.INSTANT,
+        currency="USD",
+        opened_month="2026-01",
+    )
+    Balance.objects.create(account=account, month="2026-07", amount=Decimal("12500.00"))
+
+    with override_settings(
+        SMOKE_TEST_MONTH="2026-07",
+        SMOKE_TEST_NET_WORTH="12500.00",
+        SMOKE_TEST_CURRENCY="USD",
+    ):
+        output = _run()
+
+    assert "12500.00 USD" in output
+    assert "FAIL" not in output
+
+
+def test_the_net_worth_assertion_fails_when_a_historic_figure_moves():
+    """The failure this command exists to catch: a migration or a dependency
+    upgrade that silently changed a number that should never change again."""
+    from decimal import Decimal
+
+    from accounts.models import Account, AccountType, Balance, LiquidityTier
+
+    account = Account.objects.create(
+        name="Everyday",
+        account_type=AccountType.CURRENT,
+        liquidity_tier=LiquidityTier.INSTANT,
+        currency="USD",
+        opened_month="2026-01",
+    )
+    Balance.objects.create(account=account, month="2026-07", amount=Decimal("9999.00"))
+
+    with override_settings(
+        SMOKE_TEST_MONTH="2026-07",
+        SMOKE_TEST_NET_WORTH="12500.00",
+        SMOKE_TEST_CURRENCY="USD",
+    ):
+        with pytest.raises(CommandError, match="known net worth unchanged"):
+            _run()
 
 
 def test_the_http_check_fails_against_an_unreachable_application():

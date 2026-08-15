@@ -30,6 +30,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from django.conf import settings
@@ -188,15 +189,46 @@ class Command(BaseCommand):
 
     # -- 6 -----------------------------------------------------------------
     def _check_known_net_worth(self) -> Check:
-        """Stage 2. The assertion this command exists for.
+        """The assertion this command exists for.
 
-        Once the net worth service exists, this recomputes a fixed historic
-        month and compares it against the figure the Product Owner worked by
-        hand (AS-03). A difference means something changed a number that should
-        never change again.
+        Recomputes a fixed historic month and compares it against the figure
+        recorded when that month was closed. A difference means a migration or a
+        dependency upgrade silently changed a number that should never change
+        again — the worst failure mode available to a system whose second-ranked
+        quality attribute is that historic figures reproduce, and one that no
+        amount of unit testing detects after the fact.
+
+        Configured rather than hard-coded, because the figure cannot exist until
+        a month has actually been closed. Until then it says so, rather than
+        passing vacuously.
         """
-        return Check(
-            "known net worth unchanged",
-            SKIP,
-            "arrives with the net worth service at Stage 2",
-        )
+        name = "known net worth unchanged"
+
+        month = (settings.SMOKE_TEST_MONTH or "").strip()
+        expected_raw = (settings.SMOKE_TEST_NET_WORTH or "").strip()
+
+        if not month or not expected_raw:
+            return Check(
+                name,
+                SKIP,
+                "set SMOKE_TEST_MONTH and SMOKE_TEST_NET_WORTH after the first close",
+            )
+
+        try:
+            from accounts.services.net_worth import NetWorthService
+
+            expected = Decimal(expected_raw)
+            actual = NetWorthService().for_month(
+                month, settings.SMOKE_TEST_CURRENCY
+            ).total.rounded()
+        except Exception as exc:  # noqa: BLE001 - the message is the whole point
+            return Check(name, FAIL, str(exc).strip().splitlines()[0])
+
+        if actual != expected:
+            return Check(
+                name,
+                FAIL,
+                f"{month} recomputes to {actual} {settings.SMOKE_TEST_CURRENCY}, "
+                f"expected {expected}. A historic figure has moved.",
+            )
+        return Check(name, PASS, f"{month} = {actual} {settings.SMOKE_TEST_CURRENCY}")
