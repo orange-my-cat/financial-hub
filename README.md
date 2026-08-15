@@ -63,7 +63,13 @@ Installed on the host, once:
 
 - **Python 3.14.** Installed and verified — Django 5.2.17 declares 3.10 through 3.14 in
   its own classifiers. The production image uses the same minor version.
-- **Node 20 or 22**, at a version Vite supports. **Not yet installed.**
+- **Node 24.19.0** with npm 11. Installed and verified against Vite 6.
+
+  A shell started before an install inherits the old `PATH`, so `node --version` can fail
+  in a terminal that was already open while working perfectly in a new one. Refresh with
+  `$env:Path = [Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+  [Environment]::GetEnvironmentVariable("Path","User")` before concluding anything is
+  missing.
 - **Docker Desktop**, already present, with the `vibe-city` network and the two PostgreSQL
   containers running.
 
@@ -278,7 +284,6 @@ Rollback depends on those pins, and on the previous compose file being retained.
 |---|---|
 | **OI-12** (partly open) | `BACKUP_HOST_DIR` is `D:/Backups/Financial Hub` — nominated, created, and on a local disk. That closes the likely failure (P-02: another tenant's teardown, a bad migration, a lost Docker VM) and leaves the unlikely one open (losing the machine). Syncing that folder later is a one-line change and moves no data |
 | **TR-03** | The restore procedure has never been executed. Do it once before the first live close |
-| **Node** | Not installed. Blocks the Vite half of the development loop and the production image build |
 | **OI-11** | Closed on the Python side: Django 5.2.17 declares 3.14 support in its classifiers. On the PostgreSQL side Django 5.2 supports 13 and higher, and migrations have now run against 18.4 — settled empirically |
 | **P-04** | Accepted as a guarded risk: `data-center` keeps its `0.0.0.0:5432` publish; the settings guard and the smoke test are the tripwires. Both verified to fire |
 | Fonts | Loaded from Google's CDN with real fallback stacks. Self-hosting the four families is the right follow-up for a system meant to run untouched for a decade |

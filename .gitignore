@@ -23,6 +23,11 @@ htmlcov/
 # Django collected static — rebuilt by the image, never committed
 backend/staticfiles/
 
+# The built React bundle. The image's Node stage puts it here; it can also be
+# copied here by hand to have the Django dev server serve the application
+# without Vite. Build output either way, and never committed.
+backend/frontend_dist/
+
 # Node / Vite
 node_modules/
 frontend/dist/
