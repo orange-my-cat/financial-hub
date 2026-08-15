@@ -61,8 +61,9 @@ connected to what its name is. Neither is a licence to be careless — see BUILD
 
 Installed on the host, once:
 
-- **Python 3.12 or 3.13.** Django 5.2 LTS supports 3.10 upward.
-- **Node 20 or 22**, at a version Vite supports.
+- **Python 3.14.** Installed and verified — Django 5.2.17 declares 3.10 through 3.14 in
+  its own classifiers. The production image uses the same minor version.
+- **Node 20 or 22**, at a version Vite supports. **Not yet installed.**
 - **Docker Desktop**, already present, with the `vibe-city` network and the two PostgreSQL
   containers running.
 
@@ -90,13 +91,17 @@ A local hot-reloading process on Windows. Only the database is containerised.
 
 ### First time
 
+Already done for the development profile — `.venv` exists, `.env` is written, the
+`financial_hub` role and `financial_hub_dev` database are created, migrations are applied
+and the single user exists. To repeat it on another machine:
+
 ```sh
 cp .env.example .env
 # Fill in DJANGO_SECRET_KEY and POSTGRES_PASSWORD. Confirm POSTGRES_PORT is 5433.
-python -c "import secrets; print(secrets.token_urlsafe(64))"
+python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"
 
 python -m venv .venv
-.venv/Scripts/activate                     # PowerShell: .venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1                  # PowerShell
 pip install -r backend/requirements-dev.txt
 
 cd backend
@@ -169,9 +174,14 @@ docker network connect vibe-city data-center
 #    literal hostname is resolved at nginx start, so an absent upstream stops nginx and
 #    takes control-tower.localhost down with it.
 cp docker/nginx/financial-hub.conf d:/Repositories/vibe-city/nginx/conf.d/
-docker compose -f d:/Repositories/vibe-city/compose.yaml exec central-station nginx -t
-docker compose -f d:/Repositories/vibe-city/compose.yaml exec central-station nginx -s reload
+docker exec central-station nginx -t
+docker exec central-station nginx -s reload
 ```
+
+`central-station` is a standalone container, not a compose service — it fronts every
+application on this machine and belongs to none of them. Its run arguments live in
+`d:\Repositories\vibe-city\start.ps1`; a vhost change needs neither that script nor any
+downtime, only the two `docker exec` lines above.
 
 ### Deploy
 
@@ -266,8 +276,9 @@ Rollback depends on those pins, and on the previous compose file being retained.
 
 | | |
 |---|---|
-| **OI-12** (Severe) | `BACKUP_HOST_DIR` is unset. The folder must be nominated and must be replicated off-machine |
+| **OI-12** (partly open) | `BACKUP_HOST_DIR` is `D:/Backups/Financial Hub` — nominated, created, and on a local disk. That closes the likely failure (P-02: another tenant's teardown, a bad migration, a lost Docker VM) and leaves the unlikely one open (losing the machine). Syncing that folder later is a one-line change and moves no data |
 | **TR-03** | The restore procedure has never been executed. Do it once before the first live close |
-| **OI-11** | Django 5.2's *formal* support statement for PostgreSQL 18 is unverified. The platform already runs 18.4, so this is practically settled but not asserted |
-| **P-04** | Accepted as a guarded risk: `data-center` keeps its `0.0.0.0:5432` publish; the settings guard and the smoke test are the tripwires |
+| **Node** | Not installed. Blocks the Vite half of the development loop and the production image build |
+| **OI-11** | Closed on the Python side: Django 5.2.17 declares 3.14 support in its classifiers. On the PostgreSQL side Django 5.2 supports 13 and higher, and migrations have now run against 18.4 — settled empirically |
+| **P-04** | Accepted as a guarded risk: `data-center` keeps its `0.0.0.0:5432` publish; the settings guard and the smoke test are the tripwires. Both verified to fire |
 | Fonts | Loaded from Google's CDN with real fallback stacks. Self-hosting the four families is the right follow-up for a system meant to run untouched for a decade |

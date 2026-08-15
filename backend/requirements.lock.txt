@@ -1,0 +1,17 @@
+# Pinned production dependencies (CON-13). Generated from the built image, so
+# it carries exactly what production installs and none of the dev extras.
+# Regenerate after any deliberate upgrade:
+#     docker build -f docker/Dockerfile -t financial-hub:1.0.0 .
+#     docker run --rm --entrypoint pip financial-hub:1.0.0 freeze
+#
+# Rollback depends on these pins and on the previous compose file being kept.
+asgiref==3.12.1
+Django==5.2.17
+djangorestframework==3.18.0
+gunicorn==23.0.0
+packaging==26.3
+psycopg==3.3.4
+psycopg-binary==3.3.4
+python-dotenv==1.2.2
+sqlparse==0.6.0
+whitenoise==6.12.0

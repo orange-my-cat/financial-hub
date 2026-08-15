@@ -31,9 +31,15 @@ services:
 
     volumes:
       # Dumps land in a Windows folder outside the Docker VM's virtual disk.
-      # Set BACKUP_HOST_DIR in .env — OI-12 requires it be replicated
-      # off-machine, or RISK-02 is only half closed.
-      - ${BACKUP_HOST_DIR:?BACKUP_HOST_DIR must be set in .env — see OI-12}:/backups
+      # Set BACKUP_HOST_DIR in .env.
+      #
+      # Long syntax, not `source:target`. The host path carries both a drive
+      # letter and a space — `D:/Backups/Financial Hub` — and the short form is
+      # split on colons, so a drive letter is one ambiguity too many to leave
+      # to a parser.
+      - type: bind
+        source: ${BACKUP_HOST_DIR:?BACKUP_HOST_DIR must be set in .env — see OI-12}
+        target: /backups
 
     networks:
       - vibe-city

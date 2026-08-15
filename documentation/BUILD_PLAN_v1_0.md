@@ -88,17 +88,30 @@ restart policy `no`.
 Resolved by giving the platform a home at **`d:\Repositories\vibe-city`**:
 
 - `nginx/conf.d/` now holds `control-tower.conf` and `default.conf`, copied out of the container before anything was touched
-- `compose.yaml` recreates `central-station` with `./nginx/conf.d` mounted **read-only**, on the external `vibe-city` network, restart policy raised from `no` to `unless-stopped` so the proxy returns with Docker
+- `central-station` runs with `./nginx/conf.d` mounted **read-only**, on the external `vibe-city` network, restart policy raised from `no` to `unless-stopped` so the proxy returns with Docker
 - `README.md` documents the add-an-application procedure, which `financial-hub.conf` will follow at Stage 0
 
-Verified after recreation: `nginx -t` passes, `control-tower.localhost` returns 200,
-`localhost` returns 200. The folder is not yet a git repository — `git init` and a first
-commit there is yours to make.
+**Revised 15 Aug 2026 — the proxy is a standalone container, not a compose service.** The
+first fix used a `compose.yaml`, which made Docker label `central-station` as belonging to
+a `vibe-city` compose project. That grouping was rejected on the ground that the proxy
+fronts every application on this machine and belongs to none of them, so it should not be
+anyone's stack. `compose.yaml` was replaced by **`start.ps1`**, which recreates the
+container with the same image, bind mount, published port, network and restart policy.
 
-The two PostgreSQL containers and Portainer are still ad-hoc `docker run` containers.
-Adopting them into the same compose file is a sensible follow-up, but `data-center` holds
-live data and recreating it deserves its own deliberate session rather than being folded
-into a proxy change.
+The two properties that mattered are unaffected by the change and must survive any future
+one: **`conf.d` is bind-mounted from disk**, so vhosts are never only in the container's
+writable layer; and **the run arguments are in version control**, so the container is
+reproducible. Compose was one way to hold those, not the reason for them. Ordinary vhost
+changes need neither file — `docker exec central-station nginx -t` then `-s reload`.
+
+Verified after each recreation: `nginx -t` passes, `control-tower.localhost` returns 200,
+`localhost` returns 200. The folder is not yet a git repository — `git init` and a first
+commit there is yours to make, and it now matters more, since `start.ps1` is the only
+record of how the proxy is launched.
+
+Portainer and the two PostgreSQL containers are likewise standalone `docker run`
+containers, sharing the `vibe-city` network and nothing else. That is now the platform's
+consistent shape rather than a gap to close.
 
 ### 2.2 Database — settled: shared instances
 
@@ -213,7 +226,7 @@ assumption the build will proceed under unless overridden.
 | ID | Question | Proceeding assumption | Latest point to decide |
 |---|---|---|---|
 | **D6-db** | Shared `data-center` or a dedicated `db` container? (§2.2) | **Closed** — shared. `data-center` for production, `data-center-test` for development and test | Closed 15 Aug 2026 |
-| **D6-nginx** | Mount `central-station`'s `conf.d` from a version-controlled host folder before adding a second vhost? (§2.1) | **Closed and done** — platform now at `d:\Repositories\vibe-city`, verified | Closed 15 Aug 2026 |
+| **D6-nginx** | Mount `central-station`'s `conf.d` from a version-controlled host folder before adding a second vhost? (§2.1) | **Closed and done** — platform now at `d:\Repositories\vibe-city`, verified. Revised the same day: the proxy is a standalone container launched by `start.ps1`, not a compose service; the bind mount and the versioned run arguments are retained | Closed 15 Aug 2026 |
 | OI-11 | Does Django 5.2 LTS formally support PostgreSQL 18? (AS-01, TR-01) | Practically settled — the platform already runs PostgreSQL 18.4 (E10). **I have not verified the formal support statement and am not asserting it**; worth one glance at the Django docs. The PostgreSQL 17 fallback is now costly rather than free | Stage 0, before the first migration |
 | OI-01 | Which currencies are actually held? (A9, AS-05) | USD, AUD, MYR. Each additional currency adds one stored USD pair and one more rate to type each month | Stage 1, before the rate table is seeded |
 | OI-13 | Rate staleness threshold and rate-variance warning threshold | 7 days and 10%, both stored in the settings table so they are changeable without a deploy | Stage 1 |

@@ -27,7 +27,10 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2 — runtime
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm AS runtime
+# Matches the host interpreter development runs on. Divergence between the two
+# is the class of problem that only shows up after deployment (BUILD_PLAN P-05),
+# and a Python minor version is a cheap thing to keep aligned.
+FROM python:3.14-slim-bookworm AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

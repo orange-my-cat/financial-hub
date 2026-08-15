@@ -77,11 +77,13 @@ catches it.
 ## Environment
 
 The HLD assumes Ubuntu under WSL2 with a dedicated database container. **Neither is true.**
-The real setup is Docker Desktop on Windows plus a shared local platform, `vibe-city`:
+The real setup is Docker Desktop on Windows plus a shared local platform, `vibe-city`.
+`vibe-city` is a Docker **network** and a naming theme, not a compose project — the four
+containers below are each standalone and share nothing but that network:
 
 | Container | Role |
 |---|---|
-| `central-station` (nginx) | Reverse proxy on port 80, serves `*.localhost` vhosts. Managed by `d:\Repositories\vibe-city\compose.yaml`, config bind-mounted read-only from `nginx/conf.d/` |
+| `central-station` (nginx) | Reverse proxy on port 80, serves `*.localhost` vhosts. Standalone container, not a compose service — recreated by `d:\Repositories\vibe-city\start.ps1`, config bind-mounted read-only from `nginx/conf.d/` |
 | `control-tower` (Portainer) | **Publishes host port 8000 — that port is unavailable to this project** |
 | `data-center` (PostgreSQL 18.4) | Production. Database `financial_hub`. Host port 5432 |
 | `data-center-test` (PostgreSQL 18.4) | Development and test. Databases `financial_hub_dev` and `test_financial_hub_dev`. Host port 5433 |
@@ -104,9 +106,9 @@ BUILD_PLAN P-04.
 Platform proxy, at `d:\Repositories\vibe-city`:
 
 ```sh
-docker compose up -d                                   # start or recreate nginx
-docker compose exec central-station nginx -t           # validate config before reloading
-docker compose exec central-station nginx -s reload    # apply a vhost change, no downtime
+docker exec central-station nginx -t           # validate config before reloading
+docker exec central-station nginx -s reload    # apply a vhost change, no downtime
+.\start.ps1                                    # recreate the container — ~1s downtime, rarely needed
 ```
 
 Application commands do not exist yet; they land in Stage 0. Their fixed parameters are
