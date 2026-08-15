@@ -111,6 +111,17 @@ class NetWorth:
     completeness: MonthCompleteness
 
     @property
+    def is_reportable(self) -> bool:
+        """Whether this month has a net worth at all.
+
+        A month before any account recorded a balance does not have a net worth
+        of zero — it does not have one. The distinction is the same one FR-46
+        draws for a missing rate, one level up: absent is not nothing, and a
+        chart that plots it as zero draws a cliff that never happened.
+        """
+        return bool(self.contributions)
+
+    @property
     def included(self) -> tuple[Contribution, ...]:
         return tuple(c for c in self.contributions if not c.is_excluded)
 

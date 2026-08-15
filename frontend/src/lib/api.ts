@@ -81,12 +81,19 @@ export interface Envelope<T> {
   readonly advisories: readonly Advisory[]
 }
 
-/** Completeness, exclusions and rate provenance travel with every total (§8.2). */
-export interface AggregateEnvelope<T> extends Envelope<T> {
-  readonly completeness: {
-    readonly state: 'Complete' | 'Incomplete' | 'Missing' | 'Outside Range'
-    readonly [key: string]: unknown
-  }
+export interface CompletenessSummary {
+  readonly state: 'Complete' | 'Incomplete' | 'Missing' | 'Outside Range'
+}
+
+/**
+ * Completeness, exclusions and rate provenance travel with every total (§8.2).
+ *
+ * Generic over the completeness shape so a caller that knows the fuller form
+ * gets them typed, rather than everyone widening to `unknown` and asserting.
+ */
+export interface AggregateEnvelope<T, C extends CompletenessSummary = CompletenessSummary>
+  extends Envelope<T> {
+  readonly completeness: C
   readonly exclusions: readonly { readonly account: string; readonly reason: string }[]
   readonly rate_provenance: readonly {
     readonly pair: string
@@ -142,6 +149,10 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  // Create-or-replace. Used by Month Close, where each call addresses a
+  // distinct (account, month) key and several may be in flight at once.
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),

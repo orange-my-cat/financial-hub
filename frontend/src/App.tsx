@@ -2,8 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { useSession } from './lib/session'
+import { AccountDetail } from './screens/AccountDetail'
+import { Accounts } from './screens/Accounts'
 import { FxRates } from './screens/FxRates'
 import { Login } from './screens/Login'
+import { MonthClose } from './screens/MonthClose'
+import { NetWorth } from './screens/NetWorth'
 import { Placeholder, SCREENS } from './screens/Placeholder'
 import { Settings } from './screens/Settings'
 import { AppShell } from './shell/AppShell'
@@ -41,10 +45,11 @@ function Routed() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<Placeholder {...SCREENS.dashboard!} />} />
-        <Route path="net-worth" element={<Placeholder {...SCREENS.netWorth!} />} />
-        <Route path="accounts" element={<Placeholder {...SCREENS.accounts!} />} />
-        <Route path="accounts/:accountId" element={<Placeholder {...SCREENS.accounts!} />} />
-        <Route path="month-close" element={<Placeholder {...SCREENS.monthClose!} />} />
+        {/* Stage 2 — the highest-value module, and the checkpoint. */}
+        <Route path="net-worth" element={<NetWorth />} />
+        <Route path="accounts" element={<Accounts />} />
+        <Route path="accounts/:accountId" element={<AccountDetail />} />
+        <Route path="month-close" element={<MonthClose />} />
         <Route path="cash-flow" element={<Placeholder {...SCREENS.cashFlow!} />} />
         <Route path="investments" element={<Placeholder {...SCREENS.investments!} />} />
         {/* Stage 1 — built first, because net worth cannot be tested without

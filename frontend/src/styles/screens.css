@@ -226,3 +226,282 @@
 .settings .field {
   margin-bottom: 18px;
 }
+
+/* ------------------------------------------------------------------------ */
+/* Month Close                                                               */
+/* ------------------------------------------------------------------------ */
+
+.close__month {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+  max-width: 180px;
+}
+
+/* Pinned below the header. The product's running commentary on the close. */
+.readout {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--divider);
+  margin-bottom: var(--panel-gap);
+}
+
+.readout__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+}
+
+.readout__counts {
+  font-size: var(--size-cell);
+  color: var(--ink-70);
+}
+
+.readout__remaining {
+  font-size: var(--size-secondary);
+  color: var(--carry);
+}
+
+.readout__note {
+  margin-left: auto;
+  font-size: var(--size-secondary);
+  color: var(--ink-45);
+}
+
+/* 28px in the grid, right-aligned mono. Twenty of these get typed in a row. */
+.input--grid {
+  min-height: var(--input-height-grid);
+  padding: 3px 8px;
+  font-size: var(--size-cell);
+}
+
+.numeric-input {
+  text-align: right;
+  width: 100%;
+  max-width: 160px;
+}
+
+/* On blur the value saves and the field says so, quietly. */
+.input--saved {
+  background: var(--rise-wash);
+  border-color: var(--rise-border);
+}
+
+.saved {
+  color: var(--rise);
+  font-size: var(--size-secondary);
+}
+
+.cell-state {
+  width: 70px;
+}
+
+.row-number {
+  width: 32px;
+  text-align: right;
+}
+
+.ink-30 {
+  color: var(--ink-30);
+}
+
+.carry {
+  color: var(--carry);
+}
+
+.table--close td {
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Accounts                                                                  */
+/* ------------------------------------------------------------------------ */
+
+.accounts__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.accounts__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.link-button--breach {
+  color: var(--breach);
+}
+
+/* Currency locked once balances exist. */
+.mark--locked {
+  color: var(--ink-45);
+  font-size: 0.7em;
+  margin-left: 2px;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Net worth                                                                 */
+/* ------------------------------------------------------------------------ */
+
+.networth__headline {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: var(--panel-gap);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .networth__headline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.networth__total {
+  font-size: var(--size-hero);
+  line-height: 1.1;
+  margin: 6px 0 8px;
+}
+
+.networth__change {
+  font-size: var(--size-cell);
+  color: var(--ink-70);
+  margin-bottom: 12px;
+}
+
+.networth__state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--size-secondary);
+  margin-bottom: 10px;
+}
+
+/* Rendered only when a contributing rate is stale. */
+.asat {
+  border: 1px solid var(--carry-border);
+  border-radius: var(--radius-advisory);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.asat__summary {
+  cursor: pointer;
+  font-size: var(--size-secondary);
+  color: var(--carry);
+}
+
+.asat__detail td {
+  border-bottom: none;
+  padding: 3px 6px;
+  font-size: var(--size-secondary);
+}
+
+.exclusion-notice {
+  margin: 0;
+  font-size: var(--size-secondary);
+  color: var(--breach);
+  max-width: 46ch;
+}
+
+.networth__toggles {
+  margin-bottom: var(--panel-gap);
+}
+
+.networth__tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--panel-gap);
+  align-items: start;
+}
+
+.table__total td {
+  border-top: 1px solid var(--divider);
+  border-bottom: none;
+  font-weight: 500;
+  padding-top: 8px;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Account detail                                                            */
+/* ------------------------------------------------------------------------ */
+
+.detail__crumb {
+  font-size: var(--size-secondary);
+  margin-bottom: 6px;
+}
+
+.detail__name {
+  font-family: var(--face-display);
+  font-size: var(--size-title);
+  margin-bottom: 8px;
+}
+
+.detail__tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: var(--size-secondary);
+}
+
+.tag {
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-chip);
+  padding: 2px 8px;
+  color: var(--ink-70);
+}
+
+.detail__body {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: var(--panel-gap);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .detail__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.detail__direction {
+  font-size: var(--size-body);
+  color: var(--ink-85);
+  margin: 0 0 14px;
+}
+
+.detail__stats {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail__stats div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.detail__stats dd {
+  margin: 0;
+  font-size: var(--size-cell);
+}
+
+/* A month with nothing recorded is not a zero. */
+.networth__none {
+  font-size: var(--size-body);
+  color: var(--ink-45);
+  margin: 8px 0 12px;
+  max-width: 34ch;
+  line-height: 1.5;
+}

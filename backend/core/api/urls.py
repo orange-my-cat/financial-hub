@@ -27,4 +27,5 @@ urlpatterns = [
     path("me/", WhoAmIView.as_view(), name="me"),
     path("settings/", SettingsView.as_view(), name="settings"),
     path("fx/", include("fx.api.urls")),
+    path("", include("accounts.api.urls")),
 ]
