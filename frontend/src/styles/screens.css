@@ -22,12 +22,7 @@
   font-size: 32px;
   color: var(--accent);
   line-height: 1.1;
-}
-
-.login__strap {
-  margin: -10px 0 4px;
-  font-size: var(--size-secondary);
-  color: var(--ink-55);
+  text-align: center;
 }
 
 .login__submit {

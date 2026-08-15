@@ -256,6 +256,9 @@
 .spine__month {
   font-size: var(--size-col);
   color: var(--ink-55);
+  /* Belt as well as braces. The width above is sized for the label, but a font
+     that fails to load must not be able to reintroduce the wrap. */
+  white-space: nowrap;
 }
 
 .spine__row--current .spine__month {

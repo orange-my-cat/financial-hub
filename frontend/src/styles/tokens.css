@@ -91,7 +91,13 @@
   /* -- The chrome --------------------------------------------------------- */
   --rail-collapsed: 56px;
   --rail-expanded: 208px;
-  --spine-width: 100px;
+  /* The handoff fixes the spine at 100px. At that width `Sep 2024` in 11px mono
+     plus the 11px glyph, the 8px gap and 24px of padding comes to about 96px —
+     inside 100px only if the intended font is the one that loaded, so a
+     fallback with wider metrics wraps the label onto a second line. Widened on
+     the Product Owner's call: a month rail whose months wrap defeats the point
+     of the element, which is reading the shape of a history at a glance. */
+  --spine-width: 124px;
   --header-height: 64px;
 
   /* -- Inputs ------------------------------------------------------------- */

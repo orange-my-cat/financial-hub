@@ -36,7 +36,6 @@ export function Login() {
     <div className="login">
       <form className="login__card" onSubmit={submit} noValidate>
         <div className="login__mark">Financial Hub</div>
-        <p className="login__strap">Net worth, cash flow, investments and rates.</p>
 
         {bannerMessages.length > 0 && (
           <div className="error-banner" role="alert">

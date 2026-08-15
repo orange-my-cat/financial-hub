@@ -1,19 +1,26 @@
 /**
  * The ledger spine — the signature element.
  *
- * A persistent month rail down the right edge of every screen, 100px wide,
- * latest month at the top. Each row is a month label plus its completeness
- * glyph. The spine is the same on every screen: it ties every view to one
- * timeline and makes the shape of the user's history legible at a glance.
+ * A persistent month rail down the right edge of every screen, latest month at
+ * the top. Each row is a month label plus its completeness glyph. The spine is
+ * the same on every screen: it ties every view to one timeline and makes the
+ * shape of the user's history legible at a glance.
  *
  * At tablet width it becomes a horizontal strip below the header, running
  * ascending left to right, with the current month keyed at the right end —
  * handled in CSS by reversing the flex direction, so the DOM order stays
  * chronologically honest in both layouts.
  *
- * Stage 0 shows every month as Outside Range, which is not a placeholder: it is
- * state S1, the first run, where no account has been opened yet. Outside Range
- * means "before the first account existed" and is not a fault.
+ * **The range runs from the first month that has data to the current month.**
+ * There is no month table and there never will be: months are derived from the
+ * balances that exist (ADR-04). An account is required only from the later of
+ * its opening date and the first month a balance was actually recorded for it,
+ * so a fixed window of trailing months would be inventing history the user has
+ * not entered.
+ *
+ * Until the first balance exists there is nothing to derive, so the spine shows
+ * the current month alone. That is the degenerate case of the same rule, not a
+ * special one — the moment a balance is saved, the range grows from it.
  */
 
 import { formatMonth } from '@/lib/format'
@@ -33,25 +40,30 @@ export interface SpineMonth {
   readonly state: Completeness
 }
 
-function recentMonths(count: number): string[] {
+function thisMonth(): string {
   const now = new Date()
-  return Array.from({ length: count }, (_, index) => {
-    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - index, 1))
-    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
-  })
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
 interface SpineProps {
+  /**
+   * Latest first, starting at the first month with recorded data. Supplied by
+   * the completeness service from Stage 1; absent until then.
+   */
   readonly months?: readonly SpineMonth[]
   /** The month being reported on or closed. */
   readonly current?: string
 }
 
 export function Spine({ months, current }: SpineProps) {
-  const rows: readonly SpineMonth[] =
-    months ?? recentMonths(24).map((month) => ({ month, state: 'Outside Range' as const }))
+  const currentMonth = current ?? thisMonth()
 
-  const currentMonth = current ?? rows[0]?.month
+  // Outside Range means "before the first account opened", which is exactly
+  // what is true when no account exists yet — and it is not a fault.
+  const rows: readonly SpineMonth[] =
+    months && months.length > 0
+      ? months
+      : [{ month: currentMonth, state: 'Outside Range' }]
 
   return (
     <aside className="spine" aria-label="Months">
