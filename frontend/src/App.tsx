@@ -2,8 +2,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { useSession } from './lib/session'
+import { FxRates } from './screens/FxRates'
 import { Login } from './screens/Login'
 import { Placeholder, SCREENS } from './screens/Placeholder'
+import { Settings } from './screens/Settings'
 import { AppShell } from './shell/AppShell'
 
 const queryClient = new QueryClient({
@@ -45,8 +47,10 @@ function Routed() {
         <Route path="month-close" element={<Placeholder {...SCREENS.monthClose!} />} />
         <Route path="cash-flow" element={<Placeholder {...SCREENS.cashFlow!} />} />
         <Route path="investments" element={<Placeholder {...SCREENS.investments!} />} />
-        <Route path="fx-rates" element={<Placeholder {...SCREENS.fxRates!} />} />
-        <Route path="settings" element={<Placeholder {...SCREENS.settings!} />} />
+        {/* Stage 1 — built first, because net worth cannot be tested without
+            translation. */}
+        <Route path="fx-rates" element={<FxRates />} />
+        <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

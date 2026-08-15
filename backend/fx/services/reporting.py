@@ -262,7 +262,9 @@ class RateStatus:
             "currency": self.currency,
             "pair": self.pair,
             "quote_label": self.quote_label,
-            "rate": str(self.latest_rate) if self.latest_rate is not None else None,
+            # Trimmed, matching the daily table. The same rate rendered two ways
+            # on two panels of one screen reads as two different figures.
+            "rate": format_rate(self.latest_rate) if self.latest_rate is not None else None,
             "as_at": self.latest_as_at.isoformat() if self.latest_as_at else None,
             "age_days": self.age_days,
             "missing": self.is_missing,

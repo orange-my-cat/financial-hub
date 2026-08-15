@@ -182,3 +182,6 @@ def test_the_status_serialises():
     assert payload["pair"] == "AUD/USD"
     assert payload["as_at"] == "2026-01-31"
     assert payload["missing"] is False
+    # Trimmed the same way the daily table trims it, so one screen does not show
+    # the same rate two ways.
+    assert payload["rate"] == "0.66"

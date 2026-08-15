@@ -63,3 +63,166 @@
   color: var(--ink-45);
   font-size: var(--size-secondary);
 }
+
+/* ------------------------------------------------------------------------ */
+/* Screen furniture                                                          */
+/* ------------------------------------------------------------------------ */
+
+/* Each screen states in words which of the two view controls it obeys. */
+.screen__subhead {
+  margin: 0 0 var(--panel-gap);
+  font-size: var(--size-secondary);
+  color: var(--ink-55);
+}
+
+.panel {
+  background: transparent;
+  border-bottom: 1px solid var(--divider);
+  padding-bottom: var(--panel-gap);
+  margin-bottom: var(--panel-gap);
+}
+
+.panel:last-child {
+  border-bottom: none;
+}
+
+/* Explanatory copy. Present because several of these rules are surprising, and
+   a rule the user does not understand is a rule they work around. */
+.fx__note {
+  margin: 0 0 12px;
+  font-size: var(--size-secondary);
+  color: var(--ink-55);
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ink-45);
+  font-size: var(--size-secondary);
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--breach);
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------------ */
+/* FX rates                                                                  */
+/* ------------------------------------------------------------------------ */
+
+.fx__grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: var(--panel-gap);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .fx__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fx__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 340px;
+}
+
+/* The direction, stated beside every field. The single easiest thing in this
+   system to get backwards. */
+.fx__convention {
+  color: var(--ink-45);
+  font-weight: 400;
+}
+
+/* The wrong-way check, shown at the moment of typing. */
+.fx__inverse {
+  font-size: var(--size-secondary);
+  color: var(--ink-45);
+}
+
+.fx__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.fx__trend-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.fx__trend-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fx__trend-select .input {
+  min-height: 30px;
+  padding: 2px 8px;
+}
+
+.fx__derived {
+  font-size: var(--size-secondary);
+  color: var(--accent-light);
+  padding-bottom: 6px;
+}
+
+.fx__trend-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--size-col);
+  color: var(--ink-45);
+  margin-bottom: 6px;
+}
+
+.fx__chart {
+  width: 100%;
+}
+
+/* Provenance marks — exact is unmarked, because the common case earns no ink. */
+.mark {
+  font-size: 0.7em;
+  margin-left: 2px;
+}
+
+.mark--carried {
+  color: var(--carry);
+}
+
+.mark--triangulated {
+  color: var(--accent-light);
+}
+
+.rate--stale {
+  color: var(--ink-45);
+  border-bottom: 1px dotted var(--carry);
+}
+
+.advisories {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Settings                                                                  */
+/* ------------------------------------------------------------------------ */
+
+.settings__number {
+  max-width: 140px;
+}
+
+.settings .field {
+  margin-bottom: 18px;
+}
