@@ -37,17 +37,35 @@ def rate(currency: str, on: str, value: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/api/fx/currencies/",
-        "/api/fx/rates/?start=2026-01-01&end=2026-12-31",
-        "/api/fx/status/",
-        "/api/settings/",
-    ],
-)
+READ_ENDPOINTS = [
+    "/api/fx/currencies/",
+    "/api/fx/rates/?start=2026-01-01&end=2026-12-31",
+    "/api/fx/status/",
+    "/api/fx/trend/?from_currency=AUD&to_currency=USD&start=2026-01-01&end=2026-12-31",
+    "/api/settings/",
+]
+
+
+@pytest.mark.parametrize("path", READ_ENDPOINTS)
 def test_every_fx_endpoint_requires_a_session(client, path):
     assert client.get(path).status_code == 403
+
+
+@pytest.mark.parametrize("path", READ_ENDPOINTS)
+def test_every_read_endpoint_wraps_its_payload_in_data(signed_in, path):
+    """One envelope, from every read endpoint.
+
+    Written after `/fx/currencies/` shipped unwrapped and reached the browser as
+    a blank screen — TanStack Query throws when a query function resolves to
+    undefined, and `response.data` is undefined when there is no `data` key. The
+    endpoint's own test had asserted the unwrapped shape, so it passed while
+    encoding the inconsistency. A shape convention that only some endpoints
+    follow is not a convention.
+    """
+    body = signed_in.get(path).json()
+
+    assert "data" in body, f"{path} does not wrap its payload in `data`"
+    assert body["data"] is not None
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +74,7 @@ def test_every_fx_endpoint_requires_a_session(client, path):
 
 
 def test_the_registry_states_each_pair_and_its_direction(signed_in):
-    body = signed_in.get("/api/fx/currencies/").json()
+    body = signed_in.get("/api/fx/currencies/").json()["data"]
 
     assert body["base"] == "USD"
     assert body["quoted"] == ["AUD", "MYR"]

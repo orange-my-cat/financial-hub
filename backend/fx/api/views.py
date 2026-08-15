@@ -13,7 +13,12 @@ from rest_framework import status as http
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.currencies import CURRENCIES, QUOTED_CURRENCY_CODES, pair_label
+from core.currencies import (
+    BASE_CURRENCY,
+    CURRENCIES,
+    QUOTED_CURRENCY_CODES,
+    pair_label,
+)
 from core.models import Settings
 from core.api.responses import with_advisories
 from core.services.exceptions import NotFoundError
@@ -42,22 +47,28 @@ class CurrencyRegistryView(APIView):
     """
 
     def get(self, request):  # noqa: ARG002
+        # Wrapped in `data`, like every other read endpoint. This one was not,
+        # and the inconsistency reached the browser as a blank screen: TanStack
+        # Query throws when a query function resolves to undefined, which is
+        # what `response.data` is when there is no `data` key.
         return Response(
             {
-                "base": "USD",
-                "currencies": [
-                    {
-                        "code": definition.code,
-                        "name": definition.name,
-                        "convention": str(definition.convention),
-                        "quote_label": definition.quote_label,
-                        "example": definition.example,
-                        "is_base": definition.is_base,
-                        "pair": pair_label(definition.code),
-                    }
-                    for definition in CURRENCIES.values()
-                ],
-                "quoted": list(QUOTED_CURRENCY_CODES),
+                "data": {
+                    "base": BASE_CURRENCY,
+                    "currencies": [
+                        {
+                            "code": definition.code,
+                            "name": definition.name,
+                            "convention": str(definition.convention),
+                            "quote_label": definition.quote_label,
+                            "example": definition.example,
+                            "is_base": definition.is_base,
+                            "pair": pair_label(definition.code),
+                        }
+                        for definition in CURRENCIES.values()
+                    ],
+                    "quoted": list(QUOTED_CURRENCY_CODES),
+                }
             }
         )
 

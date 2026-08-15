@@ -15,10 +15,16 @@ from .guards import ConfigurationRefused, assert_development_database
 
 DEBUG = env_bool("DJANGO_DEBUG", True)
 
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+# `host.docker.internal` is here for the browser check, which drives the
+# application from a container and therefore reaches the host under that name
+# (scripts/browser-check.ps1). Development only — production allows exactly
+# `financial-hub.localhost` and nothing else.
+ALLOWED_HOSTS = env_list(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,host.docker.internal"
+)
 CSRF_TRUSTED_ORIGINS = env_list(
     "DJANGO_CSRF_TRUSTED_ORIGINS",
-    "http://localhost:5173,http://localhost:8001",
+    "http://localhost:5173,http://localhost:8001,http://host.docker.internal:5174",
 )
 
 # Everything development is permitted to address. `financial_hub_ci` is the

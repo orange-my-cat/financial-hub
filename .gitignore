@@ -39,3 +39,6 @@ frontend/.vite/
 Thumbs.db
 .idea/
 *.swp
+
+# Browser-check screenshots — regenerated on every run
+scripts/screenshots/

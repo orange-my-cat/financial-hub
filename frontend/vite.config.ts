@@ -28,6 +28,14 @@ export default defineConfig(({ mode }) => {
 
     server: {
       port: vitePort,
+      // Vite refuses requests whose Host header it does not recognise. The
+      // browser check drives the app from inside a container, which reaches
+      // the host as `host.docker.internal`, so that name has to be allowed —
+      // but only for the check. The everyday dev server keeps Vite's default
+      // protection, because relaxing it there would be relaxing it always.
+      ...(process.env.VITE_CHECK === '1'
+        ? { allowedHosts: ['host.docker.internal', 'localhost', '127.0.0.1'] }
+        : {}),
       // Fail rather than silently move to another port: the port is written
       // into CSRF_TRUSTED_ORIGINS, and a silent move produces a login that
       // fails for no visible reason.
