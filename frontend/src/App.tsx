@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useSession } from './lib/session'
 import { AccountDetail } from './screens/AccountDetail'
 import { Accounts } from './screens/Accounts'
+import { CashFlow } from './screens/CashFlow'
 import { FxRates } from './screens/FxRates'
 import { Login } from './screens/Login'
 import { MonthClose } from './screens/MonthClose'
@@ -50,7 +51,8 @@ function Routed() {
         <Route path="accounts" element={<Accounts />} />
         <Route path="accounts/:accountId" element={<AccountDetail />} />
         <Route path="month-close" element={<MonthClose />} />
-        <Route path="cash-flow" element={<Placeholder {...SCREENS.cashFlow!} />} />
+        {/* Stage 3 — a parallel ledger. Nothing here touches a balance. */}
+        <Route path="cash-flow" element={<CashFlow />} />
         <Route path="investments" element={<Placeholder {...SCREENS.investments!} />} />
         {/* Stage 1 — built first, because net worth cannot be tested without
             translation. */}
