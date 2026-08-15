@@ -25,15 +25,26 @@ empty database.
 
 | Stage | Contents | State |
 |---|---|---|
-| **0** | Repository, configuration, both topologies, auth, test harness, backup entrypoint | **in progress** |
-| 1 | `core` + `fx` — money, rate lookup, translation, completeness | not started |
-| 2 | `accounts` — Month Close, net worth, slices → **checkpoint: close one real month** | not started |
-| 3 | `cashflow` | not started |
-| 4 | `investments` — replay engine built in isolation first | not started |
-| 5 | Dashboard, CSV export, polish | not started |
+| **0** | Repository, configuration, both topologies, auth, test harness, backup entrypoint | built |
+| **1** | `core` + `fx` — money, rate lookup, translation, completeness | built |
+| **2** | `accounts` — Month Close, net worth, slices | built |
+| **⟶** | **Checkpoint: close one real month using net worth alone** | **outstanding — yours** |
+| **3** | `cashflow` | built |
+| **4** | `investments` — replay engine built in isolation first | built |
+| **5** | Dashboard, CSV export, backup status, the spine | built |
 
-Do not build ahead of this sequence. Each stage exists because the next cannot be tested
-without it.
+493 tests, 95% line coverage. The invariant suite runs alone in under three seconds
+(`pytest -m invariant`).
+
+### What is not done
+
+| | |
+|---|---|
+| **The checkpoint** | One real month closed end to end. It is the only genuine mitigation for RISK-08's indefinite drift, and BUILD_PLAN wants OI-14 (back-fill rigidity) and RISK-03 (completeness friction) reassessed against it **with evidence**. Nobody but the Product Owner can produce that evidence |
+| **TR-03 — restore rehearsal** | The §11.3 procedure has never been executed. Do it once, deliberately, before the first live close. That act is what discharges DEP-02 |
+| **OI-12** | Backups land on a local disk rather than a replicated one. Partly closed, not closed |
+| **Responsive** | Reporting screens reflow at tablet width and the spine becomes a horizontal strip; data-entry screens are desktop-only by design. Built, but only verified at 1440px |
+| **The five designed states** | S1–S5 emerge from real data rather than being separately built. S1 (first run) and S3 (silence) are verified; S2, S4 and S5 have backend tests but no visual check |
 
 ---
 

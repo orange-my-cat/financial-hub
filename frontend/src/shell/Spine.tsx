@@ -24,6 +24,7 @@
  */
 
 import { formatMonth } from '@/lib/format'
+import { useSpine } from '@/lib/dashboard'
 
 export type Completeness = 'Complete' | 'Incomplete' | 'Missing' | 'Outside Range'
 
@@ -57,13 +58,19 @@ interface SpineProps {
 
 export function Spine({ months, current }: SpineProps) {
   const currentMonth = current ?? thisMonth()
+  // Derived server-side from the balances that exist (ADR-04). The `months`
+  // prop overrides it, so a screen that already knows its range need not
+  // re-fetch.
+  const derived = useSpine(currentMonth)
 
-  // Outside Range means "before the first account opened", which is exactly
-  // what is true when no account exists yet — and it is not a fault.
+  const supplied = months && months.length > 0 ? months : derived.data
+
   const rows: readonly SpineMonth[] =
-    months && months.length > 0
-      ? months
-      : [{ month: currentMonth, state: 'Outside Range' }]
+    supplied && supplied.length > 0
+      ? supplied
+      : // Outside Range means "before the first account opened", which is
+        // exactly what is true when no account exists yet — and not a fault.
+        [{ month: currentMonth, state: 'Outside Range' }]
 
   return (
     <aside className="spine" aria-label="Months">

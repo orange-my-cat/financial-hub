@@ -668,3 +668,103 @@
   color: var(--carry);
   margin-left: 5px;
 }
+
+/* ------------------------------------------------------------------------ */
+/* Dashboard                                                                 */
+/* ------------------------------------------------------------------------ */
+
+.dash__networth {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: var(--panel-gap);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .dash__networth {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The only bordered panel on the screen, because this panel is the product's
+   conscience. Everything else reports; this asks. */
+.tasks {
+  border: 1px solid var(--carry-border);
+  border-radius: var(--radius-panel);
+  padding: var(--panel-pad);
+  margin-bottom: var(--panel-gap);
+}
+
+.tasks__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tasks__row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.tasks__count {
+  font-size: 15px;
+  text-align: right;
+}
+
+.tasks__count.carry {
+  color: var(--carry);
+}
+
+.tasks__count.breach {
+  color: var(--breach);
+}
+
+.tasks__message {
+  font-size: var(--size-body);
+  color: var(--ink-85);
+  line-height: 1.5;
+}
+
+.tasks__link {
+  font-size: var(--size-secondary);
+  white-space: nowrap;
+}
+
+/* A single strip. State dot, date, destination, link. */
+.backup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--divider);
+  font-size: var(--size-secondary);
+}
+
+.backup__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 8px;
+}
+
+.backup__dot.ok {
+  background: var(--rise);
+}
+
+.backup__dot.warn {
+  background: var(--carry);
+}
+
+.backup--warn .backup__state {
+  color: var(--carry);
+}
+
+.backup__path {
+  color: var(--ink-45);
+  margin-left: auto;
+}

@@ -5,12 +5,12 @@ import { useSession } from './lib/session'
 import { AccountDetail } from './screens/AccountDetail'
 import { Accounts } from './screens/Accounts'
 import { CashFlow } from './screens/CashFlow'
+import { Dashboard } from './screens/Dashboard'
 import { FxRates } from './screens/FxRates'
 import { Investments } from './screens/Investments'
 import { Login } from './screens/Login'
 import { MonthClose } from './screens/MonthClose'
 import { NetWorth } from './screens/NetWorth'
-import { Placeholder, SCREENS } from './screens/Placeholder'
 import { Settings } from './screens/Settings'
 import { AppShell } from './shell/AppShell'
 
@@ -46,7 +46,8 @@ function Routed() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<Placeholder {...SCREENS.dashboard!} />} />
+        {/* Stage 5 — built last, deliberately (RISK-06). */}
+        <Route index element={<Dashboard />} />
         {/* Stage 2 — the highest-value module, and the checkpoint. */}
         <Route path="net-worth" element={<NetWorth />} />
         <Route path="accounts" element={<Accounts />} />

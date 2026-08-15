@@ -9,17 +9,30 @@
 
 import { useLocation } from 'react-router-dom'
 
+import { exportUrl } from '@/lib/dashboard'
 import { CURRENCIES } from '@/lib/money'
 import { useLogout } from '@/lib/session'
 import { useViewState } from '@/lib/viewState'
 
 import { destinationFor } from './navigation'
 
+/** Which report this screen exports. Null where the screen has no data of its own. */
+const EXPORT_FOR: Record<string, string> = {
+  '/': 'net-worth',
+  '/net-worth': 'net-worth-trend',
+  '/accounts': 'net-worth',
+  '/month-close': 'net-worth',
+  '/cash-flow': 'cashflow',
+  '/investments': 'investments',
+  '/fx-rates': 'fx',
+}
+
 export function Header() {
   const { pathname } = useLocation()
   const destination = destinationFor(pathname)
   const { currency, from, to, setCurrency } = useViewState()
   const logout = useLogout()
+  const exportReport = EXPORT_FOR[destination.path] ?? null
 
   return (
     <header className="header">
@@ -53,12 +66,27 @@ export function Header() {
           </span>
         </div>
 
-        {/* CSV export is a persistent secondary button in every screen header,
-            never a tucked-away tertiary action: it is the only route data has
-            out of the application. Wired at Stage 5. */}
-        <button type="button" className="btn" disabled title="Available from Stage 5">
-          Export CSV
-        </button>
+        {/* A persistent secondary button in every screen header, never a
+            tucked-away tertiary action: it is the only route data has out of
+            the application (ADR-11, departure D1).
+
+            A plain link, not a fetch: the file is generated server-side and
+            streamed with a Content-Disposition, so the bytes never pass through
+            JavaScript that could reformat them. An export that disagreed with
+            the screen it came from would be worse than none. */}
+        {exportReport ? (
+          <a
+            className="btn"
+            href={exportUrl(exportReport, { month: to, currency, from_month: from })}
+            download
+          >
+            Export CSV
+          </a>
+        ) : (
+          <button type="button" className="btn" disabled title="Nothing to export here">
+            Export CSV
+          </button>
+        )}
 
         <button
           type="button"

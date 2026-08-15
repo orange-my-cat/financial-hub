@@ -10,12 +10,15 @@
 
 import { NavLink } from 'react-router-dom'
 
+import { useTaskCounts } from '@/lib/dashboard'
+
 import { icons } from './icons'
 import { DESTINATIONS, SETTINGS_DESTINATION, type Destination } from './navigation'
 
 interface RailItemProps {
   readonly destination: Destination
-  readonly badge?: number
+  /** `exactOptionalPropertyTypes` is on, so absent and undefined are distinct. */
+  readonly badge?: number | undefined
 }
 
 function RailItem({ destination, badge }: RailItemProps) {
@@ -34,6 +37,10 @@ function RailItem({ destination, badge }: RailItemProps) {
 }
 
 export function Rail() {
+  // Badges show outstanding work, from the same service the dashboard's
+  // conscience panel uses. One definition, two renderings.
+  const counts = useTaskCounts()
+
   return (
     <nav className="rail" aria-label="Sections">
       <div className="rail__mark">
@@ -43,7 +50,11 @@ export function Rail() {
 
       <div className="rail__group">
         {DESTINATIONS.map((destination) => (
-          <RailItem key={destination.path} destination={destination} />
+          <RailItem
+            key={destination.path}
+            destination={destination}
+            badge={counts.data?.[destination.path]}
+          />
         ))}
       </div>
 

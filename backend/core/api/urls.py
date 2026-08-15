@@ -16,6 +16,12 @@ from __future__ import annotations
 
 from django.urls import include, path
 
+from core.api.dashboard_views import (
+    DashboardView,
+    ExportView,
+    SpineView,
+    TaskCountView,
+)
 from core.api.settings_views import SettingsView
 from core.api.views import HealthView, SessionView, WhoAmIView
 
@@ -26,6 +32,10 @@ urlpatterns = [
     path("session/", SessionView.as_view(), name="session"),
     path("me/", WhoAmIView.as_view(), name="me"),
     path("settings/", SettingsView.as_view(), name="settings"),
+    path("dashboard/", DashboardView.as_view(), name="dashboard"),
+    path("spine/", SpineView.as_view(), name="spine"),
+    path("tasks/", TaskCountView.as_view(), name="tasks"),
+    path("export/<str:report>/", ExportView.as_view(), name="export"),
     path("fx/", include("fx.api.urls")),
     path("cashflow/", include("cashflow.api.urls")),
     path("investments/", include("investments.api.urls")),
