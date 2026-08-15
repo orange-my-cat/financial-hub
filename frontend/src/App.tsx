@@ -6,6 +6,7 @@ import { AccountDetail } from './screens/AccountDetail'
 import { Accounts } from './screens/Accounts'
 import { CashFlow } from './screens/CashFlow'
 import { FxRates } from './screens/FxRates'
+import { Investments } from './screens/Investments'
 import { Login } from './screens/Login'
 import { MonthClose } from './screens/MonthClose'
 import { NetWorth } from './screens/NetWorth'
@@ -53,7 +54,8 @@ function Routed() {
         <Route path="month-close" element={<MonthClose />} />
         {/* Stage 3 — a parallel ledger. Nothing here touches a balance. */}
         <Route path="cash-flow" element={<CashFlow />} />
-        <Route path="investments" element={<Placeholder {...SCREENS.investments!} />} />
+        {/* Stage 4 — FIFO by replay. No market prices, so no unrealised gain. */}
+        <Route path="investments" element={<Investments />} />
         {/* Stage 1 — built first, because net worth cannot be tested without
             translation. */}
         <Route path="fx-rates" element={<FxRates />} />

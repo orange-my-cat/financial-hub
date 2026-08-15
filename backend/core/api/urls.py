@@ -28,5 +28,6 @@ urlpatterns = [
     path("settings/", SettingsView.as_view(), name="settings"),
     path("fx/", include("fx.api.urls")),
     path("cashflow/", include("cashflow.api.urls")),
+    path("investments/", include("investments.api.urls")),
     path("", include("accounts.api.urls")),
 ]

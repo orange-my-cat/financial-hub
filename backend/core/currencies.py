@@ -104,14 +104,13 @@ QUOTED_CURRENCY_CHOICES = [
 def format_rate(value: Decimal) -> str:
     """A rate as a person would write it — `0.66`, not `0.6600000000`.
 
-    NUMERIC(19,10) pads what was typed, and an advisory that quotes a rate back
-    at ten decimal places is asking the reader to count zeros to check their own
-    entry. Trailing zeros go; nothing else does.
-
-    `Decimal.normalize()` alone is wrong here: it renders 4200.0000000000 as
-    `4.2E+3`, which is worse than the padding it fixed.
+    Delegates to :func:`core.money.trim`, which is where this lives now: the
+    same defect turned up in a rate advisory, a settings response and a tax
+    percentage, and three copies of a fix is two too many.
     """
-    return format(value.normalize(), "f")
+    from core.money import trim
+
+    return trim(value)
 
 
 def is_known(code: str) -> bool:

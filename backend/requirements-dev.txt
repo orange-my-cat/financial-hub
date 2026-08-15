@@ -4,3 +4,8 @@
 pytest>=8,<9
 pytest-django>=4.8,<5
 pytest-cov>=5,<7
+
+# Property-based testing, for FIFO specifically (ADR-17). Invariants such as
+# "consumed quantity never exceeds purchased quantity" hold universally, and
+# generated cases reach shapes nobody thinks to write by hand.
+hypothesis>=6,<7

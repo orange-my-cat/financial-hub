@@ -30,6 +30,21 @@ DISPLAY_PLACES = 2
 _DISPLAY_EXPONENT = Decimal(1).scaleb(-DISPLAY_PLACES)
 
 
+def trim(value: Decimal) -> str:
+    """A decimal as a person would write it — `0.66`, `20`, `4200`.
+
+    NUMERIC(19,10) pads what was typed, so a rate reads back as `0.6600000000`
+    and a tax percentage as `20.0000000000`. Quoting either back at ten decimal
+    places asks the reader to count zeros to check their own entry.
+
+    `Decimal.normalize()` alone is wrong: it renders 20 as `2E+1` and 4200 as
+    `4.2E+3`, which is worse than the padding it fixed. This has now been the
+    same defect three times — in a rate advisory, in a settings response and in
+    a tax percentage — so it lives in one place.
+    """
+    return format(value.normalize(), "f")
+
+
 class CurrencyMismatch(TypeError):
     """Two different currencies were combined without translating first."""
 

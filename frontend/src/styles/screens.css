@@ -596,3 +596,75 @@
 .cashflow__totals .label {
   margin-right: 6px;
 }
+
+/* ------------------------------------------------------------------------ */
+/* Investments                                                               */
+/* ------------------------------------------------------------------------ */
+
+/* Stated on the screen, not merely implemented. */
+.prohibitions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 2px solid var(--divider);
+  padding: 4px 0 4px 12px;
+  margin-bottom: var(--panel-gap);
+  max-width: 78ch;
+}
+
+.prohibitions p {
+  margin: 0;
+  font-size: var(--size-secondary);
+  color: var(--ink-55);
+  line-height: 1.55;
+}
+
+.invest__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.invest__tax {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.invest__tax .input {
+  min-height: 28px;
+  padding: 2px 8px;
+  max-width: 80px;
+  text-align: right;
+}
+
+.invest__actions {
+  margin-bottom: 14px;
+  gap: 8px;
+}
+
+.invest__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.invest__gains {
+  margin-bottom: 22px;
+}
+
+.invest__gains-heading {
+  font-size: var(--size-cell);
+  color: var(--ink-55);
+  margin-bottom: 6px;
+}
+
+/* Every net-of-tax figure is labelled, on every screen and every export. */
+.indicative {
+  font-size: 0.8em;
+  color: var(--carry);
+  margin-left: 5px;
+}
