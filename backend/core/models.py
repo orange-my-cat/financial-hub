@@ -15,7 +15,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from core.currencies import BASE_CURRENCY, CURRENCY_CHOICES
+from core.currencies import BASE_CURRENCY, REPORTING_CURRENCY_CHOICES
 
 # ---------------------------------------------------------------------------
 # Precision — ADR-02
@@ -161,11 +161,20 @@ class Settings(models.Model):
 
     id = models.PositiveSmallIntegerField(primary_key=True, default=SETTINGS_SINGLETON_PK)
 
-    # A display choice only. Stored data is always USD and is never rewritten
-    # by changing this (BR-10).
-    reporting_currency = models.CharField(
+    # The currency every screen starts in and every currency selector
+    # pre-selects. A display choice only: stored data is always USD and is never
+    # rewritten by changing this (BR-10).
+    #
+    # It is a *default*, not the reporting currency itself. The currency a total
+    # is actually stated in is view state, held in the URL, and an explicit
+    # choice there always wins — this is only what that choice starts at.
+    #
+    # Narrower than CURRENCY_CHOICES, and deliberately: a balance may be *held*
+    # in any known currency, but net worth is only *stated* in one that reports.
+    # Gold denominates a balance and does not report.
+    default_currency = models.CharField(
         max_length=3,
-        choices=CURRENCY_CHOICES,
+        choices=REPORTING_CURRENCY_CHOICES,
         default=BASE_CURRENCY,
         help_text="Display only. The base and stored currency is always USD.",
     )
@@ -217,7 +226,7 @@ class Settings(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Settings (reporting in {self.reporting_currency})"
+        return f"Settings (default currency {self.default_currency})"
 
     def save(self, *args, **kwargs):
         self.id = self.SINGLETON_PK

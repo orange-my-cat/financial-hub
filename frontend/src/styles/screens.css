@@ -75,10 +75,13 @@
   color: var(--ink-55);
 }
 
+/* A band of the page, not a card on it: transparent, no radius, separated from
+   the next by a single straight rule. Square corners are the point — a rounded
+   box reads as something laid on top of the page rather than part of it. */
 .panel {
   background: transparent;
   border-bottom: 1px solid var(--divider);
-  padding-bottom: var(--panel-gap);
+  padding: var(--panel-pad) var(--panel-pad) var(--panel-gap);
   margin-bottom: var(--panel-gap);
 }
 
@@ -134,6 +137,23 @@
   max-width: 340px;
 }
 
+/* The provider load, under the missing-and-stale table it answers. Separated by
+   a rule rather than a heading: it is an action on the panel above it, not a
+   fifth section of the screen. */
+.fx__load {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--row-rule);
+}
+
+.fx__load .btn {
+  margin-bottom: 10px;
+}
+
+.fx__load .fx__note {
+  margin-bottom: 0;
+}
+
 /* The direction, stated beside every field. The single easiest thing in this
    system to get backwards. */
 .fx__convention {
@@ -145,12 +165,6 @@
 .fx__inverse {
   font-size: var(--size-secondary);
   color: var(--ink-45);
-}
-
-.fx__state {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
 }
 
 .fx__trend-controls {
@@ -227,17 +241,13 @@
   margin-bottom: 18px;
 }
 
+.settings__report {
+  max-width: 320px;
+}
+
 /* ------------------------------------------------------------------------ */
 /* Month Close                                                               */
 /* ------------------------------------------------------------------------ */
-
-.close__month {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px;
-  max-width: 180px;
-}
 
 /* Pinned below the header. The product's running commentary on the close. */
 .readout {
@@ -267,12 +277,6 @@
   color: var(--carry);
 }
 
-.readout__note {
-  margin-left: auto;
-  font-size: var(--size-secondary);
-  color: var(--ink-45);
-}
-
 /* 28px in the grid, right-aligned mono. Twenty of these get typed in a row. */
 .input--grid {
   min-height: var(--input-height-grid);
@@ -292,18 +296,14 @@
   border-color: var(--rise-border);
 }
 
+/* A tick in the Month Close rows, a word elsewhere. Inline-flex so the glyph
+   sits on the row's baseline box rather than on the text baseline, where a
+   descender-less icon rides high. */
 .saved {
+  display: inline-flex;
+  align-items: center;
   color: var(--rise);
   font-size: var(--size-secondary);
-}
-
-.cell-state {
-  width: 70px;
-}
-
-.row-number {
-  width: 32px;
-  text-align: right;
 }
 
 .ink-30 {
@@ -318,6 +318,23 @@
   vertical-align: middle;
 }
 
+/* Column widths are the table's own `colgroup`, per the .table--fixed rule —
+   30% to the account name, 36px to the saved tick, and an even share of what is
+   left to each column carrying a value. Nothing here may set a cell width, or
+   there would be two answers to how wide a column is. */
+
+/* The input is capped at 160px, so a wider column would leave it floating away
+   from its own header. Pushing the cell's contents right puts the box under the
+   heading and its digits in line with the prior month's beside it — which is
+   the adjacency the whole screen is built around. */
+.cell-balance {
+  text-align: right;
+}
+
+.cell-balance .field__error {
+  justify-content: flex-end;
+}
+
 /* ------------------------------------------------------------------------ */
 /* Accounts                                                                  */
 /* ------------------------------------------------------------------------ */
@@ -329,22 +346,47 @@
   align-items: end;
 }
 
+/* The column is a fixed share of the table now, so a row carrying every action
+   can outgrow it. Individual labels never break; the set wraps instead. */
 .accounts__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   justify-content: flex-end;
   white-space: nowrap;
+}
+
+/* A refusal belongs against the row that caused it, not at the top of the
+   screen where it loses its subject. No hover tint — it is not a row. */
+.accounts__error-row td {
+  padding: 8px var(--cell-pad) 12px;
+}
+
+.accounts__error-row:hover {
+  background: none;
 }
 
 .link-button--breach {
   color: var(--breach);
 }
 
-/* Currency locked once balances exist. */
-.mark--locked {
-  color: var(--ink-45);
-  font-size: 0.7em;
-  margin-left: 2px;
+/* Reveals the closed accounts, which are hidden by default. A row action earns
+   the breach hover because it changes an account; this one only changes what is
+   on screen, so it warms to the accent instead. */
+.accounts__disclosure {
+  margin: -4px 0 0;
+}
+
+/* The eye sits on the text baseline rather than the line box, which is what
+   inline-flex with a centred cross axis buys over a bare glyph. */
+.accounts__disclosure-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.accounts__disclosure-button:hover {
+  color: var(--accent-light);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -420,6 +462,13 @@
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: var(--panel-gap);
   align-items: start;
+}
+
+/* The panel rule separates panels stacked down a screen. These two sit side by
+   side, so it would underline the left column and not the right — a divider
+   between nothing and nothing. The grid gap already does the separating. */
+.networth__tables > .panel {
+  border-bottom: none;
 }
 
 .table__total td {
@@ -686,11 +735,96 @@
   }
 }
 
+/* The month's flow as four figures rather than a table. A table by currency
+   answered "how much in MYR"; these four answer "how did the month go", which
+   is the only question a dashboard is for.
+
+   Stacked in the 330px figures column, one under the next, so the four read
+   top to bottom as a single statement about the month.
+
+   Sized and spaced exactly as the net worth figure above: hero for the number,
+   cell for its movement, 6px under the label, 8px under the number, 12px
+   between one figure and the next. The two panels are the same object repeated
+   four times, and anything that made them differ would read as a distinction
+   the data does not contain. */
+.cashsum {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.cashsum__figure {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cashsum__value {
+  font-size: var(--size-hero);
+  line-height: 1.1;
+  margin: 6px 0 8px;
+}
+
+.cashsum__change {
+  font-size: var(--size-cell);
+  color: var(--ink-70);
+}
+
+/* Two stacked plots reading as one figure, sharing the month axis printed
+   under each. Never one plot with two y scales.
+
+   The gap between them has to clear the upper plot's month labels, or the two
+   read as one plot with a rule through it — which is the dual-axis reading the
+   split exists to prevent. */
+.flowchart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--panel-gap);
+  margin-top: 4px;
+}
+
+/* Figures in the tooltip are rendered from the server's strings, not from the
+   floats the chart plots with. */
+.charttip {
+  background: var(--surface);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-input);
+  padding: 8px 10px;
+  font-size: var(--size-secondary);
+}
+
+.charttip__month {
+  color: var(--ink-70);
+  margin-bottom: 6px;
+}
+
+.charttip__list {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 14px;
+  margin: 0;
+}
+
+.charttip__list dt {
+  color: var(--ink-55);
+}
+
+.charttip__list dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* The only bordered panel on the screen, because this panel is the product's
-   conscience. Everything else reports; this asks. */
+   conscience. Everything else reports; this asks.
+
+   Square corners rather than the handoff's 10px radius: every other rule on
+   this screen is a straight divider, and a rounded box among them reads as a
+   card pasted onto the page rather than as one more band of it. */
 .tasks {
   border: 1px solid var(--carry-border);
-  border-radius: var(--radius-panel);
   padding: var(--panel-pad);
   margin-bottom: var(--panel-gap);
 }

@@ -23,7 +23,7 @@
   color: var(--ink-85);
   font-size: var(--size-body);
   cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease;
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 
 .btn:hover:not(:disabled) {
@@ -41,9 +41,30 @@
   color: var(--accent-light);
 }
 
+/* The colour is already accent-light at rest, so a colour shift alone reads as
+   nothing happening. The wash is the same fill the rail uses to mark where you
+   are — a highlight this application already speaks. */
 .btn--primary:hover:not(:disabled) {
   border-color: var(--accent-light);
+  background: var(--accent-wash);
   color: var(--accent-light);
+}
+
+/* Icon only, and deliberately smaller than a labelled button. For an action
+   that sits beside one the user wants often and would resent reaching by
+   accident — the reduced target is the point, not a space saving. The label
+   lives in aria-label and title, so it is still announced and still hoverable. */
+.btn--icon {
+  width: var(--input-height-grid);
+  min-height: var(--input-height-grid);
+  height: var(--input-height-grid);
+  padding: 0;
+  color: var(--ink-55);
+}
+
+.btn--icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -182,6 +203,15 @@
   border: 1px dashed var(--ink-30);
 }
 
+/* A state in a table cell: the glyph and its word on one line. The glyph alone
+   is a legend the reader has to have learnt; the word alone loses the shape
+   that lets a column be scanned. Both, always. */
+.state-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
 /* ------------------------------------------------------------------------ */
 /* Money                                                                     */
 /* ------------------------------------------------------------------------ */
@@ -258,6 +288,12 @@
   border-collapse: collapse;
 }
 
+/* Sibling tables only align when their columns are pinned rather than sized to
+   each one's own content. Widths come from the table's own `colgroup`. */
+.table--fixed {
+  table-layout: fixed;
+}
+
 .table th {
   font-size: var(--size-col);
   font-weight: 500;
@@ -286,6 +322,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A state column carries a glyph, not a figure — right-aligned like the numbers
+   it sits beside, but without the mono face they wear. */
+.table .state-col {
+  text-align: right;
+}
+
 .table .secondary {
   color: var(--ink-55);
   font-size: var(--size-secondary);
@@ -295,10 +337,10 @@
 /* Panels                                                                    */
 /* ------------------------------------------------------------------------ */
 
-.panel {
-  padding: var(--panel-pad);
-  border-radius: var(--radius-panel);
-}
+/* `.panel` itself lives in screens.css, with the rest of the screen
+   furniture. It was defined in both files, which is how it kept a 10px radius
+   nobody could find: this file set the corners, that one set the border, and
+   neither rule showed the whole shape. One class, one definition. */
 
 .panel__heading {
   font-family: var(--face-display);

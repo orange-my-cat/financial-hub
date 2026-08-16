@@ -1,38 +1,30 @@
 /**
- * The header — reporting currency and date range, both mirrored to the URL.
+ * The header — reporting currency, mirrored to the URL.
  *
- * These are persistent view state, not filters. Where a control does not apply
+ * This is persistent view state, not a filter. Where the control does not apply
  * to the current screen it renders at 40% opacity and is disabled, rather than
  * disappearing: a control that vanishes raises the question of where it went,
  * and a control that silently does nothing is worse than either.
+ *
+ * The date range is still view state and still mirrored to the URL — each
+ * screen that obeys it reads it from there — it is simply no longer displayed
+ * here. It still reaches CSV export, which now lives on Settings.
  */
 
 import { useLocation } from 'react-router-dom'
 
-import { exportUrl } from '@/lib/dashboard'
-import { CURRENCIES } from '@/lib/money'
+import { REPORTING_CURRENCIES } from '@/lib/money'
 import { useLogout } from '@/lib/session'
 import { useViewState } from '@/lib/viewState'
 
+import { icons } from './icons'
 import { destinationFor } from './navigation'
-
-/** Which report this screen exports. Null where the screen has no data of its own. */
-const EXPORT_FOR: Record<string, string> = {
-  '/': 'net-worth',
-  '/net-worth': 'net-worth-trend',
-  '/accounts': 'net-worth',
-  '/month-close': 'net-worth',
-  '/cash-flow': 'cashflow',
-  '/investments': 'investments',
-  '/fx-rates': 'fx',
-}
 
 export function Header() {
   const { pathname } = useLocation()
   const destination = destinationFor(pathname)
-  const { currency, from, to, setCurrency } = useViewState()
+  const { currency, setCurrency } = useViewState()
   const logout = useLogout()
-  const exportReport = EXPORT_FOR[destination.path] ?? null
 
   return (
     <header className="header">
@@ -45,7 +37,9 @@ export function Header() {
           aria-label="Reporting currency"
         >
           <span className="label seg__legend">Reporting</span>
-          {CURRENCIES.map((code) => (
+          {/* Reporting currencies, not every currency held: a balance may be
+              denominated in gold, but net worth is never stated in ounces. */}
+          {REPORTING_CURRENCIES.map((code) => (
             <button
               key={code}
               type="button"
@@ -59,42 +53,17 @@ export function Header() {
           ))}
         </div>
 
-        <div className={`range${destination.obeysRange ? '' : ' range--inert'}`}>
-          <span className="label">Range</span>
-          <span className="mono range__value">
-            {from} — {to}
-          </span>
-        </div>
-
-        {/* A persistent secondary button in every screen header, never a
-            tucked-away tertiary action: it is the only route data has out of
-            the application (ADR-11, departure D1).
-
-            A plain link, not a fetch: the file is generated server-side and
-            streamed with a Content-Disposition, so the bytes never pass through
-            JavaScript that could reformat them. An export that disagreed with
-            the screen it came from would be worse than none. */}
-        {exportReport ? (
-          <a
-            className="btn"
-            href={exportUrl(exportReport, { month: to, currency, from_month: from })}
-            download
-          >
-            Export CSV
-          </a>
-        ) : (
-          <button type="button" className="btn" disabled title="Nothing to export here">
-            Export CSV
-          </button>
-        )}
-
+        {/* Icon only and smaller than its neighbour by intent — the cost of a
+            misclick here is a lost session. */}
         <button
           type="button"
-          className="btn"
+          className="btn btn--icon"
           onClick={() => logout.mutate()}
           disabled={logout.isPending}
+          aria-label="Sign out"
+          title="Sign out"
         >
-          Sign out
+          {icons.signOut}
         </button>
       </div>
     </header>

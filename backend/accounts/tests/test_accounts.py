@@ -265,6 +265,36 @@ def test_the_exclusion_is_stated_on_the_aggregate():
 
 
 # ---------------------------------------------------------------------------
+# The month in progress is valued at today
+# ---------------------------------------------------------------------------
+
+
+def test_the_month_in_progress_is_translated_at_today_not_at_its_month_end():
+    """A rate entered this morning is exact this morning, not carried and stale.
+
+    Valuing the running month at a month-end that has not arrived would date
+    every quote forward by the days left in it, so the headline would carry a
+    staleness warning counting time that has not passed. Asserted as an
+    invariant against today rather than a fixed date, so it keeps meaning
+    something on every day this suite is run.
+    """
+    from core.months import month_of
+
+    today = date.today()
+    current = month_of(today)
+
+    aud = make_account(name="CommBank", currency="AUD")
+    Balance.objects.create(account=aud, month=current, amount=Decimal("5000"))
+    ExchangeRate.objects.create(currency="AUD", rate_date=today, rate=Decimal("0.66"))
+
+    result = NetWorthService(staleness_days=7).for_month(current, "USD")
+
+    assert result.any_stale is False
+    assert result.oldest_as_at == today
+    assert result.contributions[0].quote.provenance == "exact"
+
+
+# ---------------------------------------------------------------------------
 # BR-07 — reclassification restates history
 # ---------------------------------------------------------------------------
 

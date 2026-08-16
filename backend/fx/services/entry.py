@@ -24,7 +24,12 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from core.currencies import BASE_CURRENCY, definition, format_rate, pair_label
+from core.currencies import (
+    BASE_CURRENCY,
+    definition,
+    format_rate,
+    pair_label,
+)
 from core.services.advisories import Advisory, AdvisoryKind
 from core.services.exceptions import BusinessRuleError, NotFoundError
 from fx.models import ExchangeRate, RateSource
@@ -58,8 +63,11 @@ def _variance_advisory(
     if abs(difference) <= threshold_percent:
         return None
 
-    # Stated in the convention the user typed in, because that is the number
-    # they can check against the site they read it from.
+    # Stated in the stored pair's own market convention, and it names that pair,
+    # because that is the number the user can check against the site they read it
+    # from. Where the entry was re-based onto a reporting currency the figure
+    # quoted here is therefore not the one they typed — which is why the pair
+    # label is in the sentence rather than assumed.
     return Advisory(
         kind=AdvisoryKind.RATE_VARIANCE,
         message=(

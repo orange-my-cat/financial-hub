@@ -6,9 +6,16 @@ that adjacency is the point of the screen*. So the query returns the prior
 month's figure alongside each row rather than making the browser fetch a second
 month and join them.
 
-Rates come first in the payload for the same reason they come first on screen:
-the whole pass runs in one tab order, and stopping midway to go and find a rate
-is exactly the friction that ends a close.
+This query used to carry a second section: the rates for the month, quoted
+against the reporting currency and typed on the screen beside the balances.
+Rates are loaded from the provider now (`manage.py load_rates`), so the payload
+is balances alone and the whole re-basing apparatus that served those rows is
+gone with it.
+
+The reporting currency therefore no longer changes anything this query returns.
+It is still accepted, because the completeness figure below is computed against
+it and because dropping a parameter from a live endpoint's signature buys
+nothing.
 """
 
 from __future__ import annotations
@@ -16,44 +23,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from core.currencies import definition, format_rate, pair_label
-from core.months import month_end, previous
+from core.currencies import BASE_CURRENCY, definition
+from core.months import as_at_of, previous
 from core.services.completeness import MonthCompleteness
-from core.services.rate_lookup import RateResolver
+from core.services.movement import movement
 from accounts.models import Account, AccountStatus, Balance
 from accounts.services.net_worth import NetWorthService
-
-
-@dataclass(frozen=True)
-class RateRow:
-    currency: str
-    pair: str
-    quote_label: str
-    example: str
-    #: What is recorded for this month-end, if anything.
-    rate: Decimal | None
-    is_recorded: bool
-    #: What a translation would use today — carried, if nothing was entered.
-    effective_rate: Decimal | None
-    effective_as_at: str | None
-    provenance: str | None
-    is_stale: bool
-
-    def as_dict(self) -> dict:
-        return {
-            "currency": self.currency,
-            "pair": self.pair,
-            "quote_label": self.quote_label,
-            "example": self.example,
-            "rate": format_rate(self.rate) if self.rate is not None else None,
-            "recorded": self.is_recorded,
-            "effective_rate": format_rate(self.effective_rate)
-            if self.effective_rate is not None
-            else None,
-            "effective_as_at": self.effective_as_at,
-            "provenance": self.provenance,
-            "stale": self.is_stale,
-        }
 
 
 @dataclass(frozen=True)
@@ -74,6 +49,11 @@ class BalanceRow:
         return self.current is not None
 
     def as_dict(self) -> dict:
+        # The movement on the month before, from the one place that defines it.
+        # Both halves null where either month has no figure, the percentage
+        # alone null against a zero prior month — see core.services.movement.
+        moved = movement(self.current, self.prior)
+
         return {
             "account_id": self.account_id,
             "name": self.name,
@@ -86,6 +66,8 @@ class BalanceRow:
             "prior_month": self.prior_month,
             "current": str(self.current) if self.current is not None else None,
             "saved": self.is_saved,
+            "change": moved["change"],
+            "change_percent": moved["change_percent"],
         }
 
 
@@ -93,26 +75,34 @@ class BalanceRow:
 class MonthClose:
     month: str
     as_at: str
+    #: The reporting currency the completeness figure is computed against.
+    #: Balances are unaffected and stay in each account's own currency.
+    currency: str
     completeness: MonthCompleteness
-    rates: tuple[RateRow, ...]
     rows: tuple[BalanceRow, ...]
 
     def as_dict(self) -> dict:
         return {
             "month": self.month,
             "as_at": self.as_at,
+            "currency": self.currency,
             "completeness": self.completeness.as_dict(),
-            "rates": [rate.as_dict() for rate in self.rates],
             "rows": [row.as_dict() for row in self.rows],
         }
 
 
-def month_close(month: str, *, staleness_days: int) -> MonthClose:
-    from fx.models import ExchangeRate
-
-    as_at = month_end(month)
+def month_close(
+    month: str,
+    *,
+    staleness_days: int,
+    reporting_currency: str = BASE_CURRENCY,
+) -> MonthClose:
+    basis = reporting_currency
+    definition(basis)
+    # Never a future date. A month still running is valued at today, not at a
+    # month-end that has not arrived — see core.months.as_at_of.
+    as_at = as_at_of(month)
     prior_month = previous(month)
-    resolver = RateResolver(staleness_days=staleness_days)
 
     # -- accounts ---------------------------------------------------------
     # Dormant accounts appear so their status is visible and they can be
@@ -156,38 +146,10 @@ def month_close(month: str, *, staleness_days: int) -> MonthClose:
         for account in accounts
     )
 
-    # -- rates ------------------------------------------------------------
-    # Only the currencies actually in use this month. A rate for a currency no
-    # account holds is one more thing to type for nothing.
-    required = sorted({account.currency for account in accounts if account.currency != "USD"})
-
-    recorded = {
-        row.currency: row.rate
-        for row in ExchangeRate.objects.filter(rate_date=as_at, currency__in=required)
-    }
-
-    rates: list[RateRow] = []
-    for code in required:
-        leg = resolver.leg(code, as_at)
-        rates.append(
-            RateRow(
-                currency=code,
-                pair=pair_label(code),
-                quote_label=definition(code).quote_label,
-                example=definition(code).example,
-                rate=recorded.get(code),
-                is_recorded=code in recorded,
-                effective_rate=leg.quoted_rate if leg else None,
-                effective_as_at=leg.as_at.isoformat() if leg else None,
-                provenance=str(leg.provenance) if leg else None,
-                is_stale=leg.is_stale if leg else False,
-            )
-        )
-
     return MonthClose(
         month=month,
         as_at=as_at.isoformat(),
+        currency=basis,
         completeness=NetWorthService(staleness_days=staleness_days).completeness_for(month),
-        rates=tuple(rates),
         rows=rows,
     )

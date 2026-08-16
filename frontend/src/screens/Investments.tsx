@@ -27,6 +27,7 @@ import { useState, type FormEvent } from 'react'
 import { ErrorBanner } from '@/components/Advisories'
 import { useAccounts } from '@/lib/accounts'
 import { formatDate, formatDecimal } from '@/lib/format'
+import { useDefaultCurrency } from '@/lib/fx'
 import {
   INSTRUMENT_TYPES,
   useCreateHolding,
@@ -138,7 +139,7 @@ function TransactionForm({ holdings }: { readonly holdings: readonly Position[] 
 
   return (
     <section className="panel">
-      <h2 className="panel__heading">Record a transaction</h2>
+      <h2 className="panel__heading">Record a Transaction</h2>
       <p className="fx__note">
         Corporate actions are limited to fees, splits and reinvestment. Mergers,
         spin-offs, rights issues and returns of capital are out of scope — representing
@@ -286,11 +287,14 @@ function TransactionForm({ holdings }: { readonly holdings: readonly Position[] 
 function NewHolding() {
   const accounts = useAccounts()
   const create = useCreateHolding()
+  // Seeds the field only. A holding's currency is a fact about the instrument,
+  // and once chosen it is not the default's to revise.
+  const defaultCurrency = useDefaultCurrency()
   const [form, setForm] = useState({
     name: '',
     symbol: '',
     instrument_type: 'Equity',
-    currency: 'USD',
+    currency: defaultCurrency as string,
     account_id: '',
     estimated_tax_percent: '',
   })
@@ -317,7 +321,7 @@ function NewHolding() {
 
   return (
     <section className="panel">
-      <h2 className="panel__heading">Add a holding</h2>
+      <h2 className="panel__heading">Add a Holding</h2>
       <p className="fx__note">
         A holding belongs to one account and cannot be moved. The same instrument at two
         brokers is two holdings with independent FIFO queues.
@@ -502,7 +506,7 @@ export function Investments() {
       <NewHolding />
 
       <section className="panel">
-        <h2 className="panel__heading">Realised gains</h2>
+        <h2 className="panel__heading">Realised Gains</h2>
         <p className="fx__note">
           Grouped by currency and never summed across them. Net figures are indicative
           estimates using the percentage you typed.

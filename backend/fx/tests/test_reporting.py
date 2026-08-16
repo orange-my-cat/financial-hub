@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pytest
 
+from core.currencies import BASE_CURRENCY, QUOTED_CURRENCY_CODES
 from core.services.rate_lookup import Provenance
 from fx.models import ExchangeRate
 from fx.services.reporting import rate_status, rate_trend
@@ -154,7 +155,10 @@ def test_the_boundary_matches_the_lookup_service():
 def test_every_quoted_pair_appears_and_the_base_never_does():
     statuses = rate_status(JAN_31, staleness_days=7)
 
-    assert {s.currency for s in statuses} == {"AUD", "MYR"}
+    # Derived from the registry rather than listed, so the assertion keeps
+    # meaning what its name says when a currency is added (AS-05).
+    assert {s.currency for s in statuses} == set(QUOTED_CURRENCY_CODES)
+    assert BASE_CURRENCY not in {s.currency for s in statuses}
 
 
 def test_the_status_carries_the_quote_label_so_direction_is_never_in_doubt():

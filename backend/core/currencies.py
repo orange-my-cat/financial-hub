@@ -24,7 +24,7 @@ Adding a fourth currency (AS-05) is one entry here plus one stored pair.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
 # The base currency and the stored currency of record. Fixed, not switchable: a
@@ -53,6 +53,15 @@ class CurrencyDefinition:
     quote_label: str
     #: A plausible value, shown as placeholder text.
     example: str
+    #: Whether net worth may be *stated* in this unit.
+    #:
+    #: The one distinction this module did not need until gold. A currency and a
+    #: unit of account are not the same thing: XAU can denominate a balance —
+    #: eight troy ounces in a safe is a balance like any other — but "net worth,
+    #: in ounces" is a different claim, one whose denominator moves for reasons
+    #: that have nothing to do with the finances being measured. It is excluded
+    #: because it would be offered otherwise, not because it is unthinkable.
+    can_report: bool = True
 
     @property
     def is_base(self) -> bool:
@@ -84,6 +93,27 @@ CURRENCIES: dict[str, CurrencyDefinition] = {
         quote_label="MYR per 1 USD",
         example="4.2000",
     ),
+    # Gold, by its ISO 4217 code, quoted the only way the market quotes it and
+    # the only way the rate provider serves it: USD per troy ounce. `C:USDXAU`
+    # does not exist, which is a useful check on the direction below.
+    #
+    # It is here as a currency rather than as a price because that is what makes
+    # it obey every rule already written. A Physical Asset account denominated
+    # in XAU holds a balance of ounces, entered and never derived (BR-01); it
+    # translates through the one translation service like any foreign balance;
+    # a month with no gold rate excludes that account and says so rather than
+    # zeroing it (FR-46). None of that is a market-price feature, which the
+    # design handoff excludes — it is the existing foreign-currency machinery,
+    # pointed at a unit that happens to be metal.
+    "XAU": CurrencyDefinition(
+        code="XAU",
+        name="Gold (Troy Ounce)",
+        convention=QuoteConvention.USD_PER_UNIT,
+        quote_label="USD per 1 XAU",
+        example="4400.0000",
+        # See CurrencyDefinition.can_report.
+        can_report=False,
+    ),
 }
 
 #: Every currency the system knows, base first.
@@ -94,10 +124,18 @@ QUOTED_CURRENCY_CODES: tuple[str, ...] = tuple(
     code for code in CURRENCIES if code != BASE_CURRENCY
 )
 
+#: The currencies net worth may be stated in. A strict subset, since gold.
+REPORTING_CURRENCY_CODES: tuple[str, ...] = tuple(
+    code for code, currency in CURRENCIES.items() if currency.can_report
+)
+
 #: Django model choices.
 CURRENCY_CHOICES = [(code, CURRENCIES[code].name) for code in CURRENCIES]
 QUOTED_CURRENCY_CHOICES = [
     (code, CURRENCIES[code].name) for code in QUOTED_CURRENCY_CODES
+]
+REPORTING_CURRENCY_CHOICES = [
+    (code, CURRENCIES[code].name) for code in REPORTING_CURRENCY_CODES
 ]
 
 
@@ -185,16 +223,23 @@ def usd_per_unit(code: str, quoted_rate: Decimal) -> Decimal:
     return ONE / quoted_rate
 
 
-def to_quoted(code: str, usd_per_one_unit: Decimal) -> Decimal:
-    """The inverse of :func:`usd_per_unit` — back into market convention.
+# ---------------------------------------------------------------------------
+# Storing a rate at the column's scale
+# ---------------------------------------------------------------------------
 
-    Used to show the reciprocal live as the user types, so a wrong-way entry is
-    obvious before it is saved.
-    """
-    if code == BASE_CURRENCY:
-        return ONE
-    if usd_per_one_unit <= 0:
-        raise ValueError(f"A rate must be greater than zero; got {usd_per_one_unit}.")
-    if definition(code).convention is QuoteConvention.USD_PER_UNIT:
-        return usd_per_one_unit
-    return ONE / usd_per_one_unit
+#: The scale a stored rate is held at — NUMERIC(19,10), the rate column.
+#:
+#: ADR-02 rounds once, at display, and carries full precision until then. This
+#: is the exception the rule allows for: a figure being *written* has no further
+#: precision to carry, and something has to reconcile it with the column's ten
+#: places. Rounding here rather than letting Postgres truncate on the way in is
+#: what makes "once, half-up" a decision rather than an accident — see the rate
+#: provider, where the wire genuinely delivers thirteen decimal places.
+RATE_PLACES = Decimal("0.0000000001")
+
+
+def quantize_rate(value: Decimal) -> Decimal:
+    """To the stored rate scale, half-up — the rounding ADR-02 asks for."""
+    return value.quantize(RATE_PLACES, rounding=ROUND_HALF_UP)
+
+

@@ -16,11 +16,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.services.net_worth import NetWorthService
-from cashflow.services.reporting import category_report
+from cashflow.services.summary import summary_trend, summary_with_change
+from core.currencies import BASE_CURRENCY
 from core.models import Settings
 from core.months import descending, month_of, previous, sequence
 from core.services.backup_status import backup_status
-from core.services.completeness import month_completeness
 from core.services.export import (
     cashflow_csv,
     fx_csv,
@@ -28,6 +28,7 @@ from core.services.export import (
     net_worth_csv,
     net_worth_trend_csv,
 )
+from core.services.movement import movement
 from core.services.tasks import outstanding_tasks, task_counts
 from investments.services.positions import positions
 
@@ -36,7 +37,10 @@ CENTS = Decimal("0.01")
 
 class DashboardView(APIView):
     def get(self, request):
-        currency = request.query_params.get("currency", "USD")
+        # The base currency, not the user's default currency setting — the
+        # client sends its resolved default explicitly, so a URL keeps fully
+        # determining its response (§8.2).
+        currency = request.query_params.get("currency", BASE_CURRENCY)
         # Fixed to the current month. The date range does not apply here.
         month = request.query_params.get("month") or month_of(date.today())
 
@@ -57,16 +61,13 @@ class DashboardView(APIView):
 
         previous_month = previous(month)
         prior = service.for_month(previous_month, currency)
-        change = (
-            (result.total.amount - prior.total.amount).quantize(CENTS)
-            if result.is_reportable and prior.is_reportable
-            else None
+        # Both months or neither: a month with no balances is not a month worth
+        # zero, so there is nothing to subtract from.
+        reportable = result.is_reportable and prior.is_reportable
+        change = movement(
+            result.total.amount if reportable else None,
+            prior.total.amount if reportable else None,
         )
-        change_percent = None
-        if change is not None and prior.total.amount != 0:
-            change_percent = (
-                (result.total.amount - prior.total.amount) / abs(prior.total.amount) * 100
-            ).quantize(Decimal("0.1"))
 
         return Response(
             {
@@ -76,10 +77,7 @@ class DashboardView(APIView):
                     "net_worth": {
                         "total": result.total.api() if result.is_reportable else None,
                         "reportable": result.is_reportable,
-                        "change": str(change) if change is not None else None,
-                        "change_percent": str(change_percent)
-                        if change_percent is not None
-                        else None,
+                        **change,
                         "previous_month": previous_month,
                         # Silent when every contributing rate is fresh.
                         "as_at": result.oldest_as_at.isoformat()
@@ -93,8 +91,19 @@ class DashboardView(APIView):
                     "trend": trend,
                     # The product's conscience.
                     "tasks": [task.as_dict() for task in outstanding_tasks(month)],
-                    # Per currency. Never combined, and never added to a balance.
-                    "cashflow": category_report(month),
+                    # In the reporting currency, and never added to a balance.
+                    # The per-currency breakdown lives on the Category report,
+                    # where the currency a thing was bought in is the point.
+                    "cashflow": summary_with_change(
+                        month, currency, service.translation
+                    ),
+                    # The same 24-month window as the net worth trend, and the
+                    # same window deliberately: the three plots on this screen
+                    # share one x axis, so a month sits at the same horizontal
+                    # position in all of them. Two windows would put a bar and
+                    # a point at the same place on screen while meaning two
+                    # different months, which is worse than not aligning them.
+                    "cashflow_trend": summary_trend(window, currency, service.translation),
                     "investments": _investment_summary(),
                     "backup": backup_status().as_dict(),
                 }
@@ -136,11 +145,22 @@ def _investment_summary() -> list[dict]:
     ]
 
 
+#: How far before the first recorded month the spine may be extended. Ten
+#: years is the dataset the whole design is sized for (ADR-05); past that the
+#: rail is showing months that could not contain anything.
+MAX_EXTEND_MONTHS = 120
+
+
 class SpineView(APIView):
     """The ledger spine's months.
 
     Runs from the first month with recorded data to the current month. There is
     no month table; months are derived from the balances that exist (ADR-04).
+
+    `extend` pushes the start back by that many months beyond the first
+    recorded one. Those months are Outside Range — a fact about them, not a gap
+    to be filled — and their state is computed by the same service as every
+    other month rather than assumed by the caller.
     """
 
     def get(self, request):
@@ -151,27 +171,26 @@ class SpineView(APIView):
         starts = [h.required_from for h in histories if h.required_from is not None]
         current = request.query_params.get("through") or month_of(date.today())
 
-        if not starts:
-            # Nothing recorded yet. The current month alone, Outside Range —
-            # which is exactly what "before the first account opened" means.
-            return Response(
-                {
-                    "data": [
-                        {
-                            "month": current,
-                            "state": str(month_completeness(current, []).state),
-                        }
-                    ]
-                }
-            )
+        try:
+            extend = max(0, int(request.query_params.get("extend", 0)))
+        except ValueError:
+            extend = 0
+        granted = min(extend, MAX_EXTEND_MONTHS)
 
-        first = min(starts)
+        # Nothing recorded yet means the current month alone — which is exactly
+        # what "before the first account opened" means — but it can still be
+        # extended backwards from there.
+        first = previous_n(min(starts) if starts else current, granted)
+
         return Response(
             {
                 "data": [
                     {"month": month, "state": str(service.completeness_for(month).state)}
                     for month in descending(first, current)
-                ]
+                ],
+                # Whether another press of Earlier would show anything new, so
+                # the control can retire itself rather than going dead.
+                "extendable": granted < MAX_EXTEND_MONTHS,
             }
         )
 
@@ -203,7 +222,8 @@ class ExportView(APIView):
 
     def get(self, request, report: str):
         params = request.query_params
-        currency = params.get("currency", "USD")
+        # See DashboardView: the base currency, not the default currency setting.
+        currency = params.get("currency", BASE_CURRENCY)
         month = params.get("month") or month_of(date.today())
 
         if report == "net-worth":

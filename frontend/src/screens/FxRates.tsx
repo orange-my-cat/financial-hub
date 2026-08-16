@@ -31,10 +31,13 @@ import {
   useBulkRateEntry,
   useCurrencies,
   useDailyRates,
+  useDefaultCurrency,
   useDeleteRate,
+  useLoadRates,
   useRateStatus,
   useRateTrend,
   type CurrencyDefinition,
+  type RateLoadResult,
 } from '@/lib/fx'
 import { useViewState } from '@/lib/viewState'
 
@@ -46,6 +49,16 @@ function monthEnd(iso: string): string {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+/**
+ * Never a future date. A rate is something that happened, and a day that has
+ * not arrived has no rate to record — so the month currently running offers
+ * today rather than its month-end.
+ */
+function notAfterToday(iso: string): string {
+  const today = todayIso()
+  return iso > today ? today : iso
 }
 
 /**
@@ -71,7 +84,7 @@ function statusGlyph(row: { missing: boolean; stale: boolean }): GlyphState {
 // ---------------------------------------------------------------------------
 
 function BulkEntry({ currencies }: { readonly currencies: readonly CurrencyDefinition[] }) {
-  const [rateDate, setRateDate] = useState(() => monthEnd(todayIso()))
+  const [rateDate, setRateDate] = useState(() => notAfterToday(monthEnd(todayIso())))
   const [values, setValues] = useState<Record<string, string>>({})
   const [advisories, setAdvisories] = useState<readonly Advisory[]>([])
   const entry = useBulkRateEntry()
@@ -100,7 +113,7 @@ function BulkEntry({ currencies }: { readonly currencies: readonly CurrencyDefin
 
   return (
     <section className="panel fx__entry">
-      <h2 className="panel__heading">Enter rates for a date</h2>
+      <h2 className="panel__heading">Enter Rates for a Date</h2>
       <p className="fx__note">
         Only month-end rates are required. Any other date is optional and exists to enrich
         the trend chart.
@@ -118,6 +131,9 @@ function BulkEntry({ currencies }: { readonly currencies: readonly CurrencyDefin
             type="date"
             className="input"
             value={rateDate}
+            // The picker stops at today, and the form refuses to submit past
+            // it. Typed dates are caught by the same constraint.
+            max={todayIso()}
             onChange={(event) => setRateDate(event.target.value)}
             required
           />
@@ -170,6 +186,66 @@ function BulkEntry({ currencies }: { readonly currencies: readonly CurrencyDefin
 
 // ---------------------------------------------------------------------------
 
+/**
+ * What the last load did, in one sentence.
+ *
+ * Counts rather than rates: the daily table below is where the figures are, and
+ * repeating them here would be a second place for them to be read from. The
+ * kept-by-hand count is the exception and is always stated, because it is the
+ * only place a person sees BRD §4.3 decline to overwrite something they typed.
+ */
+function LoadSummary({ result }: { readonly result: RateLoadResult }) {
+  const pairs = result.pairs
+    .filter((pair) => pair.fetched > 0)
+    .map((pair) => `${pair.pair} ${pair.written}`)
+    .join(' · ')
+
+  return (
+    <p className="fx__note">
+      <strong>{result.written}</strong> daily closes stored from {result.provider},{' '}
+      {formatDate(result.start)} to {formatDate(result.end)}
+      {pairs && <> — {pairs}</>}.
+      {result.kept_manual > 0 && (
+        <> {result.kept_manual} left as typed by hand and not overwritten.</>
+      )}
+    </p>
+  )
+}
+
+function LoadFromProvider() {
+  const load = useLoadRates()
+
+  return (
+    <div className="fx__load">
+      <ErrorBanner error={load.error} />
+      <button
+        type="button"
+        className="btn btn--primary"
+        onClick={() => load.mutate()}
+        // The request is a few seconds of real work. Disabling is what stops a
+        // second press queueing a second full year behind the first.
+        disabled={load.isPending}
+      >
+        {load.isPending ? 'Loading…' : 'Load Rates From Provider'}
+      </button>
+      {load.isPending ? (
+        <p className="fx__note">
+          Fetching the last 365 days. This takes a few seconds.
+        </p>
+      ) : load.data ? (
+        <LoadSummary result={load.data.data} />
+      ) : (
+        <p className="fx__note">
+          Every trading day's closing rate for the last 365 days. Rates you typed
+          are never overwritten, and running it again is safe.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
 function StatusSummary({ asOf }: { readonly asOf: string }) {
   const status = useRateStatus(asOf)
 
@@ -177,10 +253,14 @@ function StatusSummary({ asOf }: { readonly asOf: string }) {
 
   return (
     <section className="panel">
-      <h2 className="panel__heading">Missing and stale</h2>
+      <h2 className="panel__heading">Missing and Stale</h2>
+      {/* The date is stated because it is not always the end of the range —
+          the month still running is judged as at today. A state with no date
+          attached is a state the reader has to guess the basis of. */}
       <p className="fx__note">
-        A rate more than {status.data.staleness_days} days old on the date it is used is
-        flagged. Carrying forward keeps reports working; it never silently hides its age.
+        State as at {formatDate(status.data.as_of)}. A rate more than{' '}
+        {status.data.staleness_days} days old on the date it is used is flagged. Carrying
+        forward keeps reports working; it never silently hides its age.
       </p>
 
       <table className="table">
@@ -203,7 +283,7 @@ function StatusSummary({ asOf }: { readonly asOf: string }) {
               </td>
               <td className="secondary">{row.as_at ? formatDate(row.as_at) : '—'}</td>
               <td>
-                <span className="fx__state">
+                <span className="state-cell">
                   <StateGlyph state={statusGlyph(row)} />
                   {row.state}
                 </span>
@@ -212,6 +292,10 @@ function StatusSummary({ asOf }: { readonly asOf: string }) {
           ))}
         </tbody>
       </table>
+
+      {/* Beneath the table it answers: the states above are the reason to press
+          it, and pressing it is what clears them. */}
+      <LoadFromProvider />
     </section>
   )
 }
@@ -227,7 +311,7 @@ function DailyTable({ start, end }: { readonly start: string; readonly end: stri
   if (rates.data.length === 0) {
     return (
       <section className="panel">
-        <h2 className="panel__heading">Daily rates</h2>
+        <h2 className="panel__heading">Daily Rates</h2>
         <p className="fx__note">No rates recorded in this range.</p>
       </section>
     )
@@ -235,7 +319,7 @@ function DailyTable({ start, end }: { readonly start: string; readonly end: stri
 
   return (
     <section className="panel">
-      <h2 className="panel__heading">Daily rates</h2>
+      <h2 className="panel__heading">Daily Rates</h2>
       <p className="fx__note">
         Every pair as a translation on that date would resolve it. A pair not entered that
         day is shown carried, with the date it came from — not left blank.
@@ -299,8 +383,15 @@ function TrendChart({
   readonly start: string
   readonly end: string
 }) {
-  const [from, setFrom] = useState('AUD')
-  const [to, setTo] = useState('USD')
+  // The trend opens quoted in the default currency — the side of the pair a
+  // reader is measuring against. The other side is the first currency the
+  // registry knows that is not it: a pair of a currency against itself is not
+  // a rate, and the default is not always USD.
+  const defaultCurrency = useDefaultCurrency()
+  const [to, setTo] = useState<string>(defaultCurrency)
+  const [from, setFrom] = useState<string>(
+    () => currencies.find((currency) => currency.code !== defaultCurrency)?.code ?? 'AUD',
+  )
   const trend = useRateTrend(from, to, start, end)
 
   const data = useMemo(
@@ -424,7 +515,14 @@ export function FxRates() {
 
       <div className="fx__grid">
         <BulkEntry currencies={registry.data.currencies} />
-        <StatusSummary asOf={end} />
+        {/* Obeys the range like everything else here, but never past today.
+            Judging a rate's state at a month-end still to come ages it by the
+            days remaining: a rate entered this morning would be reported as a
+            fortnight old and flagged stale on time that has not passed. The
+            date range's other two consumers below are ranges of dates that
+            have rates, and no rate can be recorded in the future, so only this
+            one needs capping. */}
+        <StatusSummary asOf={notAfterToday(end)} />
       </div>
 
       <DailyTable start={start} end={end} />

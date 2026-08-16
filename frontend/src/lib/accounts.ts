@@ -38,7 +38,7 @@ export interface Account {
   readonly opened_month: string
   readonly closed_month: string | null
   readonly is_liability: boolean
-  /** Fixed once balances exist (BR-08). Drives the superscript lock. */
+  /** Fixed once balances exist (BR-08). Enforced by the API, not shown. */
   readonly currency_locked: boolean
   readonly has_history: boolean
   readonly balance_count: number
@@ -53,19 +53,6 @@ export interface Completeness {
   readonly outstanding_currencies: readonly string[]
 }
 
-export interface MonthCloseRate {
-  readonly currency: string
-  readonly pair: string
-  readonly quote_label: string
-  readonly example: string
-  readonly rate: string | null
-  readonly recorded: boolean
-  readonly effective_rate: string | null
-  readonly effective_as_at: string | null
-  readonly provenance: 'exact' | 'carried' | 'triangulated' | null
-  readonly stale: boolean
-}
-
 export interface MonthCloseRow {
   readonly account_id: number
   readonly name: string
@@ -78,13 +65,18 @@ export interface MonthCloseRow {
   readonly prior_month: string
   readonly current: string | null
   readonly saved: boolean
+  /** Null where either month has no figure — a month nobody recorded is not zero. */
+  readonly change: string | null
+  /** Null against a zero prior month: a rise from nothing has no proportion. */
+  readonly change_percent: string | null
 }
 
 export interface MonthCloseView {
   readonly month: string
   readonly as_at: string
+  /** What the completeness figure is computed against. Balances are not translated. */
+  readonly currency: CurrencyCode
   readonly completeness: Completeness
-  readonly rates: readonly MonthCloseRate[]
   readonly rows: readonly MonthCloseRow[]
 }
 
@@ -124,6 +116,8 @@ export interface TrendPoint {
   /** Null for a month with no balances. The chart breaks its line here. */
   readonly total: { readonly amount: string; readonly currency: CurrencyCode } | null
   readonly change: string | null
+  /** Null against a zero prior month — a rise from nothing has no proportion. */
+  readonly change_percent: string | null
   readonly completeness: CompletenessState
   readonly any_stale: boolean
   readonly excluded: number
@@ -136,6 +130,12 @@ export interface SliceRow {
   readonly is_liability: boolean
   readonly accounts: number
   readonly excluded: number
+  /**
+   * The row against gross assets — what is owned. Asset rows compose to 100%;
+   * a liability is read against what stands behind it and may exceed it. Null
+   * where nothing is owned.
+   */
+  readonly percent_of_gross: string | null
 }
 
 export interface SlicePayload {
@@ -175,6 +175,11 @@ export function useAccounts() {
   })
 }
 
+/**
+ * No currency parameter: it quoted the rate section, which the screen no longer
+ * carries, and balances have always stayed in each account's own currency. The
+ * endpoint still accepts one and defaults it, so nothing here needs to send it.
+ */
 export function useMonthClose(month: string) {
   return useQuery({
     queryKey: accountKeys.monthClose(month),

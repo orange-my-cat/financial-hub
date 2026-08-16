@@ -8,8 +8,6 @@ qualifies it (§8.2). That is why the reporting endpoints use
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 from rest_framework import status as http
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,6 +16,7 @@ from core.api.responses import aggregate, with_advisories
 from core.models import Settings
 from core.months import sequence
 from core.services.exceptions import NotFoundError
+from core.services.movement import movement
 from accounts.api.serializers import (
     AccountCreateSerializer,
     AccountSerializer,
@@ -33,9 +32,6 @@ from accounts.services import lifecycle
 from accounts.services.month_close import month_close
 from accounts.services.net_worth import NetWorth, NetWorthService
 from accounts.services.slices import SliceDimension, slice_net_worth
-
-
-CENTS = Decimal("0.01")
 
 
 def _validated(serializer_class, data):
@@ -214,9 +210,21 @@ class BalanceView(APIView):
 
 
 class MonthCloseView(APIView):
+    """The close for one month.
+
+    `currency` is still accepted and defaulted, but it no longer changes the
+    response: it quoted the rate section, which moved to the provider load, and
+    balances are entered in each account's own currency and are not translated
+    anywhere here. The screen no longer sends it.
+    """
+
     def get(self, request):
         query = _validated(MonthQuerySerializer, request.query_params)
-        result = month_close(query["month"], staleness_days=_staleness())
+        result = month_close(
+            query["month"],
+            staleness_days=_staleness(),
+            reporting_currency=query["currency"],
+        )
         return Response({"data": result.as_dict()})
 
 
@@ -257,7 +265,7 @@ class NetWorthTrendView(APIView):
                     {
                         "month": result.month,
                         "total": None,
-                        "change": None,
+                        **movement(None, None),
                         "completeness": str(result.completeness.state),
                         "any_stale": False,
                         "excluded": 0,
@@ -267,14 +275,13 @@ class NetWorthTrendView(APIView):
                 continue
 
             total = result.total.amount
-            change = total - previous_total if previous_total is not None else None
             points.append(
                 {
                     "month": result.month,
                     "total": result.total.api(),
-                    # Month-on-month, computed from the full-precision totals
-                    # and rounded once here for display.
-                    "change": str(change.quantize(CENTS)) if change is not None else None,
+                    # Month-on-month, from the one definition — the same
+                    # arithmetic the dashboard's headline states.
+                    **movement(total, previous_total),
                     "completeness": str(result.completeness.state),
                     "any_stale": result.any_stale,
                     "excluded": len(result.exclusions),

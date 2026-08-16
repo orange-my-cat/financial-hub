@@ -9,14 +9,18 @@
  * inferred from server-side session state, so a URL fully determines its
  * response (§8.2). Holding them here and in the address bar is the same
  * decision seen from the browser's side.
+ *
+ * The default currency setting is what the reporting currency starts at when
+ * the URL is silent, and nothing more. It is resolved here, in the browser, and
+ * sent onward as an explicit parameter — the server never reads it for a
+ * report, which is what keeps the sentence above true.
  */
 
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import { CURRENCIES, type CurrencyCode } from './money'
-
-export const DEFAULT_CURRENCY: CurrencyCode = 'USD'
+import { useDefaultCurrency } from './fx'
+import { REPORTING_CURRENCIES, type ReportingCurrencyCode } from './money'
 
 /** How many months the reports show by default. */
 const DEFAULT_RANGE_MONTHS = 24
@@ -32,28 +36,46 @@ function shiftMonths(from: string, months: number): string {
 }
 
 export interface ViewState {
-  readonly currency: CurrencyCode
+  readonly currency: ReportingCurrencyCode
   readonly from: string
   readonly to: string
-  setCurrency: (currency: CurrencyCode) => void
+  /**
+   * The single month being worked on — what the spine selects and what Month
+   * Close and Cash flow entry operate on. Deliberately *not* the range: those
+   * screens state that the date range does not apply to them, and selecting a
+   * month to close must not quietly restate the reports.
+   */
+  readonly month: string
+  setCurrency: (currency: ReportingCurrencyCode) => void
   setRange: (from: string, to: string) => void
+  setMonth: (month: string) => void
 }
 
 export function useViewState(): ViewState {
   const [params, setParams] = useSearchParams()
+  const defaultCurrency = useDefaultCurrency()
 
-  const currency = useMemo<CurrencyCode>(() => {
+  // The URL wins where it names a currency, and the stored default fills the
+  // silence — so a bookmarked report keeps its meaning while a fresh visit
+  // opens in the currency the user works in.
+  //
+  // A hand-typed `?currency=XAU` falls back to the default rather than being
+  // honoured: gold denominates balances, never a reported total.
+  const currency = useMemo<ReportingCurrencyCode>(() => {
     const raw = params.get('currency')
-    return (CURRENCIES as readonly string[]).includes(raw ?? '')
-      ? (raw as CurrencyCode)
-      : DEFAULT_CURRENCY
-  }, [params])
+    return (REPORTING_CURRENCIES as readonly string[]).includes(raw ?? '')
+      ? (raw as ReportingCurrencyCode)
+      : defaultCurrency
+  }, [params, defaultCurrency])
 
   const to = params.get('to') ?? monthKey(new Date())
   const from = params.get('from') ?? shiftMonths(to, -(DEFAULT_RANGE_MONTHS - 1))
+  // Defaults to the end of the range, which is where a month-at-a-time screen
+  // would have started anyway. Once selected it is held separately.
+  const month = params.get('month') ?? to
 
   const setCurrency = useCallback(
-    (next: CurrencyCode) => {
+    (next: ReportingCurrencyCode) => {
       setParams(
         (current) => {
           const updated = new URLSearchParams(current)
@@ -81,5 +103,19 @@ export function useViewState(): ViewState {
     [setParams],
   )
 
-  return { currency, from, to, setCurrency, setRange }
+  const setMonth = useCallback(
+    (next: string) => {
+      setParams(
+        (current) => {
+          const updated = new URLSearchParams(current)
+          updated.set('month', next)
+          return updated
+        },
+        { replace: true },
+      )
+    },
+    [setParams],
+  )
+
+  return { currency, from, to, month, setCurrency, setRange, setMonth }
 }

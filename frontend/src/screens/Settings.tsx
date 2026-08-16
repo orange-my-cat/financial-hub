@@ -1,11 +1,20 @@
 /**
  * Settings.
  *
- * Four things, and the copy on three of them exists to prevent a
+ * Also the home of CSV export. It was a persistent button in every screen
+ * header (ADR-11, departure D1); it is now one panel here, where the report is
+ * chosen explicitly rather than implied by whichever screen the user happens to
+ * be standing on. The export itself is unchanged — same endpoint, same
+ * server-computed figures.
+ *
+ * Four settings, and the copy on three of them exists to prevent a
  * misunderstanding rather than to decorate:
  *
- *   reporting currency  a display choice; stored balances are always USD and
- *                       are never rewritten (BR-10)
+ *   default currency    what every currency selector starts at — the header's
+ *                       reporting control and each entry form. A display choice
+ *                       and a starting point only: an explicit choice wins,
+ *                       stored balances are always USD, and nothing is
+ *                       rewritten (BR-10)
  *   timezone            one, fixed, used only to decide what "today" means when
  *                       defaulting a date field (§9.4)
  *   staleness           7 days by default, changeable without a deploy (OI-13)
@@ -20,15 +29,77 @@
 import { useEffect, useState } from 'react'
 
 import { ErrorBanner } from '@/components/Advisories'
+import { exportUrl } from '@/lib/dashboard'
 import { useCurrencies, useSettings, useUpdateSettings } from '@/lib/fx'
+import { useViewState } from '@/lib/viewState'
+
+/** The five reports the export endpoint serves, and what each one takes.
+ *
+ * Only two obey the reporting currency, and cash flow obeys none of it — it
+ * stays in the currency each amount was entered in, exactly as its screen does.
+ * Each report states its own parameters below rather than the panel implying a
+ * single set that applies to all of them.
+ */
+interface ExportReport {
+  readonly id: string
+  readonly label: string
+  /** Query parameters for this report, from the view state in the URL. */
+  readonly params: (view: { currency: string; from: string; to: string }) => Record<string, string>
+  /** What the file will contain, in the user's terms, with the actual values. */
+  readonly describe: (view: { currency: string; from: string; to: string }) => string
+}
+
+/** The last calendar day of a `YYYY-MM` month. Day 0 of the next month. */
+function lastDayOf(month: string): string {
+  const [year, index] = month.split('-').map(Number)
+  const end = new Date(Date.UTC(year ?? 1970, index ?? 1, 0))
+  return end.toISOString().slice(0, 10)
+}
+
+const REPORTS: readonly ExportReport[] = [
+  {
+    id: 'net-worth',
+    label: 'Net Worth — One Month',
+    params: (v) => ({ month: v.to, currency: v.currency }),
+    describe: (v) => `Every open account at ${v.to}, translated to ${v.currency}.`,
+  },
+  {
+    id: 'net-worth-trend',
+    label: 'Net Worth — Trend',
+    params: (v) => ({ from_month: v.from, month: v.to, currency: v.currency }),
+    describe: (v) => `One row per month from ${v.from} to ${v.to}, translated to ${v.currency}.`,
+  },
+  {
+    id: 'cashflow',
+    label: 'Cash Flow',
+    params: (v) => ({ month: v.to }),
+    describe: (v) =>
+      `Transactions for ${v.to}. The reporting currency does not apply — amounts stay in the currency they were entered in.`,
+  },
+  {
+    id: 'investments',
+    label: 'Investments — Realised Gains',
+    params: () => ({}),
+    describe: () =>
+      'Every realised disposal, all years, with its FIFO cost basis. Gains are indicative — estimated tax is a typed percentage, not a calculation.',
+  },
+  {
+    id: 'fx',
+    label: 'Exchange Rates',
+    params: (v) => ({ start: `${v.from}-01`, end: lastDayOf(v.to) }),
+    describe: (v) => `Every stored rate from ${v.from}-01 to ${lastDayOf(v.to)}.`,
+  },
+]
 
 export function Settings() {
   const settings = useSettings()
   const registry = useCurrencies()
   const update = useUpdateSettings()
+  const view = useViewState()
 
   const [staleness, setStaleness] = useState('')
   const [variance, setVariance] = useState('')
+  const [report, setReport] = useState(REPORTS[0]!.id)
 
   useEffect(() => {
     if (settings.data) {
@@ -41,31 +112,42 @@ export function Settings() {
   if (!settings.data || !registry.data) return <ErrorBanner error={settings.error} />
 
   const current = settings.data
+  const chosen = REPORTS.find((candidate) => candidate.id === report) ?? REPORTS[0]!
 
   return (
     <div className="settings">
       <p className="screen__subhead">
-        Neither view control applies to this screen.
+        Neither view control applies to this screen. Export below carries the range and
+        reporting currency held in the URL, and states them before you download.
       </p>
 
       <ErrorBanner error={update.error} />
 
       <section className="panel">
-        <h2 className="panel__heading">Reporting currency</h2>
+        <h2 className="panel__heading">Default Currency</h2>
+        <p className="fx__note">
+          What every currency selector starts at — the reporting currency in the header,
+          and the currency field on each entry form. A starting point, never an override:
+          a report that names its own currency keeps it, and a currency already chosen on
+          a form is left alone.
+        </p>
         <p className="fx__note">
           A display choice only. The base and stored currency is always USD, and changing
           this rewrites nothing — it is reversible at any time.
         </p>
         <div className="seg">
-          {registry.data.currencies.map((currency) => (
+          {/* Filtered on `can_report`, which the API serves. Gold denominates a
+              balance but does not state a net worth, and mapping the whole
+              registry here would offer it. */}
+          {registry.data.currencies.filter((currency) => currency.can_report).map((currency) => (
             <button
               key={currency.code}
               type="button"
               className={`seg__option mono${
-                currency.code === current.reporting_currency ? ' seg__option--on' : ''
+                currency.code === current.default_currency ? ' seg__option--on' : ''
               }`}
-              aria-pressed={currency.code === current.reporting_currency}
-              onClick={() => update.mutate({ reporting_currency: currency.code })}
+              aria-pressed={currency.code === current.default_currency}
+              onClick={() => update.mutate({ default_currency: currency.code })}
             >
               {currency.code}
             </button>
@@ -74,7 +156,7 @@ export function Settings() {
       </section>
 
       <section className="panel">
-        <h2 className="panel__heading">Rate thresholds</h2>
+        <h2 className="panel__heading">Rate Thresholds</h2>
 
         <div className="field">
           <label className="field__label" htmlFor="staleness">
@@ -132,6 +214,44 @@ export function Settings() {
           stored date, and changing it would restate nothing. All financial dates are plain
           calendar dates with no time component.
         </p>
+      </section>
+
+      {/* Export and backup sit together because they answer the same question
+          from two directions — one is the route data takes out of the
+          application, the other is the route it comes back from (ADR-11). */}
+      <section className="panel">
+        <h2 className="panel__heading">Export</h2>
+        <p className="fx__note">
+          The only route data has out of this application. Files are generated server-side
+          from the same services the screens use, so an export can never disagree with the
+          screen it came from.
+        </p>
+
+        <div className="field">
+          <label className="field__label" htmlFor="export-report">
+            Report
+          </label>
+          <select
+            id="export-report"
+            className="input settings__report"
+            value={report}
+            onChange={(event) => setReport(event.target.value)}
+          >
+            {REPORTS.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.label}
+              </option>
+            ))}
+          </select>
+          <span className="fx__note">{chosen.describe(view)}</span>
+        </div>
+
+        {/* A plain link, not a fetch: the file is streamed with a
+            Content-Disposition, so the bytes never pass through JavaScript that
+            could reformat them. */}
+        <a className="btn" href={exportUrl(chosen.id, chosen.params(view))} download>
+          Export CSV
+        </a>
       </section>
 
       <section className="panel">

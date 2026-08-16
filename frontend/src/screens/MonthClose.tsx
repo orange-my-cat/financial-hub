@@ -4,8 +4,6 @@
  * Twenty rows, optimised for a person typing twenty numbers without lifting
  * their hands. Everything here follows from that:
  *
- *   * **Rates first**, so the whole pass runs in one tab order. Stopping
- *     halfway to go and find a rate is what ends a close.
  *   * **The prior balance sits immediately left of the input.** That adjacency
  *     is the point of the screen — it is how you notice a number that is wrong.
  *   * **Autosave on blur, and deliberately no save button.** An interruption
@@ -15,25 +13,50 @@
  *   * **Tab advances to the next account.** Which is just DOM order, and is the
  *     reason the inputs are a flat sequence rather than nested in per-row forms.
  *
- * Neither view control applies; both render inert.
+ * The month being closed is chosen on the spine, which is always shown here.
+ * Neither view control applies, and both render inert: the reporting currency
+ * governed the rate section, and rates are loaded from the provider now
+ * (`manage.py load_rates`) rather than typed here. Balances were always
+ * untouched by it and stay in each account's own currency.
+ *
+ * The completeness readout still counts rates, which is not a leftover. A
+ * missing rate excludes an account from the translated total rather than
+ * zeroing it (FR-46), so a load that quietly failed yields a total that looks
+ * finished and is not — and this is the screen where that gets noticed.
  */
 
 import { useEffect, useRef, useState, type FocusEvent } from 'react'
 
-import { AdvisoryList, ErrorBanner } from '@/components/Advisories'
+import { ErrorBanner } from '@/components/Advisories'
 import { StateGlyph } from '@/components/Provenance'
-import { ApiError, type Advisory } from '@/lib/api'
+import { ApiError } from '@/lib/api'
+import { useMonthClose, useSaveBalance, type MonthCloseRow } from '@/lib/accounts'
 import {
-  useMonthClose,
-  useSaveBalance,
-  type MonthCloseRate,
-  type MonthCloseRow,
-} from '@/lib/accounts'
-import { formatDate, formatDecimal, parseAmountInput } from '@/lib/format'
-import { useRateEntry } from '@/lib/fx'
+  formatDecimal,
+  formatMonth,
+  formatPercent,
+  parseAmountInput,
+  roundDecimal,
+} from '@/lib/format'
 import { useViewState } from '@/lib/viewState'
+import { icons } from '@/shell/icons'
 
 type RowState = 'idle' | 'saving' | 'saved' | 'error'
+
+/**
+ * Rise or Breach, by sign and by whether the balance is owed.
+ *
+ * A liability moving up is more debt, which is not a rise, so the colour
+ * inverts on it: green means the month moved in your favour here exactly as it
+ * does everywhere else. A movement of zero takes neither colour — nothing
+ * moved, and painting that green reports a rise that did not happen. The test
+ * is on the string rather than on `Number(value)`: money carries no arithmetic
+ * in the browser, and asking whether a figure is signed is not arithmetic.
+ */
+function movementClass(value: string | null, isLiability: boolean): string {
+  if (!value || /^-?0(\.0*)?$/.test(value)) return ''
+  return value.startsWith('-') === isLiability ? 'money--rise' : 'money--breach'
+}
 
 // ---------------------------------------------------------------------------
 
@@ -72,76 +95,7 @@ function CompletenessReadout({
       {remaining.length > 0 && (
         <span className="readout__remaining">Outstanding: {remaining.join(' · ')}</span>
       )}
-      <span className="readout__note">Autosaves on blur. There is no save button.</span>
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-function RateRow({
-  rate,
-  asAt,
-  onAdvisories,
-}: {
-  readonly rate: MonthCloseRate
-  readonly asAt: string
-  readonly onAdvisories: (advisories: readonly Advisory[]) => void
-}) {
-  const [value, setValue] = useState(rate.rate ?? '')
-  const [state, setState] = useState<RowState>('idle')
-  const entry = useRateEntry()
-
-  useEffect(() => {
-    setValue(rate.rate ?? '')
-    setState('idle')
-  }, [rate.rate])
-
-  function commit(event: FocusEvent<HTMLInputElement>) {
-    const raw = event.target.value.trim()
-    if (raw === '' || raw === (rate.rate ?? '')) return
-
-    setState('saving')
-    entry.mutate(
-      { currency: rate.currency, rate_date: asAt, rate: raw },
-      {
-        onSuccess: (response) => {
-          setState('saved')
-          onAdvisories(response.advisories)
-        },
-        onError: () => setState('error'),
-      },
-    )
-  }
-
-  return (
-    <tr>
-      <td className="mono">{rate.pair}</td>
-      <td className="secondary">{rate.quote_label}</td>
-      <td className="numeric">
-        {rate.effective_rate ?? <span className="excluded">none</span>}
-        {rate.provenance === 'carried' && <sup className="mark mark--carried">c</sup>}
-      </td>
-      <td className="secondary">
-        {rate.effective_as_at ? formatDate(rate.effective_as_at) : '—'}
-      </td>
-      <td>
-        <input
-          className={`input input--grid mono${state === 'saved' ? ' input--saved' : ''}`}
-          inputMode="decimal"
-          placeholder={rate.example}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          onBlur={commit}
-          aria-label={`${rate.pair} rate`}
-        />
-      </td>
-      <td className="cell-state">
-        {state === 'saved' && <span className="saved">saved</span>}
-        {state === 'saving' && <span className="secondary">…</span>}
-        {state === 'error' && <span className="excluded">not saved</span>}
-      </td>
-    </tr>
   )
 }
 
@@ -149,23 +103,26 @@ function RateRow({
 
 function BalanceRow({
   row,
-  index,
   month,
 }: {
   readonly row: MonthCloseRow
-  readonly index: number
   readonly month: string
 }) {
-  const [value, setValue] = useState(row.current ?? '')
+  // Two places, not the four the column stores. Storage keeps NUMERIC(19,4) and
+  // reads back as `10000.0000`; nobody enters a balance to a hundredth of a
+  // cent, and four places of padding in a box about to be retyped is noise.
+  const entered = row.current === null ? '' : roundDecimal(row.current)
+
+  const [value, setValue] = useState(entered)
   const [state, setState] = useState<RowState>(row.saved ? 'idle' : 'idle')
   const [error, setError] = useState<string | null>(null)
   const save = useSaveBalance()
-  const lastCommitted = useRef(row.current ?? '')
+  const lastCommitted = useRef(entered)
 
   useEffect(() => {
-    setValue(row.current ?? '')
-    lastCommitted.current = row.current ?? ''
-  }, [row.current])
+    setValue(entered)
+    lastCommitted.current = entered
+  }, [entered])
 
   function commit(event: FocusEvent<HTMLInputElement>) {
     const raw = event.target.value
@@ -199,15 +156,19 @@ function BalanceRow({
 
   return (
     <tr>
-      <td className="secondary row-number mono">{index + 1}</td>
       <td>{row.name}</td>
       <td className="secondary">{row.type}</td>
+      {/* Which side of net worth the figure lands on. The nine account types
+          carry it already, but only if you know all nine by heart — and it is
+          what decides whether a rising balance is a rise. */}
+      <td className="secondary">{row.is_liability ? 'Liability' : 'Asset'}</td>
+      <td className="secondary">{row.liquidity_tier}</td>
       <td className="secondary mono">{row.currency}</td>
       {/* The adjacency that is the point of this screen. */}
       <td className="numeric secondary">
         {row.prior !== null ? formatDecimal(row.prior) : <span className="ink-30">—</span>}
       </td>
-      <td>
+      <td className="cell-balance">
         <input
           className={`input input--grid mono numeric-input${isSaved ? ' input--saved' : ''}${
             state === 'error' ? ' input--error' : ''
@@ -220,12 +181,30 @@ function BalanceRow({
         />
         {error && <span className="field__error">{error}</span>}
       </td>
-      <td className="cell-state">
-        {isSaved && <span className="saved">saved</span>}
+      {/* Left-aligned, unlike the state columns elsewhere: the tick belongs to
+          the box it follows, not to the percentage after it. Its width is the
+          colgroup's, like every other column here. */}
+      <td>
+        {/* The icon carries no meaning on its own, so the word is still there
+            for anyone reading by screen reader or hovering to check. */}
+        {isSaved && (
+          <span className="saved" role="img" aria-label="Saved" title="Saved">
+            {icons.saved}
+          </span>
+        )}
         {state === 'saving' && <span className="secondary">…</span>}
         {!isSaved && state !== 'saving' && state !== 'error' && (
           <span className="ink-30">—</span>
         )}
+      </td>
+      {/* The typed figure against the one beside it, stated as a proportion.
+          Em dash on both halves until this month is entered — a month nobody
+          recorded is not a month worth zero — and on the percentage alone
+          where the prior month was zero, because a rise from nothing has no
+          proportion. The value shown is the saved one: it appears once the
+          input commits, not while it is being typed. */}
+      <td className={`numeric ${movementClass(row.change_percent, row.is_liability)}`.trim()}>
+        {row.change_percent ? formatPercent(row.change_percent) : <span className="ink-30">—</span>}
       </td>
     </tr>
   )
@@ -234,10 +213,12 @@ function BalanceRow({
 // ---------------------------------------------------------------------------
 
 export function MonthClose() {
-  const { to } = useViewState()
-  const [month, setMonth] = useState(to)
+  // The month lives in the URL and is chosen on the spine, which is always
+  // present on this screen. A second selector here would be a second face of
+  // the same value with nothing to add, sitting above a rail that already shows
+  // which months still need the work.
+  const { month } = useViewState()
   const close = useMonthClose(month)
-  const [advisories, setAdvisories] = useState<readonly Advisory[]>([])
 
   if (close.isPending) return <div className="boot">Loading…</div>
   if (!close.data) return <ErrorBanner error={close.error} />
@@ -246,24 +227,6 @@ export function MonthClose() {
 
   return (
     <div className="close">
-      <p className="screen__subhead">
-        Neither the reporting currency nor the date range applies here. Balances are
-        entered in each account’s own currency.
-      </p>
-
-      <div className="close__month">
-        <label className="field__label" htmlFor="close-month">
-          Month
-        </label>
-        <input
-          id="close-month"
-          type="month"
-          className="input mono"
-          value={month}
-          onChange={(event) => setMonth(event.target.value)}
-        />
-      </div>
-
       <CompletenessReadout
         state={view.completeness.state}
         balances={view.completeness.balances}
@@ -272,73 +235,60 @@ export function MonthClose() {
         outstandingCurrencies={view.completeness.outstanding_currencies}
       />
 
-      {/* Section 1 — rates first, so the whole pass runs in one tab order. */}
-      <section className="panel">
-        <h2 className="panel__heading">Exchange rates required for this month</h2>
-        {view.rates.length === 0 ? (
-          <p className="fx__note">
-            Every account this month is in USD, so no rate is required.
-          </p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Pair</th>
-                <th>Quoted as</th>
-                <th className="numeric">In effect</th>
-                <th>As at</th>
-                <th>Rate for {formatDate(view.as_at)}</th>
-                <th aria-label="Saved" />
-              </tr>
-            </thead>
-            <tbody>
-              {view.rates.map((rate) => (
-                <RateRow
-                  key={rate.currency}
-                  rate={rate}
-                  asAt={view.as_at}
-                  onAdvisories={setAdvisories}
-                />
-              ))}
-            </tbody>
-          </table>
-        )}
-        {/* Saves either way — the advisory sits beside the thing it concerns. */}
-        <AdvisoryList advisories={advisories} />
-      </section>
+      {/* Balances. Rates used to be section 1 here, entered by hand and quoted
+          against the reporting currency; they are loaded from the provider now
+          (`manage.py load_rates`), so the pass is balances alone.
 
-      {/* Section 2 — balances. */}
+          The readout above still counts them, and that is deliberate rather
+          than a leftover. A missing rate does not zero an account, it excludes
+          it from the translated total (FR-46) — so a load that silently did not
+          run produces a total that looks complete and is not. This screen is
+          where that would be noticed. */}
       <section className="panel">
-        <h2 className="panel__heading">Balances as at {formatDate(view.as_at)}</h2>
-        <p className="fx__note">
-          Liabilities are entered as positive figures; the system applies the sign.
-        </p>
+        <h2 className="panel__heading">Balances for {formatMonth(view.month)}</h2>
 
         {view.rows.length === 0 ? (
           <p className="fx__note">
             No accounts are active in this month. Create one on the Accounts screen first.
           </p>
         ) : (
-          <table className="table table--close">
+          <table className="table table--fixed table--close">
+            {/* Fixed layout and pinned widths, because auto layout sizes each
+                column to its own content: the account name — the longest thing
+                in the row and its subject — is squeezed to the width of the
+                word "Liquidity" while the columns beside it, each holding a
+                word or a figure, take an unequal share of what is left.
+
+                The name takes 30% and the tick 36px, which is all a glyph
+                needs; the seven columns that carry a value divide the rest
+                evenly. */}
+            <colgroup>
+              <col style={{ width: '30%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '36px' }} />
+              <col style={{ width: '10%' }} />
+            </colgroup>
             <thead>
               <tr>
-                <th className="row-number">#</th>
                 <th>Account</th>
                 <th>Type</th>
-                <th>Cur</th>
-                <th className="numeric">{view.rows[0]?.prior_month ?? 'Prior'}</th>
-                <th>Balance</th>
+                <th>Category</th>
+                <th>Liquidity</th>
+                <th>Currency</th>
+                <th className="numeric">Previous Month</th>
+                <th className="numeric">Balance</th>
                 <th aria-label="Saved" />
+                <th className="numeric">% Change</th>
               </tr>
             </thead>
             <tbody>
-              {view.rows.map((row, index) => (
-                <BalanceRow
-                  key={row.account_id}
-                  row={row}
-                  index={index}
-                  month={view.month}
-                />
+              {view.rows.map((row) => (
+                <BalanceRow key={row.account_id} row={row} month={view.month} />
               ))}
             </tbody>
           </table>

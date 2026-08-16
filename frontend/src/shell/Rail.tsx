@@ -1,6 +1,11 @@
 /**
- * The icon rail — 56px collapsed, expanding on hover to a 208px drawer with
- * names and a task-count badge per destination.
+ * The navigation rail — pinned open at 208px, showing an icon, a name and a
+ * task-count badge per destination.
+ *
+ * Below 1024px the width is worth more to the screen than to the navigation, so
+ * there it collapses to a 56px icon rail and expands over the content on hover
+ * or keyboard focus. Both states are the same markup; only CSS differs, so the
+ * abbreviated wordmark is in the DOM at every width.
  *
  * Badges show outstanding work. They are empty in Stage 0 because there is no
  * work yet; the counts arrive with the outstanding-tasks service at Stage 5,

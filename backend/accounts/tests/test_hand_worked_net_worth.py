@@ -62,6 +62,7 @@ MYR rate — not 31 Jul, even though two of the three currencies are current.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -69,7 +70,7 @@ import pytest
 
 from accounts.models import Account, AccountType, Balance, LiquidityTier
 from accounts.services.net_worth import NetWorthService
-from accounts.services.slices import SliceDimension, slice_net_worth
+from accounts.services.slices import SliceDimension, gross_assets, slice_net_worth
 from fx.models import ExchangeRate
 
 pytestmark = [pytest.mark.django_db, pytest.mark.invariant]
@@ -212,6 +213,80 @@ def test_the_by_currency_slice(scenario):
     # AUD: 26,400 - 165,000 = -138,600
     assert rows["AUD"].amount == Decimal("-138600.0000")
     assert rows["MYR"].amount == Decimal("100000.00") / Decimal("4.20")
+
+
+#: The three asset legs only: 12,500 + 26,400 + 23,809.5238...
+#: The two debts are what the column measures, so they are not in it.
+EXPECTED_GROSS_ASSETS = Decimal("62709.52")
+
+
+def test_gross_assets_are_what_is_owned_before_anything_owed(scenario):
+    result = NetWorthService(staleness_days=7).for_month(MONTH, "USD")
+
+    assert gross_assets(result).quantize(Decimal("0.01")) == EXPECTED_GROSS_ASSETS
+
+
+def test_the_asset_rows_compose_to_the_whole_of_what_is_owned(scenario):
+    """Assets make 100% of assets — the composition the column exists for.
+
+    Within the tenth each row is rounded to: the amounts sum exactly because
+    they are full precision, the shares are rounded for display first, and
+    asserting exactness here would be asserting that rounding does not round.
+    """
+    result = NetWorthService(staleness_days=7).for_month(MONTH, "USD")
+    rows = {row.key: row for row in slice_net_worth(result, SliceDimension.TYPE)}
+
+    # Both current accounts, two currencies: (12,500 + 23,809.52) / 62,709.52.
+    assert rows["Current/Checking"].percent_of_gross == Decimal("57.9")
+    assert rows["Savings/Deposit"].percent_of_gross == Decimal("42.1")
+
+    owned = sum(
+        row.percent_of_gross for row in rows.values() if not row.is_liability
+    )
+    assert abs(owned - 100) <= Decimal("0.5")
+
+
+def test_a_debt_is_read_against_what_stands_behind_it_and_may_exceed_it(scenario):
+    """-263.1%, and that figure is the point rather than a defect.
+
+    The mortgage is 165,000 against 62,709.52 of assets. Stated as a share of
+    net worth it would be -156% of a household worth less than nothing; stated
+    against what is owned it says plainly that the debt is two and a half times
+    everything behind it.
+    """
+    result = NetWorthService(staleness_days=7).for_month(MONTH, "USD")
+    rows = {row.key: row for row in slice_net_worth(result, SliceDimension.TYPE)}
+
+    assert rows["Loan/Mortgage"].percent_of_gross == Decimal("-263.1")
+    assert rows["Credit Card"].percent_of_gross == Decimal("-5.2")
+
+
+def test_a_row_holding_both_sides_states_the_net_of_them(scenario):
+    """The USD row holds a current account and a credit card; AUD a saver and a
+    mortgage. Each states what that currency is worth on balance."""
+    result = NetWorthService(staleness_days=7).for_month(MONTH, "USD")
+    rows = {row.key: row for row in slice_net_worth(result, SliceDimension.CURRENCY)}
+
+    # 9,250 / 62,709.52; -138,600 / 62,709.52; 23,809.52 / 62,709.52.
+    assert rows["USD"].percent_of_gross == Decimal("14.8")
+    assert rows["AUD"].percent_of_gross == Decimal("-221.0")
+    assert rows["MYR"].percent_of_gross == Decimal("38.0")
+
+
+def test_a_balance_sheet_of_nothing_leaves_the_share_absent_rather_than_zero(scenario):
+    """A proportion of nothing is not a figure — the amount beside it is."""
+    result = NetWorthService(staleness_days=7).for_month(MONTH, "USD")
+    flat = replace(
+        result,
+        contributions=tuple(
+            replace(c, translated=Decimal(0)) for c in result.contributions
+        ),
+    )
+
+    rows = slice_net_worth(flat, SliceDimension.CURRENCY)
+
+    assert rows
+    assert all(row.percent_of_gross is None for row in rows)
 
 
 def test_reporting_in_aud_gives_a_consistent_answer(scenario):

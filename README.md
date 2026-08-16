@@ -145,6 +145,43 @@ origin, which keeps the session cookie behaving in development exactly as it wil
 production — no CORS layer, no `django-cors-headers`, and no class of bug that appears
 only after deployment. Opening 8001 directly gets a 501 page explaining this.
 
+### Loading Rates
+
+Rates are typed by hand on the FX Rates screen, and that stays true. `load_rates` is a
+backfill and a top-up on top of it — the second implementation of ADR-08's ingestion
+seam, fetching each **trading day's closing rate** from Massive.
+
+```sh
+cd backend
+python manage.py load_rates --from 2016-01-01                       # to today
+python manage.py load_rates --from 2026-08-01 --dry-run             # fetch, report, save nothing
+python manage.py load_rates --from 2026-01-01 --currency AUD        # one pair
+```
+
+Three pairs are loaded by default: `AUD/USD`, `USD/MYR` and `XAU/USD`. Gold is in the
+registry as a currency, not as a price — an account denominated in XAU holds a balance of
+troy ounces, entered and never derived, and translates through the one translation service
+exactly as a foreign-currency balance does. It is the only currency that does **not**
+report: a balance may be *held* in ounces, but net worth is not *stated* in them, so the
+reporting-currency toggle excludes it (`can_report` on `CurrencyDefinition`, served by
+`/api/fx/currencies/` so the Settings screen does not decide it for itself).
+
+Needs `MASSIVE_API_KEY` in `.env`; without it the command says so and everything else
+works exactly as before. Three things it does that are not obvious:
+
+- **A rate you typed is never overwritten.** BRD §4.3, and the reason `source` and
+  `provider` were captured from day one. Rows from an earlier fetch *are* replaced, so
+  re-running a range is safe. The output counts what it left alone.
+- **Weekend bars are dropped.** The FX week opens Sunday evening UTC, so the provider
+  emits a two-hour Sunday bar whose close is a partial session, not a daily close.
+- **Closes are read as `Decimal`, never through `float`.** The wire format is a JSON
+  number; `parse_float` is what keeps ADR-02 true through the one door that is not a
+  form field.
+
+Only the close is read. Open, high, low, volume and live quotes are all available and
+none of them is fetched — this system stores one rate per pair per date, and a second
+figure would only ever disagree with the first.
+
 ### Tests
 
 ```sh

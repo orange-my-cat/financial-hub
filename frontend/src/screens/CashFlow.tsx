@@ -46,6 +46,7 @@ import {
   useUpdateCategory,
 } from '@/lib/cashflow'
 import { formatDate, formatDecimal } from '@/lib/format'
+import { useDefaultCurrency } from '@/lib/fx'
 import { CURRENCIES } from '@/lib/money'
 import { useViewState } from '@/lib/viewState'
 
@@ -53,7 +54,7 @@ type Tab = 'entry' | 'report' | 'categories'
 
 const TABS: readonly { key: Tab; label: string }[] = [
   { key: 'entry', label: 'Entry' },
-  { key: 'report', label: 'Category report' },
+  { key: 'report', label: 'Category Report' },
   { key: 'categories', label: 'Categories' },
 ]
 
@@ -78,11 +79,15 @@ function Entry({ month }: { readonly month: string }) {
   const confirm = useConfirmProposal()
   const dismiss = useDismissProposal()
 
+  // Seeds the field on the first render and then leaves it alone — a
+  // transaction keeps whichever currency was chosen for it.
+  const defaultCurrency = useDefaultCurrency()
+
   const [advisories, setAdvisories] = useState<readonly Advisory[]>([])
   const [form, setForm] = useState({
     date: `${month}-01`,
     amount: '',
-    currency: 'USD',
+    currency: defaultCurrency as string,
     category_id: '',
     note: '',
   })
@@ -121,7 +126,7 @@ function Entry({ month }: { readonly month: string }) {
   return (
     <div className="cashflow__entry">
       <section className="panel">
-        <h2 className="panel__heading">Add a transaction</h2>
+        <h2 className="panel__heading">Add a Transaction</h2>
         <ErrorBanner error={record.error} />
 
         <form className="cashflow__form" onSubmit={submit}>
@@ -213,7 +218,7 @@ function Entry({ month }: { readonly month: string }) {
       </section>
 
       <section className="panel">
-        <h2 className="panel__heading">Recurring proposals</h2>
+        <h2 className="panel__heading">Recurring Proposals</h2>
         <p className="fx__note">
           Proposed each period, never posted automatically. The amount is adjustable at
           confirmation, and a confirmed transaction is thereafter independent of its
@@ -531,9 +536,10 @@ function Categories() {
 // ---------------------------------------------------------------------------
 
 export function CashFlow() {
-  const { from, to } = useViewState()
+  // The month lives in the URL, not here, so this field and the spine are two
+  // faces of one value rather than two copies that drift apart.
+  const { from, to, month, setMonth } = useViewState()
   const [tab, setTab] = useState<Tab>('entry')
-  const [month, setMonth] = useState(to)
 
   return (
     <div className="cashflow">
@@ -562,7 +568,9 @@ export function CashFlow() {
               type="month"
               className="input mono"
               value={month}
-              onChange={(event) => setMonth(event.target.value)}
+              // Ignore a cleared field. It is a transient state of the input,
+              // and writing it through would put an empty month in the URL.
+              onChange={(event) => event.target.value && setMonth(event.target.value)}
             />
           </label>
         )}

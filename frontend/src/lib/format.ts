@@ -39,13 +39,19 @@ function group(integer: string): string {
 }
 
 /**
- * Round a decimal string half-up to `places`, and group the integer part.
+ * Round a decimal string half-up to `places`, ungrouped, with an ASCII minus.
  *
  * The sign is removed first, so incrementing rounds away from zero — which is
  * what half-up means for a negative figure.
+ *
+ * Separate from `formatDecimal` because an editable field needs the rounding
+ * without the presentation: storage keeps NUMERIC(19,4) and a balance reads
+ * back as `10000.0000`, which is four places of noise in a box someone is about
+ * to retype. Grouping and a typographic minus belong in text, not in a value
+ * that has to survive being parsed again.
  */
-export function formatDecimal(value: string, places = 2): string {
-  const negative = value.startsWith('-')
+export function roundDecimal(value: string, places = 2): string {
+  const negative = value.startsWith('-') || value.startsWith(MINUS)
   const magnitude = negative ? value.slice(1) : value
 
   const [rawInteger = '0', rawFraction = ''] = magnitude.split('.')
@@ -69,10 +75,22 @@ export function formatDecimal(value: string, places = 2): string {
   }
 
   integer = integer.replace(/^0+(?=\d)/, '')
-  const body = places === 0 ? group(integer) : `${group(integer)}.${fraction}`
+  const body = places === 0 ? integer : `${integer}.${fraction}`
 
-  // Do not render "−0.00". A figure that rounds to nothing is nothing.
-  if (negative && /^[0,]*(\.0*)?$/.test(body)) return body
+  // Do not render "-0.00". A figure that rounds to nothing is nothing.
+  if (negative && /^0*(\.0*)?$/.test(body)) return body
+  return negative ? `-${body}` : body
+}
+
+/** As `roundDecimal`, grouped for reading — `−122,000.00`. */
+export function formatDecimal(value: string, places = 2): string {
+  const rounded = roundDecimal(value, places)
+  const negative = rounded.startsWith('-')
+  const magnitude = negative ? rounded.slice(1) : rounded
+
+  const [integer = '0', fraction] = magnitude.split('.')
+  const body = fraction === undefined ? group(integer) : `${group(integer)}.${fraction}`
+
   return negative ? `${MINUS}${body}` : body
 }
 
@@ -140,6 +158,13 @@ const MONTH_YEAR = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'UTC',
 })
 
+// `Aug 26` — for chart axis ticks, where two dozen of them share one line.
+const MONTH_SHORT_YEAR = new Intl.DateTimeFormat('en-GB', {
+  month: 'short',
+  year: '2-digit',
+  timeZone: 'UTC',
+})
+
 /**
  * Format an ISO calendar date (`2026-08-13`) as `13 Aug 2026`.
  *
@@ -154,6 +179,15 @@ export function formatDate(iso: string): string {
 export function formatMonth(iso: string): string {
   const [year, month] = iso.split('-')
   return MONTH_YEAR.format(new Date(`${year}-${month}-01T00:00:00Z`))
+}
+
+/**
+ * Format `2026-08` as `Aug 26` — for chart axis ticks, where two dozen of them
+ * share one line and the century is never the thing in doubt.
+ */
+export function formatMonthShort(iso: string): string {
+  const [year, month] = iso.split('-')
+  return MONTH_SHORT_YEAR.format(new Date(`${year}-${month}-01T00:00:00Z`))
 }
 
 /** `2026-08` — the reporting month a date falls in. */

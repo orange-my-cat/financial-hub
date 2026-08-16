@@ -6,8 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { api } from './api'
 import type { Completeness, CompletenessState } from './accounts'
-import type { CurrencyBlock } from './cashflow'
-import type { CurrencyCode } from './money'
+import type { CurrencyCode, Money } from './money'
 
 export interface Task {
   readonly kind: string
@@ -29,6 +28,12 @@ export interface BackupStatus {
   readonly size_bytes: number | null
   readonly count: number
   readonly newest_data_at: string | null
+}
+
+/** One figure's month-on-month movement. Both halves absent where undefined. */
+export interface FigureChange {
+  readonly change: string | null
+  readonly change_percent: string | null
 }
 
 export interface DashboardPayload {
@@ -57,7 +62,61 @@ export interface DashboardPayload {
     completeness: CompletenessState
   }[]
   readonly tasks: readonly Task[]
-  readonly cashflow: readonly CurrencyBlock[]
+  /**
+   * The month's flow in the reporting currency — one figure per line, not a
+   * breakdown. A currency with no rate at the month's as-at date — its
+   * month-end, or today while it is still running — is withheld from all four
+   * figures and named in `exclusions`, never counted as zero (FR-46).
+   */
+  readonly cashflow: {
+    readonly month: string
+    readonly currency: CurrencyCode
+    readonly reportable: boolean
+    readonly income: Money | null
+    readonly expense: Money | null
+    readonly net: Money | null
+    /** Net as a percentage of income. Null where income is zero. */
+    readonly savings_rate: string | null
+    readonly exclusions: readonly { currency: CurrencyCode; reason: string }[]
+    readonly rate_provenance: readonly {
+      currency: CurrencyCode
+      pair: string
+      as_at: string
+      provenance: string
+      stale: boolean
+    }[]
+    readonly as_at: string | null
+    readonly any_stale: boolean
+    readonly previous_month: string
+    /**
+     * Each figure's movement on the month before.
+     *
+     * `change_percent` is null against a zero prior month — a rise from nothing
+     * has no proportion. `savings_rate` moves in percentage points and never
+     * carries a percent of its own: a proportion of a proportion is a figure
+     * nobody can check by hand.
+     */
+    readonly change: {
+      readonly income: FigureChange
+      readonly expense: FigureChange
+      readonly net: FigureChange
+      readonly savings_rate: FigureChange
+    }
+  }
+  /**
+   * 24 months of the same four figures, latest last.
+   *
+   * Money is zero for a month with nothing recorded — the one place absence and
+   * zero coincide, because a month with no spending genuinely spent nothing.
+   * `savings_rate` stays null there: no income is no denominator.
+   */
+  readonly cashflow_trend: readonly {
+    month: string
+    income: string
+    expense: string
+    net: string
+    savings_rate: string | null
+  }[]
   readonly investments: readonly {
     currency: CurrencyCode
     holdings: number
@@ -82,11 +141,20 @@ export function useDashboard(month: string, currency: string) {
   })
 }
 
-export function useSpine(through: string) {
+/**
+ * The spine's months.
+ *
+ * `extend` asks for that many months before the first recorded one. The
+ * response says whether asking for more would show anything new, so the
+ * control that drives it can retire itself instead of going quietly dead.
+ */
+export function useSpine(through: string, extend = 0) {
   return useQuery({
-    queryKey: ['spine', through],
+    queryKey: ['spine', through, extend],
     queryFn: () =>
-      api.get<{ data: SpineMonth[] }>(`/spine/?through=${through}`).then((r) => r.data),
+      api.get<{ data: SpineMonth[]; extendable: boolean }>(
+        `/spine/?through=${through}&extend=${extend}`,
+      ),
   })
 }
 

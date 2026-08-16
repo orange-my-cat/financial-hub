@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pytest
 
+from core.currencies import QUOTED_CURRENCY_CODES
 from fx.models import ExchangeRate
 
 pytestmark = pytest.mark.django_db
@@ -77,13 +78,29 @@ def test_the_registry_states_each_pair_and_its_direction(signed_in):
     body = signed_in.get("/api/fx/currencies/").json()["data"]
 
     assert body["base"] == "USD"
-    assert body["quoted"] == ["AUD", "MYR"]
+    assert body["quoted"] == list(QUOTED_CURRENCY_CODES)
     by_code = {c["code"]: c for c in body["currencies"]}
     assert by_code["AUD"]["quote_label"] == "USD per 1 AUD"
     assert by_code["AUD"]["pair"] == "AUD/USD"
     assert by_code["MYR"]["quote_label"] == "MYR per 1 USD"
     assert by_code["MYR"]["pair"] == "USD/MYR"
+    # Gold, quoted the only way the market and the provider quote it. Stated
+    # here explicitly rather than derived, because a direction that flips
+    # silently is the failure this endpoint exists to prevent.
+    assert by_code["XAU"]["quote_label"] == "USD per 1 XAU"
+    assert by_code["XAU"]["pair"] == "XAU/USD"
     assert by_code["USD"]["is_base"] is True
+
+
+def test_the_registry_says_which_currencies_net_worth_may_be_stated_in(signed_in):
+    """Served, so the Settings screen does not decide it for itself."""
+    body = signed_in.get("/api/fx/currencies/").json()["data"]
+
+    assert "XAU" not in body["reporting"]
+    assert body["reporting"] == ["USD", "AUD", "MYR"]
+    by_code = {c["code"]: c for c in body["currencies"]}
+    assert by_code["XAU"]["can_report"] is False
+    assert by_code["AUD"]["can_report"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +304,7 @@ def test_deleting_a_rate_that_is_not_there_is_a_404_shaped_error(signed_in):
 def test_settings_are_created_with_their_defaults_on_first_read(signed_in):
     body = signed_in.get("/api/settings/").json()
 
-    assert body["data"]["reporting_currency"] == "USD"
+    assert body["data"]["default_currency"] == "USD"
     assert body["data"]["rate_staleness_days"] == 7
     # Trimmed, so it reads identically before and after a database round-trip.
     assert body["data"]["rate_variance_percent"] == "10"
@@ -305,26 +322,160 @@ def test_changing_the_staleness_threshold_takes_effect_without_a_deploy(signed_i
     assert body["data"]["staleness_days"] == 30
 
 
-def test_changing_the_reporting_currency_rewrites_no_stored_data(signed_in):
+def test_changing_the_default_currency_rewrites_no_stored_data(signed_in):
     rate("AUD", "2026-01-31", "0.66")
     before = ExchangeRate.objects.get(currency="AUD").rate
 
     signed_in.patch(
         "/api/settings/",
-        data={"reporting_currency": "AUD"},
+        data={"default_currency": "AUD"},
         content_type="application/json",
     )
 
     assert ExchangeRate.objects.get(currency="AUD").rate == before
-    assert signed_in.get("/api/settings/").json()["data"]["reporting_currency"] == "AUD"
+    assert signed_in.get("/api/settings/").json()["data"]["default_currency"] == "AUD"
 
 
-def test_an_unknown_reporting_currency_is_refused(signed_in):
+def test_gold_is_a_currency_but_not_one_net_worth_can_be_stated_in(signed_in):
+    """XAU denominates a balance and does not report.
+
+    A distinct refusal from the unknown-code one below: XAU *is* a currency this
+    system knows, holds rates for and will translate — it simply is not a unit
+    net worth is stated in. The endpoint has to tell those two apart, or the
+    error sends the reader looking for a typo that is not there.
+    """
     response = signed_in.patch(
         "/api/settings/",
-        data={"reporting_currency": "GBP"},
+        data={"default_currency": "XAU"},
         content_type="application/json",
     )
 
     assert response.status_code == 400
-    assert "reporting_currency" in response.json()["error"]["field_errors"]
+    assert signed_in.get("/api/settings/").json()["data"]["default_currency"] == "USD"
+
+
+def test_an_unknown_default_currency_is_refused(signed_in):
+    response = signed_in.patch(
+        "/api/settings/",
+        data={"default_currency": "GBP"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert "default_currency" in response.json()["error"]["field_errors"]
+
+
+def test_a_rate_posted_against_a_basis_is_refused_rather_than_misread(signed_in):
+    """The re-based form is gone, and its absence must not be silent.
+
+    DRF drops unknown fields, so without the guard this request would store
+    1.5152 as `USD per 1 AUD` — a rate wrong by a factor of five, misstating
+    every AUD balance for that month with nothing else to catch it.
+    """
+    response = signed_in.post(
+        "/api/fx/rates/",
+        data={
+            "currency": "AUD",
+            "basis": "USD",
+            "rate_date": "2026-01-31",
+            "rate": "1.5151515152",
+        },
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert "basis" in response.json()["error"]["field_errors"]
+    assert not ExchangeRate.objects.filter(currency="AUD").exists()
+
+
+# ---------------------------------------------------------------------------
+# Loading from the provider — the FX screen's button
+# ---------------------------------------------------------------------------
+
+
+class _StubProvider:
+    """Stands in for Massive. No test in this file reaches the network."""
+
+    name = "massive"
+    asked: tuple = ()
+
+    def __init__(self, *args, **kwargs) -> None:  # noqa: ARG002
+        pass
+
+    def daily_closes(self, currency, start, end):
+        from datetime import date as _date
+        from decimal import Decimal as _Decimal
+
+        from fx.services.providers import DailyClose
+
+        type(self).asked = (start, end)
+        if currency != "AUD":
+            return ()
+        return (
+            DailyClose(currency="AUD", rate_date=_date(2026, 8, 14), close=_Decimal("0.70835")),
+        )
+
+
+@pytest.fixture
+def stub_provider(monkeypatch):
+    monkeypatch.setattr("fx.api.views.MassiveProvider", _StubProvider)
+    _StubProvider.asked = ()
+    return _StubProvider
+
+
+def test_loading_from_the_provider_stores_rates_and_reports_what_it_did(
+    signed_in, stub_provider
+):
+    response = signed_in.post("/api/fx/rates/load/")
+
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["provider"] == "massive"
+    assert body["written"] == 1
+    assert body["kept_manual"] == 0
+    stored = ExchangeRate.objects.get(currency="AUD")
+    assert stored.rate == Decimal("0.70835")
+    assert stored.source == "api"
+
+
+def test_the_button_loads_a_year_ending_today(signed_in, stub_provider):
+    from django.utils import timezone
+
+    from fx.services.ingest import RECENT_WINDOW_DAYS
+
+    signed_in.post("/api/fx/rates/load/")
+
+    start, end = stub_provider.asked
+    assert end == timezone.localdate()
+    assert (end - start).days + 1 == RECENT_WINDOW_DAYS
+
+
+def test_loading_never_overwrites_a_rate_that_was_typed(signed_in, stub_provider):
+    """BRD §4.3, over HTTP. The count is what the screen shows for it."""
+    rate("AUD", "2026-08-14", "0.66")
+
+    body = signed_in.post("/api/fx/rates/load/").json()["data"]
+
+    assert body["kept_manual"] == 1
+    assert body["written"] == 0
+    assert ExchangeRate.objects.get(currency="AUD").rate == Decimal("0.66")
+
+
+def test_a_provider_outage_is_an_error_banner_and_saves_nothing(signed_in, monkeypatch):
+    from fx.services.providers import RateProviderError
+
+    class _Broken(_StubProvider):
+        def daily_closes(self, currency, start, end):
+            raise RateProviderError("The rate provider is unreachable: timed out")
+
+    monkeypatch.setattr("fx.api.views.MassiveProvider", _Broken)
+
+    response = signed_in.post("/api/fx/rates/load/")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "rate_provider_unavailable"
+    assert ExchangeRate.objects.count() == 0
+
+
+def test_loading_requires_a_session(client):
+    assert client.post("/api/fx/rates/load/").status_code == 403

@@ -9,6 +9,13 @@ way to tell which was right. Partitioning makes "every slice totals to net
 worth" true by construction rather than by testing — though it is tested anyway,
 because construction arguments have been wrong before.
 
+Each row also states its share of **gross assets** — what is owned — and not
+its share of net worth. Net worth is what remains after the two sides cancel,
+so it collapses toward zero in exactly the households the column is most worth
+reading, and goes negative in any of them carrying a mortgage; a share of it
+inflates without bound and inverts on the sign. Against assets, the asset rows
+compose to 100% and each debt is read against what stands behind it.
+
 Toggling between slices is the whole interaction model on the Net worth screen.
 There is no drill-down.
 """
@@ -21,6 +28,10 @@ from enum import StrEnum
 
 from accounts.models import LIABILITY_TYPES, AccountType, LiquidityTier
 from accounts.services.net_worth import Contribution, NetWorth
+
+
+CENTS = Decimal("0.01")
+TENTHS = Decimal("0.1")
 
 
 class SliceDimension(StrEnum):
@@ -42,15 +53,20 @@ class SliceRow:
     account_count: int
     #: Accounts excluded from the translated total, kept visible in their row.
     excluded_count: int
+    #: The row as a proportion of gross. None where the balance sheet is empty.
+    percent_of_gross: Decimal | None
 
     def as_dict(self) -> dict:
         return {
             "key": self.key,
             "label": self.label,
-            "amount": str(self.amount.quantize(Decimal("0.01"))),
+            "amount": str(self.amount.quantize(CENTS)),
             "is_liability": self.is_liability,
             "accounts": self.account_count,
             "excluded": self.excluded_count,
+            "percent_of_gross": str(self.percent_of_gross)
+            if self.percent_of_gross is not None
+            else None,
         }
 
 
@@ -75,6 +91,43 @@ def _sort_index(dimension: SliceDimension, key: str, label: str) -> tuple:
     if dimension is SliceDimension.LIQUIDITY:
         return (_TIER_ORDER.index(key) if key in _TIER_ORDER else len(_TIER_ORDER),)
     return (label.lower(),)
+
+
+def gross_assets(net_worth: NetWorth) -> Decimal:
+    """What is owned, before anything owed against it.
+
+    Assets only — the liability side is what the column is measuring, so it
+    cannot also be in the denominator. Membership is by account type, the
+    system's own asset/liability split, not by the sign of a figure: an
+    overdrawn current account is an asset holding less than nothing, and
+    counting it as a debt would move it between the two sides of the report
+    from one month to the next.
+
+    Excluded accounts are left out, exactly as they are left out of the total
+    (FR-46). A row measured against money the system declined to count would be
+    a proportion of a figure shown nowhere.
+    """
+    return sum(
+        (c.translated for c in net_worth.included if not c.is_liability), Decimal(0)
+    )
+
+
+def _share(amount: Decimal, total: Decimal) -> Decimal | None:
+    """A row as a proportion of gross assets, keeping its own sign.
+
+    Assets compose: on a slice where no row mixes the two sides, they make
+    100%. Liabilities are read *against* what is owned and are unbounded by
+    design — a mortgage at -263% is the statement that the debt is two and a
+    half times everything on the other side, which is the comparison the column
+    exists to make and one net worth cannot express.
+
+    Null against a balance sheet holding no assets, for the same reason the
+    month-on-month percentage is null against a zero prior month: a proportion
+    of nothing is not a figure. The amount beside it is still real.
+    """
+    if total == 0:
+        return None
+    return (amount / total * 100).quantize(TENTHS)
 
 
 def slice_net_worth(net_worth: NetWorth, dimension: SliceDimension) -> tuple[SliceRow, ...]:
@@ -103,6 +156,10 @@ def slice_net_worth(net_worth: NetWorth, dimension: SliceDimension) -> tuple[Sli
         if not contribution.is_liability:
             bucket["liability"] = False
 
+    # Computed once from the same contributions the rows partition, so a given
+    # account holds the same share in every slice.
+    denominator = gross_assets(net_worth)
+
     rows = [
         SliceRow(
             key=key,
@@ -111,6 +168,7 @@ def slice_net_worth(net_worth: NetWorth, dimension: SliceDimension) -> tuple[Sli
             is_liability=bucket["liability"],
             account_count=bucket["accounts"],
             excluded_count=bucket["excluded"],
+            percent_of_gross=_share(bucket["amount"], denominator),
         )
         for key, bucket in buckets.items()
     ]

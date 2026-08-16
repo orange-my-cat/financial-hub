@@ -20,10 +20,41 @@
  * impossible for a screen and an export to disagree (ADR-12).
  */
 
-/** The currencies actually held (OI-01). Stored and base currency is always USD. */
-export const CURRENCIES = ['USD', 'AUD', 'MYR'] as const
+/**
+ * The currencies a balance may be *denominated* in (OI-01), mirroring
+ * `core.currencies.CURRENCY_CODES`. Stored and base currency is always USD.
+ *
+ * XAU is here because gold is a currency in this system rather than a price: a
+ * Physical Asset account holds a balance of troy ounces, entered like any
+ * other, and translated by the one translation service. A code missing from
+ * this list makes `money()` throw on a perfectly valid API response, so this
+ * list is not a menu — it is the set of codes the server can send.
+ */
+export const CURRENCIES = ['USD', 'AUD', 'MYR', 'XAU'] as const
 
 export type CurrencyCode = (typeof CURRENCIES)[number]
+
+/**
+ * The currencies net worth may be *stated* in — a strict subset, since gold.
+ *
+ * A unit of account is not the same thing as a currency: "net worth, in
+ * ounces" has a denominator that moves for reasons unrelated to the finances
+ * being measured. The server is the authority (`can_report` on the currency
+ * registry, which Settings reads); this list exists because the header toggle
+ * renders before any query resolves.
+ */
+export const REPORTING_CURRENCIES = ['USD', 'AUD', 'MYR'] as const
+
+export type ReportingCurrencyCode = (typeof REPORTING_CURRENCIES)[number]
+
+/**
+ * The stored and base currency, mirroring `core.currencies.BASE_CURRENCY`.
+ *
+ * Not the same thing as the user's default currency, which is a stored
+ * preference and may be any reporting currency. This is the fallback beneath
+ * that preference: the one currency that is stated without a rate.
+ */
+export const BASE_CURRENCY: ReportingCurrencyCode = 'USD'
 
 export interface Money {
   /** The exact decimal, as the server computed it. Never parsed to a number. */

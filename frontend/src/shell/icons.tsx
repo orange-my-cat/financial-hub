@@ -1,24 +1,46 @@
 /**
- * Rail iconography.
+ * Iconography — the rail's destinations, sign out in the header, and the few
+ * glyphs that sit inside a screen.
  *
- * Inline SVG on `currentColor`, 24px viewBox, 1.5px stroke, round caps and
- * joins — Phosphor-style geometric glyphs, one per destination. No icon
- * library: eight paths are not worth a dependency maintained for a decade.
+ * Lucide, rendered inline on `currentColor` from a 24px viewBox at 1.5px
+ * stroke with round caps and joins — the handoff's geometry, drawn by a
+ * maintained set rather than by hand. Lucide's own defaults are 24px and 2px,
+ * so size and stroke width are set here and nowhere else; every glyph
+ * therefore weighs the same on screen.
+ *
+ * Two sizes, and only two. Chrome is 20px. A glyph set beside body copy takes
+ * `inline` at 14px, because a chrome-sized icon beside 11.5px text reads as the
+ * subject and the words as its caption.
+ *
+ * Elements, not components: a call site renders a glyph by name and never
+ * varies its props, so there is nothing for it to get wrong.
  */
 
+import {
+  ArrowLeftRight,
+  CalendarCheck,
+  ChartColumn,
+  Check,
+  Coins,
+  CreditCard,
+  Eye,
+  EyeOff,
+  LayoutGrid,
+  LogOut,
+  SlidersHorizontal,
+  TrendingUp,
+} from 'lucide-react'
 import type { ReactElement } from 'react'
 
 const base = {
-  width: 20,
-  height: 20,
-  viewBox: '0 0 24 24',
-  fill: 'none',
-  stroke: 'currentColor',
+  size: 20,
+  // Not `absoluteStrokeWidth`: the stroke scales with the box, as it did when
+  // these were drawn by hand, so the weight on screen is unchanged.
   strokeWidth: 1.5,
-  strokeLinecap: 'round' as const,
-  strokeLinejoin: 'round' as const,
   'aria-hidden': true,
 }
+
+const inline = { ...base, size: 14 }
 
 export type IconName =
   | 'dashboard'
@@ -29,68 +51,28 @@ export type IconName =
   | 'investments'
   | 'fxRates'
   | 'settings'
+  | 'signOut'
+  | 'show'
+  | 'hide'
+  | 'saved'
 
 export const icons: Record<IconName, ReactElement> = {
-  dashboard: (
-    <svg {...base}>
-      <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
-      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
-      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
-      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
-    </svg>
-  ),
-  netWorth: (
-    <svg {...base}>
-      <path d="M3 20h18" />
-      <path d="M4 16l5-5 3.5 3.5L20 7" />
-      <path d="M15.5 7H20v4.5" />
-    </svg>
-  ),
-  accounts: (
-    <svg {...base}>
-      <rect x="3" y="6" width="18" height="12" rx="2" />
-      <path d="M3 10h18" />
-      <path d="M16.5 14.5h1.5" />
-    </svg>
-  ),
-  monthClose: (
-    <svg {...base}>
-      <rect x="3.5" y="5" width="17" height="16" rx="2" />
-      <path d="M3.5 10h17" />
-      <path d="M8 3v4M16 3v4" />
-      <path d="M9 15.5l2.25 2.25L15.5 13.5" />
-    </svg>
-  ),
-  cashFlow: (
-    <svg {...base}>
-      <path d="M4 8h13" />
-      <path d="M13.5 4.5L17 8l-3.5 3.5" />
-      <path d="M20 16H7" />
-      <path d="M10.5 12.5L7 16l3.5 3.5" />
-    </svg>
-  ),
-  investments: (
-    <svg {...base}>
-      <path d="M3 20h18" />
-      <rect x="5" y="11" width="3.5" height="6" rx="1" />
-      <rect x="10.25" y="7" width="3.5" height="10" rx="1" />
-      <rect x="15.5" y="13" width="3.5" height="4" rx="1" />
-    </svg>
-  ),
-  fxRates: (
-    <svg {...base}>
-      <circle cx="8" cy="8" r="4.5" />
-      <circle cx="16" cy="16" r="4.5" />
-      <path d="M14.5 6.5h4.5V11" />
-      <path d="M9.5 17.5H5V13" />
-    </svg>
-  ),
-  settings: (
-    <svg {...base}>
-      <path d="M3 7h11M18 7h3" />
-      <path d="M3 17h5M12 17h9" />
-      <circle cx="16" cy="7" r="2.25" />
-      <circle cx="10" cy="17" r="2.25" />
-    </svg>
-  ),
+  dashboard: <LayoutGrid {...base} />,
+  netWorth: <TrendingUp {...base} />,
+  accounts: <CreditCard {...base} />,
+  monthClose: <CalendarCheck {...base} />,
+  // Two opposed arrows: money out, money in. Never a transfer — there is no
+  // transfer affordance anywhere in this application.
+  cashFlow: <ArrowLeftRight {...base} />,
+  investments: <ChartColumn {...base} />,
+  fxRates: <Coins {...base} />,
+  settings: <SlidersHorizontal {...base} />,
+  signOut: <LogOut {...base} />,
+  // In-screen, beside the disclosure that reveals closed accounts. The open eye
+  // offers the reveal; the struck one offers to put them away again.
+  show: <Eye {...inline} />,
+  hide: <EyeOff {...inline} />,
+  // The bare tick in a Month Close row, in place of the word "saved". Sized
+  // inline: it sits in a table of 11.5px figures, not in the chrome.
+  saved: <Check {...inline} />,
 }

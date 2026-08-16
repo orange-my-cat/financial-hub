@@ -252,6 +252,20 @@ BACKUP_MAX_AGE_HOURS = int(os.environ.get("BACKUP_MAX_AGE_HOURS", "24"))
 
 
 # ---------------------------------------------------------------------------
+# Rate provider
+# ---------------------------------------------------------------------------
+# The second implementation of ADR-08's ingestion seam, read only by
+# `manage.py load_rates`. Deliberately optional and deliberately not `env()`:
+# every screen, report and calculation works with nothing but hand-entered
+# rates, and an unset key must not stop the application starting. The command
+# says what is missing if it is asked to run without one.
+
+MASSIVE_API_KEY = os.environ.get("MASSIVE_API_KEY", "").strip()
+MASSIVE_BASE_URL = os.environ.get("MASSIVE_BASE_URL", "https://api.massive.com").strip()
+MASSIVE_TIMEOUT_SECONDS = int(os.environ.get("MASSIVE_TIMEOUT_SECONDS", "30"))
+
+
+# ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 # stdout, captured by Docker's json-file driver and capped at 10 MB × 3 in

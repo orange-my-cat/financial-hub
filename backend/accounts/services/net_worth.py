@@ -10,6 +10,11 @@ the trend, every slice, the CSV export, the smoke test — comes through here.
 There is exactly one definition, so a screen and a report cannot disagree
 (§5.2.2).
 
+"That month-end" means the month's as-at date, which for the month still in
+progress is today rather than a month-end that has not arrived (see
+`core.months.as_at_of`). For every month that has ended the two are the same
+date, so the rule reads as written everywhere except the month being closed.
+
 Four rules meet in this function, and each is easy to get subtly wrong:
 
 **The sign is the account's, not the balance's** (BR-06). Liabilities are typed
@@ -36,7 +41,7 @@ from datetime import date
 from decimal import Decimal
 
 from core.money import Money
-from core.months import month_end
+from core.months import as_at_of
 from core.services.completeness import (
     AccountHistory,
     MonthCompleteness,
@@ -228,7 +233,14 @@ class NetWorthService:
     # -- the definition ----------------------------------------------------
 
     def for_month(self, month: str, reporting_currency: str) -> NetWorth:
-        as_at = month_end(month)
+        # The date the month is valued at — its month-end, or today while it is
+        # still running (core.months.as_at_of). Translating the month in
+        # progress at a month-end that has not arrived would date every quote
+        # forward: a rate entered on the 16th reads as carried and n days stale
+        # on the 16th, and the staleness warning under the headline would be
+        # counting days that have not happened. Month Close already records
+        # against this date, and completeness already reads it.
+        as_at = as_at_of(month)
         accounts = self._accounts_for(month)
 
         contributions: list[Contribution] = []
@@ -303,13 +315,20 @@ class NetWorthService:
             Balance.objects.filter(month=month).values_list("account_id", flat=True)
         )
 
-        # A rate counts only when it was entered on the month-end date itself.
-        # A carried rate keeps reports working but does not make the month
-        # complete — nobody entered it (ADR-08).
+        # A rate counts only when it was entered on the month's as-at date
+        # itself. A carried rate keeps reports working but does not make the
+        # month complete — nobody entered it (ADR-08).
+        #
+        # As-at rather than month-end because Month Close now records against
+        # the as-at date, and the readout sits directly above the rows it
+        # describes: a screen that says "0 of 1 rates" beside a row marked saved
+        # is worse than either statement alone. For every month that has ended
+        # the two dates are the same, so this changes nothing but the month in
+        # progress.
         from fx.models import ExchangeRate
 
         recorded_rates = set(
-            ExchangeRate.objects.filter(rate_date=month_end(month)).values_list(
+            ExchangeRate.objects.filter(rate_date=as_at_of(month)).values_list(
                 "currency", flat=True
             )
         )

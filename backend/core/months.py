@@ -50,6 +50,29 @@ def month_start(month: str) -> date:
     return date(year, mon, 1)
 
 
+def as_at_of(month: str, *, today: date | None = None) -> date:
+    """The date a month is valued at — its last day, or today if it is still running.
+
+    A month boundary is its last calendar day (BR-24), and for every month that
+    has ended that is the answer. The month currently in progress is the one
+    exception, and it is the reason this function exists: closing August on the
+    16th cannot record a balance or a rate as at the 31st, because the 31st has
+    not happened. Stating a future date on a screen that then saves against it
+    is the kind of small dishonesty a ledger cannot afford.
+
+    A month that has not begun keeps its own month-end. Today is not inside it,
+    so today is not its as-at date, and nothing is recorded for it anyway.
+
+    **The as-at date of the current month moves.** A rate recorded for it on the
+    16th sits on the 16th, and when the month ends the month-end figure is a
+    different figure that was never entered. That is a true statement about an
+    early close rather than a defect, but it is the reason this is one function
+    and not a `min()` written out at each call site.
+    """
+    current = today or date.today()
+    return current if month_of(current) == require_month(month) else month_end(month)
+
+
 def shift(month: str, by: int) -> str:
     year, mon = parts(month)
     index = year * 12 + (mon - 1) + by

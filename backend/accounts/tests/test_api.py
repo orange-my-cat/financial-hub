@@ -221,21 +221,34 @@ def test_month_close_puts_the_prior_balance_beside_each_input(signed_in, portfol
     assert rows["Everyday"]["saved"] is True
 
 
-def test_month_close_lists_only_the_currencies_actually_in_use(signed_in, portfolio):
+def test_month_close_carries_balances_and_no_rates(signed_in, portfolio):
+    """Rates were section one of this screen and are loaded from the provider
+    now, so the query does not build them and the payload does not carry them.
+
+    Asserted rather than assumed: leaving the key in place would keep the whole
+    re-basing apparatus alive behind an endpoint nothing renders.
+    """
     body = signed_in.get("/api/month-close/?month=2026-07").json()["data"]
 
-    assert [rate["currency"] for rate in body["rates"]] == ["AUD"]
-    assert body["rates"][0]["quote_label"] == "USD per 1 AUD"
-    assert body["rates"][0]["recorded"] is True
+    assert "rates" not in body
+    assert body["rows"]
+    # Still computed against the reporting currency, which is the one thing on
+    # this payload the currency parameter still governs.
+    assert body["completeness"]["rates"]["expected"] >= 1
 
 
-def test_month_close_shows_a_carried_rate_as_carried(signed_in, portfolio):
-    body = signed_in.get("/api/month-close/?month=2026-08").json()["data"]
-    rate = body["rates"][0]
+def test_month_close_never_states_an_as_at_date_in_the_future(signed_in, portfolio):
+    """Closing a month still running is valued at today, not at its month-end.
 
-    assert rate["recorded"] is False
-    assert rate["provenance"] == "carried"
-    assert rate["effective_as_at"] == "2026-07-31"
+    Asserted as an invariant rather than against a fixed date, so it keeps
+    meaning something on every day this suite is run.
+    """
+    from core.months import month_of
+
+    today = date.today()
+    body = signed_in.get(f"/api/month-close/?month={month_of(today)}").json()["data"]
+
+    assert date.fromisoformat(body["as_at"]) == today
 
 
 def test_a_partly_closed_month_is_a_legitimate_state(signed_in, portfolio):
@@ -271,6 +284,30 @@ def test_net_worth_carries_its_completeness_and_provenance(signed_in, portfolio)
     assert body["completeness"]["state"] == "Complete"
     assert body["exclusions"] == []
     assert body["rate_provenance"][0]["currency"] == "AUD"
+
+
+def test_the_default_currency_seeds_a_selector_and_never_restates_a_report(
+    signed_in, portfolio
+):
+    """It is what a screen *starts* at, not what an endpoint answers in.
+
+    The currency reaches a reporting endpoint as an explicit query parameter,
+    never read from the settings row, so a URL fully determines its response
+    (§8.2). A bookmarked report does not change meaning because the default was
+    changed afterwards, and one omitting the parameter falls back to the base
+    currency rather than to a stored preference.
+    """
+    signed_in.patch(
+        "/api/settings/",
+        data={"default_currency": "AUD"},
+        content_type="application/json",
+    )
+
+    named = signed_in.get("/api/net-worth/?month=2026-07&currency=USD").json()
+    assert named["data"]["total"]["currency"] == "USD"
+
+    omitted = signed_in.get("/api/net-worth/?month=2026-07").json()
+    assert omitted["data"]["total"]["currency"] == "USD"
 
 
 def test_the_as_at_date_is_silent_when_every_rate_is_fresh(signed_in, portfolio):

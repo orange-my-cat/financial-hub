@@ -4,53 +4,55 @@
 
 .shell {
   display: grid;
-  grid-template-columns: var(--rail-collapsed) minmax(0, 1fr) var(--spine-width);
+  grid-template-columns: var(--rail-expanded) minmax(0, 1fr) var(--spine-width);
+  /* The header row runs the full width across columns 2 and 3; the spine hangs
+     below it rather than beside it. minmax(0, 1fr) rather than 1fr, so the body
+     row can be shorter than its content and its children scroll. */
+  grid-template-rows: var(--header-height) minmax(0, 1fr);
   height: 100%;
 }
 
-/* The rail is fixed and therefore out of the grid's flow, so these two are
-   placed explicitly. Left to auto-placement they would fall into the 56px
-   column the rail only appears to occupy. */
-.shell__body {
-  grid-column: 2;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
+/* No spine on this screen: the column goes, rather than standing empty. */
+.shell--flush {
+  grid-template-columns: var(--rail-expanded) minmax(0, 1fr);
 }
 
+.shell--flush .header {
+  grid-column: 2;
+}
+
+/* The rail is fixed and therefore out of the grid's flow, so everything else is
+   placed explicitly. Left to auto-placement they would fall into the 56px
+   column the rail only appears to occupy. */
 .shell__main {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
   overflow-y: auto;
   padding: var(--gutter);
 }
 
 /* ------------------------------------------------------------------------ */
-/* Rail — 56px, expanding on hover to a 208px drawer                         */
+/* Rail — pinned open at 208px; a 56px hover drawer below 1024px             */
 /* ------------------------------------------------------------------------ */
 
-/* Fixed rather than in-flow, so the drawer overlays the screen instead of
-   reflowing it. A layout that shifts under the cursor on hover is a layout
-   that cannot be clicked accurately. */
+/* Fixed rather than in-flow, so that at narrow widths the drawer overlays the
+   screen instead of reflowing it. A layout that shifts under the cursor on
+   hover is a layout that cannot be clicked accurately. Pinned open the width
+   is matched by the shell's first column, so nothing is overlaid. */
 .rail {
   position: fixed;
   top: 0;
   left: 0;
   bottom: 0;
   z-index: 20;
-  width: var(--rail-collapsed);
+  width: var(--rail-expanded);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--ground-rail);
   border-right: 1px solid var(--divider);
   transition: width 140ms ease;
-}
-
-.rail:hover,
-.rail:focus-within {
-  width: var(--rail-expanded);
-  box-shadow: 12px 0 32px rgba(0, 0, 0, 0.45);
 }
 
 .rail__mark {
@@ -65,26 +67,17 @@
 
 .rail__mark--full {
   font-size: 22px;
-  opacity: 0;
   transition: opacity 100ms ease;
 }
 
+/* The abbreviation only ever shows in the collapsed drawer, so it is out of the
+   way entirely until the narrow breakpoint turns it on. */
 .rail__mark--short {
+  display: none;
   font-size: 21px;
   position: absolute;
   left: 16px;
   transition: opacity 100ms ease;
-}
-
-.rail:hover .rail__mark--full,
-.rail:focus-within .rail__mark--full {
-  opacity: 1;
-  transition-delay: 40ms;
-}
-
-.rail:hover .rail__mark--short,
-.rail:focus-within .rail__mark--short {
-  opacity: 0;
 }
 
 .rail__group {
@@ -131,26 +124,13 @@
 .rail__label {
   flex: 1;
   font-size: var(--size-body);
-  opacity: 0;
   transition: opacity 100ms ease;
-}
-
-.rail:hover .rail__label,
-.rail:focus-within .rail__label {
-  opacity: 1;
-  transition-delay: 40ms;
 }
 
 .rail__badge {
   font-size: var(--size-secondary);
   color: var(--carry);
-  opacity: 0;
   transition: opacity 100ms ease;
-}
-
-.rail:hover .rail__badge,
-.rail:focus-within .rail__badge {
-  opacity: 1;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -158,12 +138,18 @@
 /* ------------------------------------------------------------------------ */
 
 .header {
-  flex: 0 0 var(--header-height);
+  grid-column: 2 / 4;
+  grid-row: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 0 var(--gutter);
+  /* The gap sets the distance between the title and the reporting control that
+     follows it. */
+  gap: var(--gutter);
+  /* Asymmetric by intent. The title keeps the page gutter so it lines up with
+     the content below it; the right edge is trimmed so sign out sits close to
+     the edge of the screen, over the spine column, out of the path of the
+     controls the user actually reaches for. */
+  padding: 0 12px 0 var(--gutter);
   border-bottom: 1px solid var(--divider);
 }
 
@@ -172,16 +158,33 @@
   font-size: var(--size-title);
 }
 
+/* Spans the width left of the title rather than hugging the right edge, so the
+   reporting control reads as a continuation of the title line. */
 .header__controls {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
+/* Sign out is pushed off the end of the run of controls rather than sitting in
+   it — the same reasoning as the reduced target size. `auto` rather than a
+   fixed margin, so it stays at the right edge whatever sits to its left. */
+.header__controls .btn--icon {
+  margin-left: auto;
+}
+
+/* The one control here whose cost is a lost session, so hover states it rather
+   than brightening like every other button — breach, the colour this system
+   already uses for a consequence the user did not want. */
+.header__controls .btn--icon:hover:not(:disabled) {
+  border-color: var(--breach);
+  color: var(--breach);
+}
+
 /* A control that does not apply to this screen renders inert rather than
    disappearing. */
-.seg--inert,
-.range--inert {
+.seg--inert {
   opacity: 0.4;
   pointer-events: none;
 }
@@ -212,23 +215,13 @@
   color: var(--accent-light);
 }
 
-.range {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.range__value {
-  font-size: var(--size-cell);
-  color: var(--ink-70);
-}
-
 /* ------------------------------------------------------------------------ */
 /* Ledger spine — 100px down the right edge of every screen                  */
 /* ------------------------------------------------------------------------ */
 
 .spine {
   grid-column: 3;
+  grid-row: 2;
   width: var(--spine-width);
   background: var(--ground-spine);
   border-left: 1px solid var(--divider);
@@ -238,19 +231,65 @@
   padding: 10px 0;
 }
 
+/* A button, because it selects the month. Everything below the first three
+   declarations is undoing the browser's button defaults — the row's appearance
+   is unchanged from when it was a div. */
 .spine__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
   height: 26px;
   padding: 0 12px;
+  border: 0;
   border-right: 2px solid transparent;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.spine__row:hover {
+  background: var(--row-hover);
 }
 
 .spine__row--current {
   background: var(--accent-wash);
   border-right-color: var(--accent);
+}
+
+/* The selected row is keyed by fill and accent border already; hover must not
+   wash that out. */
+.spine__row--current:hover {
+  background: var(--accent-wash);
+}
+
+/* Quieter than a month row and set apart from the run of them: it is a control
+   over the rail, not a month in it. */
+.spine__extend {
+  flex: 0 0 auto;
+  margin-top: 6px;
+  padding: 6px 12px;
+  border: 0;
+  border-top: 1px solid var(--divider);
+  background: transparent;
+  color: var(--ink-45);
+  font: inherit;
+  font-size: var(--size-col);
+  text-align: left;
+  cursor: pointer;
+}
+
+.spine__extend:hover:not(:disabled) {
+  color: var(--ink-85);
+  background: var(--row-hover);
+}
+
+.spine__extend:disabled {
+  opacity: 0.4;
+  cursor: progress;
 }
 
 .spine__month {
@@ -272,15 +311,58 @@
 @media (max-width: 1024px) {
   .shell {
     grid-template-columns: var(--rail-collapsed) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: var(--header-height) auto minmax(0, 1fr);
   }
 
-  .shell__body {
+  /* Too narrow to give 208px to navigation permanently: the rail collapses to
+     its icons and expands over the screen on hover or keyboard focus. */
+  .rail {
+    width: var(--rail-collapsed);
+  }
+
+  .rail:hover,
+  .rail:focus-within {
+    width: var(--rail-expanded);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.45);
+  }
+
+  .rail__mark--full {
+    opacity: 0;
+  }
+
+  .rail__mark--short {
+    display: block;
+  }
+
+  .rail__label,
+  .rail__badge {
+    opacity: 0;
+  }
+
+  .rail:hover .rail__mark--full,
+  .rail:focus-within .rail__mark--full,
+  .rail:hover .rail__label,
+  .rail:focus-within .rail__label {
+    opacity: 1;
+    transition-delay: 40ms;
+  }
+
+  .rail:hover .rail__badge,
+  .rail:focus-within .rail__badge {
+    opacity: 1;
+  }
+
+  .rail:hover .rail__mark--short,
+  .rail:focus-within .rail__mark--short {
+    opacity: 0;
+  }
+
+  .header {
     grid-column: 2;
-    grid-row: 2;
   }
 
   .shell__main {
+    grid-row: 3;
     padding: var(--gutter-tablet);
   }
 
@@ -290,7 +372,7 @@
      data being re-sorted for a viewport. */
   .spine {
     grid-column: 2;
-    grid-row: 1;
+    grid-row: 2;
     width: auto;
     flex-direction: row-reverse;
     justify-content: flex-start;
@@ -303,6 +385,9 @@
 
   .spine__row {
     flex: 0 0 auto;
+    /* Auto, not the 100% the vertical rail needs — in the horizontal strip a
+       full-width row would push every other month off the end. */
+    width: auto;
     gap: 6px;
     padding: 0 10px;
     height: 34px;
@@ -312,5 +397,16 @@
 
   .spine__row--current {
     border-bottom-color: var(--accent);
+  }
+
+  /* The strip runs oldest to newest left to right, so the control that extends
+     the old end belongs at the left — which row-reverse puts it at, since it is
+     last in the DOM. The divider turns with it. */
+  .spine__extend {
+    margin-top: 0;
+    margin-left: 6px;
+    border-top: 0;
+    border-left: 1px solid var(--divider);
+    white-space: nowrap;
   }
 }

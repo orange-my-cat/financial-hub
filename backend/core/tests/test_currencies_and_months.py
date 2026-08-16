@@ -19,7 +19,6 @@ from core.currencies import (
     QuoteConvention,
     definition,
     pair_label,
-    to_quoted,
     usd_per_unit,
     usd_ratio,
 )
@@ -67,12 +66,6 @@ def test_the_ratio_is_returned_undivided():
     assert usd_ratio("MYR", Decimal("4.20")) == (Decimal(1), Decimal("4.20"))
 
 
-def test_round_tripping_back_to_market_convention():
-    """Shown live as the user types, so a wrong-way entry is obvious."""
-    assert to_quoted("AUD", usd_per_unit("AUD", Decimal("0.66"))) == Decimal("0.66")
-    assert to_quoted("MYR", usd_per_unit("MYR", Decimal("4.20"))) == Decimal("4.20")
-
-
 def test_a_non_positive_rate_is_refused():
     with pytest.raises(ValueError, match="greater than zero"):
         usd_per_unit("AUD", Decimal("0"))
@@ -106,6 +99,32 @@ def test_month_start():
 
 def test_month_of_a_date():
     assert months.month_of(date(2026, 8, 15)) == "2026-08"
+
+
+# -- as-at ------------------------------------------------------------------
+
+
+def test_a_month_that_has_ended_is_valued_at_its_last_day():
+    assert months.as_at_of("2026-07", today=date(2026, 8, 16)) == date(2026, 7, 31)
+
+
+def test_the_month_in_progress_is_valued_at_today():
+    """The 31st has not happened, so nothing can be recorded as at the 31st."""
+    assert months.as_at_of("2026-08", today=date(2026, 8, 16)) == date(2026, 8, 16)
+
+
+def test_the_last_day_of_the_current_month_is_both_answers_at_once():
+    assert months.as_at_of("2026-08", today=date(2026, 8, 31)) == date(2026, 8, 31)
+
+
+def test_a_month_that_has_not_begun_keeps_its_own_month_end():
+    """Today is not inside it, so today is not its as-at date."""
+    assert months.as_at_of("2026-12", today=date(2026, 8, 16)) == date(2026, 12, 31)
+
+
+def test_as_at_refuses_something_that_is_not_a_month():
+    with pytest.raises(ValueError, match="not a reporting month"):
+        months.as_at_of("2026-8", today=date(2026, 8, 16))
 
 
 def test_shifting_across_a_year_boundary():

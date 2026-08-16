@@ -14,6 +14,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, type Advisory, type Envelope } from './api'
+import { BASE_CURRENCY, REPORTING_CURRENCIES, type ReportingCurrencyCode } from './money'
 
 export type Provenance = 'exact' | 'carried' | 'triangulated'
 
@@ -25,6 +26,11 @@ export interface CurrencyDefinition {
   readonly quote_label: string
   readonly example: string
   readonly is_base: boolean
+  /**
+   * Whether net worth may be *stated* in this unit. A balance may be held in
+   * any currency here; gold denominates one and does not report.
+   */
+  readonly can_report: boolean
   readonly pair: string
 }
 
@@ -32,6 +38,8 @@ export interface CurrencyRegistry {
   readonly base: string
   readonly currencies: readonly CurrencyDefinition[]
   readonly quoted: readonly string[]
+  /** The codes the reporting-currency toggle may offer. Served, not inferred. */
+  readonly reporting: readonly string[]
 }
 
 export interface DailyRateEntry {
@@ -86,7 +94,12 @@ export interface RateTrend {
 }
 
 export interface AppSettings {
-  readonly reporting_currency: string
+  /**
+   * What every currency selector starts at — the reporting-currency control in
+   * the header, and the currency field on each entry form. A default, not an
+   * override: an explicit choice, in the URL or in a form, always wins.
+   */
+  readonly default_currency: string
   readonly timezone: string
   readonly rate_staleness_days: number
   readonly rate_variance_percent: string
@@ -152,6 +165,27 @@ export function useSettings() {
   })
 }
 
+/**
+ * The currency every selector in the application starts at.
+ *
+ * The shell waits for settings before rendering a screen, so by the time any
+ * selector mounts this is the stored value rather than the fallback. The
+ * fallback covers exactly one case — the settings request failed — where USD is
+ * the honest answer: it is the base currency, the one figure that needs no rate
+ * to be stated.
+ *
+ * Narrowed to a reporting currency rather than trusted as served. The server
+ * refuses to store XAU here, and a code that slipped through would otherwise
+ * reach the header toggle, which has no button to show for it.
+ */
+export function useDefaultCurrency(): ReportingCurrencyCode {
+  const settings = useSettings()
+  const code = settings.data?.default_currency
+  return (REPORTING_CURRENCIES as readonly string[]).includes(code ?? '')
+    ? (code as ReportingCurrencyCode)
+    : BASE_CURRENCY
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -166,6 +200,10 @@ function useFxInvalidation() {
   const queryClient = useQueryClient()
   return () => {
     void queryClient.invalidateQueries({ queryKey: ['fx'] })
+    // And the accounts tree, which every rate reaches: net worth and the
+    // month's completeness are both derived through these rates, and neither
+    // restates itself.
+    void queryClient.invalidateQueries({ queryKey: ['accounts'] })
   }
 }
 
@@ -184,15 +222,43 @@ export function useBulkRateEntry() {
   })
 }
 
-export function useRateEntry() {
+/** What one pair's load did. Counts, not figures — the table shows the rates. */
+export interface RateLoadPair {
+  readonly currency: string
+  readonly pair: string
+  readonly fetched: number
+  readonly written: number
+  readonly replaced: number
+  /** Dates left alone because the rate there was typed by hand (BRD §4.3). */
+  readonly kept_manual: number
+  readonly first_date: string | null
+  readonly last_date: string | null
+}
+
+export interface RateLoadResult {
+  readonly provider: string
+  readonly start: string
+  readonly end: string
+  readonly dry_run: boolean
+  readonly fetched: number
+  readonly written: number
+  readonly kept_manual: number
+  readonly pairs: readonly RateLoadPair[]
+}
+
+/**
+ * Load the last 365 days of daily closes from the provider.
+ *
+ * Takes a few seconds and no arguments: the window is fixed on the server, so
+ * the browser cannot ask for a decade through a synchronous endpoint. Safe to
+ * run repeatedly — a re-fetch replaces only rows an earlier fetch wrote, and
+ * never a rate that was typed.
+ */
+export function useLoadRates() {
   const invalidate = useFxInvalidation()
 
   return useMutation({
-    mutationFn: (input: { currency: string; rate_date: string; rate: string }) =>
-      api.post<Envelope<{ currency: string; pair: string; rate: string }>>(
-        '/fx/rates/',
-        input,
-      ),
+    mutationFn: () => api.post<Envelope<RateLoadResult>>('/fx/rates/load/', {}),
     onSuccess: invalidate,
   })
 }

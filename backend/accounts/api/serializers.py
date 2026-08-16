@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from core.currencies import CURRENCY_CODES
+from core.currencies import BASE_CURRENCY, CURRENCY_CODES
 from core.months import MONTH_PATTERN
 from accounts.models import Account, AccountStatus, AccountType, LiquidityTier
 
@@ -76,15 +76,26 @@ class BalanceSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=19, decimal_places=4)
 
 
+#: What a missing `currency` falls back to. Deliberately the base currency and
+#: *not* the user's default currency setting: the client sends its resolved
+#: default explicitly, and reading a stored preference here would make the same
+#: URL answer differently after a settings change (§8.2).
+_CURRENCY_FALLBACK = BASE_CURRENCY
+
+
 class MonthQuerySerializer(serializers.Serializer):
     month = serializers.RegexField(MONTH_REGEX)
-    currency = serializers.ChoiceField(choices=CURRENCY_CODES, required=False, default="USD")
+    currency = serializers.ChoiceField(
+        choices=CURRENCY_CODES, required=False, default=_CURRENCY_FALLBACK
+    )
 
 
 class RangeQuerySerializer(serializers.Serializer):
     from_month = serializers.RegexField(MONTH_REGEX)
     to_month = serializers.RegexField(MONTH_REGEX)
-    currency = serializers.ChoiceField(choices=CURRENCY_CODES, required=False, default="USD")
+    currency = serializers.ChoiceField(
+        choices=CURRENCY_CODES, required=False, default=_CURRENCY_FALLBACK
+    )
 
     def validate(self, attrs: dict) -> dict:
         if attrs["from_month"] > attrs["to_month"]:
