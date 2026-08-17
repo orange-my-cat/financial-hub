@@ -7,18 +7,21 @@
  * be standing on. The export itself is unchanged — same endpoint, same
  * server-computed figures.
  *
- * Four settings, and the copy on three of them exists to prevent a
- * misunderstanding rather than to decorate:
+ * Three settings, and the copy on each exists to prevent a misunderstanding
+ * rather than to decorate:
  *
  *   default currency    what every currency selector starts at — the header's
  *                       reporting control and each entry form. A display choice
  *                       and a starting point only: an explicit choice wins,
  *                       stored balances are always USD, and nothing is
  *                       rewritten (BR-10)
- *   timezone            one, fixed, used only to decide what "today" means when
- *                       defaulting a date field (§9.4)
  *   staleness           7 days by default, changeable without a deploy (OI-13)
  *   variance            10% by default; advises, never blocks
+ *
+ * The timezone is deliberately absent. It is one fixed value that decides what
+ * "today" means when a date field defaults (§9.4) and nothing about it is
+ * settable, so a panel stating it only invited the question of how to change it.
+ * It is still served on the settings payload for anything that needs it.
  *
  * Backup status is a **readout only**. Backups are taken by the container
  * entrypoint, outside the application — there is nothing to run and nothing to
@@ -116,11 +119,6 @@ export function Settings() {
 
   return (
     <div className="settings">
-      <p className="screen__subhead">
-        Neither view control applies to this screen. Export below carries the range and
-        reporting currency held in the URL, and states them before you download.
-      </p>
-
       <ErrorBanner error={update.error} />
 
       <section className="panel">
@@ -204,16 +202,6 @@ export function Settings() {
             misplaced decimal looks identical and nothing else would catch it.
           </span>
         </div>
-      </section>
-
-      <section className="panel">
-        <h2 className="panel__heading">Timezone</h2>
-        <p className="fx__note">
-          <span className="mono">{current.timezone}</span> — fixed. Used for exactly one
-          thing: deciding what “today” means when a date field defaults. It never adjusts a
-          stored date, and changing it would restate nothing. All financial dates are plain
-          calendar dates with no time component.
-        </p>
       </section>
 
       {/* Export and backup sit together because they answer the same question
