@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    The collapsed rail mark, at 32px: "FH" in the mark face, accent on the rail
+    ground, at the rail's own corner radius (Rail.tsx, tokens.css).
+
+    A favicon renders in isolation, with no stylesheet and no webfont, so the
+    letters fall to the mark face's documented serif fallback rather than
+    Instrument Serif itself, and the six colours are inlined as literals. Both
+    are the compromise the font stack already makes, not a new one. Self hosting
+    the four families would let this reference the real face; that follow up is
+    noted in the README.
+
+    Note for editors: no double hyphen may appear anywhere in this comment. XML
+    forbids it, and the whole file then fails to parse rather than degrading.
+  -->
+  <rect width="32" height="32" rx="6" fill="#12141f" />
+  <text
+    x="16"
+    y="22.3"
+    fill="#9184d9"
+    font-family="Instrument Serif, Georgia, Times New Roman, serif"
+    font-size="18"
+    text-anchor="middle"
+  >FH</text>
+</svg>
