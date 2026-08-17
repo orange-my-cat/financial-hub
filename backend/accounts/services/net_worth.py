@@ -308,7 +308,16 @@ class NetWorthService:
             )
         return histories
 
-    def completeness_for(self, month: str) -> MonthCompleteness:
+    def completeness_for(
+        self, month: str, *, today: date | None = None
+    ) -> MonthCompleteness:
+        """The state of one month.
+
+        `today` is what "now" means when deciding the month's as-at date, and
+        exists so a caller reasoning about a month other than the real current one
+        can be tested deterministically. It changes nothing for a month that has
+        ended, which has one as-at date whatever day it is read on.
+        """
         histories = self.account_histories()
 
         recorded_balances = set(
@@ -328,7 +337,7 @@ class NetWorthService:
         from fx.models import ExchangeRate
 
         recorded_rates = set(
-            ExchangeRate.objects.filter(rate_date=as_at_of(month)).values_list(
+            ExchangeRate.objects.filter(rate_date=as_at_of(month, today=today)).values_list(
                 "currency", flat=True
             )
         )

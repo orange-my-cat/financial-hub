@@ -747,7 +747,8 @@
    between one figure and the next. The two panels are the same object repeated
    four times, and anything that made them differ would read as a distinction
    the data does not contain. */
-.cashsum {
+.cashsum,
+.holdings {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
@@ -755,21 +756,52 @@
   margin-bottom: 12px;
 }
 
-.cashsum__figure {
+.cashsum__figure,
+.holdings__figure {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.cashsum__value {
+.cashsum__value,
+.holdings__value {
   font-size: var(--size-hero);
   line-height: 1.1;
   margin: 6px 0 8px;
 }
 
+/* What a holdings figure rests on, under the figure. Sized as a movement line is
+   on the two panels above, because it occupies the same place and answers the
+   same question — "how should I read the number above this". */
+.holdings__note {
+  font-size: var(--size-secondary);
+  line-height: 1.35;
+}
+
 .cashsum__change {
   font-size: var(--size-cell);
   color: var(--ink-70);
+}
+
+/* The only plot on this screen with two series, so the only one that needs a key.
+   Two lines on one scale is legitimate here and is not on the cash flow panel:
+   both series are money in one currency, and the distance between them is itself
+   the figure being read.
+
+   Above the plot rather than inside it — Recharts' own legend eats plot height
+   and reserves it whether or not the series are drawn. */
+.chartkey {
+  display: flex;
+  gap: 16px;
+  font-size: var(--size-secondary);
+  padding-left: var(--panel-pad);
+  margin-bottom: 4px;
+}
+
+.chartkey__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* Two stacked plots reading as one figure, sharing the month axis printed

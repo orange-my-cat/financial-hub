@@ -95,6 +95,20 @@ class MonthCompleteness:
     def is_complete(self) -> bool:
         return self.state is CompletenessState.COMPLETE
 
+    @property
+    def all_balances_recorded(self) -> bool:
+        """Every balance this month required is in — whatever its rates did.
+
+        A fact, not a fifth state: the four states above stay the vocabulary. It
+        exists because "the user has finished entering balances" and "the month is
+        Complete" are different questions, and for the month in progress they have
+        different answers — a month's rates are required *on its as-at date*, which
+        while the month runs is today and therefore moves daily (ADR-08). A month
+        whose balances are all in can never catch up with that unless a rate
+        happens to be entered on the very day the question is asked.
+        """
+        return self.balances_expected > 0 and self.balances_recorded == self.balances_expected
+
     def as_dict(self) -> dict:
         return {
             "month": self.month,

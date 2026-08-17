@@ -20,6 +20,18 @@ export const ACCENT = '#9184d9'
 export const RISE = '#6fae90'
 export const BREACH = '#d1756a'
 
+/**
+ * A reference series — a baseline the eye measures another line against.
+ *
+ * Deliberately not Rise or Breach: those two carry a judgement, and a cost basis
+ * is neither good nor bad news. Ink at 45%, so the line it is there to be
+ * compared with stays the one that reads first.
+ */
+export const REFERENCE = 'rgba(233,233,237,.45)'
+
+/** The dash pattern for a reference series. Dashed reads as "given", not "measured". */
+export const DASH = '4 3'
+
 export const AXIS_WIDTH = 72
 export const CHART_HEIGHT = 208
 export const CHART_MARGIN = { top: 8, right: 8, bottom: 4, left: 8 } as const

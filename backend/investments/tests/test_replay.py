@@ -502,3 +502,116 @@ def test_an_empty_holding_replays_to_nothing():
     assert result.total_quantity == Decimal("0")
     assert result.realised_gain == Decimal("0")
     assert result.is_consistent
+
+
+# ---------------------------------------------------------------------------
+# The last price transacted at, and the estimate resting on it
+# ---------------------------------------------------------------------------
+# A departure from the BRD, made at the Product Owner's instruction: the system
+# has no market prices, so the dashboard estimates a value from the last price the
+# user typed. These tests exist because that estimate has exactly one arithmetic
+# trap in it, and it is the split.
+
+
+def test_the_hand_worked_estimate():
+    """The scenario above, valued at the price it last traded at.
+
+    80 units remain and cost 972.00; the August sale went through at 14.00, so
+    80 x 14.00 = 1,120.00 and the estimated gain is 148.00. The sale is a price
+    observation like any other — it is what the market paid that day.
+    """
+    result = replay(SCENARIO)
+
+    assert result.last_price.unit_price == Decimal("14.00")
+    assert result.last_price.on_date == date(2026, 8, 18)
+    assert result.estimated_value == Decimal("1120.00")
+    assert result.estimated_gain == Decimal("148.00")
+
+
+def test_a_split_after_the_last_price_does_not_invent_a_gain():
+    """The trap. A 2:1 split doubles the units and halves the price per unit.
+
+    Without rescaling the observation, 200 units at the pre-split 20.00 would
+    estimate 4,000 against a cost basis of 2,000 — a 100% gain manufactured out of
+    a corporate action that changed nothing. The holding is worth what it was.
+    """
+    result = replay(
+        [buy(1, date(2026, 1, 10), "100", "20.00"), split(2, date(2026, 2, 1), "2")]
+    )
+
+    assert result.total_quantity == Decimal("200")
+    assert result.last_price.unit_price == Decimal("10")
+    assert result.last_price.split_adjusted is True
+    assert result.estimated_value == Decimal("2000")
+    assert result.estimated_gain == Decimal("0")
+
+
+def test_a_consolidation_rescales_the_other_way():
+    """A 1:10 consolidation: a tenth of the units at ten times the price."""
+    result = replay(
+        [buy(1, date(2026, 1, 10), "1000", "2.00"), split(2, date(2026, 2, 1), "0.1")]
+    )
+
+    assert result.total_quantity == Decimal("100.0")
+    assert result.last_price.unit_price == Decimal("20")
+    assert result.estimated_value == Decimal("2000.0")
+
+
+def test_a_price_recorded_after_a_split_is_taken_as_it_stands():
+    """Only an observation *older* than the split needs rescaling."""
+    result = replay(
+        [
+            buy(1, date(2026, 1, 10), "100", "20.00"),
+            split(2, date(2026, 2, 1), "2"),
+            buy(3, date(2026, 3, 1), "50", "12.00"),
+        ]
+    )
+
+    assert result.last_price.unit_price == Decimal("12.00")
+    assert result.last_price.split_adjusted is False
+    # 250 units at 12.00, against 2,000 + 600 spent.
+    assert result.estimated_value == Decimal("3000.00")
+    assert result.estimated_gain == Decimal("400.00")
+
+
+def test_a_holding_sold_out_has_no_estimate_rather_than_one_of_zero():
+    """Nothing held is not a value of nothing — there is nothing to value.
+
+    Its realised gain is a fact and stays; the estimate has no subject.
+    """
+    result = replay(
+        [buy(1, date(2026, 1, 10), "100", "10.00"), sell(2, date(2026, 6, 1), "100", "15.00")]
+    )
+
+    assert result.total_quantity == Decimal("0")
+    assert result.estimated_value is None
+    assert result.estimated_gain is None
+    assert result.realised_gain == Decimal("500.00")
+
+
+def test_a_holding_with_no_priced_transaction_has_no_estimate():
+    """A zero-price acquisition is not a price observation. Absent, not zero."""
+    result = replay([buy(1, date(2026, 1, 10), "100", "0")])
+
+    assert result.total_quantity == Decimal("100")
+    assert result.last_price is None
+    assert result.estimated_value is None
+    assert result.estimated_gain is None
+
+
+def test_a_distribution_is_not_a_price_observation():
+    """Cash against a holding says nothing about what a unit is worth."""
+    result = replay(
+        [
+            buy(1, date(2026, 1, 10), "100", "10.00"),
+            ReplayTransaction(
+                id=2,
+                action=Action.DISTRIBUTION,
+                on_date=date(2026, 7, 1),
+                cash_amount=Decimal("42.00"),
+            ),
+        ]
+    )
+
+    assert result.last_price.on_date == date(2026, 1, 10)
+    assert result.estimated_value == Decimal("1000.00")

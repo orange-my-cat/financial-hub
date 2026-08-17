@@ -31,7 +31,8 @@ export interface Destination {
 }
 
 export const DESTINATIONS: readonly Destination[] = [
-  // Fixed to the current month; the date range does not apply.
+  // Fixed to the last closed month, which the screen names in its subhead; the
+  // date range does not apply.
   { path: '/', label: 'Dashboard', icon: 'dashboard', obeysCurrency: true, obeysRange: false, showsSpine: false },
   { path: '/net-worth', label: 'Net Worth', icon: 'netWorth', obeysCurrency: true, obeysRange: true, showsSpine: false },
   // The register and the account detail beneath it are in each account's own

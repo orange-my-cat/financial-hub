@@ -15,7 +15,10 @@ import pytest
 from accounts.models import Account, AccountType, LiquidityTier
 from core.services.exceptions import BusinessRuleError
 from investments.models import Holding, InvestmentTransaction
+from fx.models import ExchangeRate
 from investments.services.positions import (
+    held_summary,
+    held_trend,
     net_of_tax,
     realised_gains_by_currency,
     record,
@@ -298,3 +301,165 @@ def test_a_deleted_transaction_leaves_the_replay(signed_in, holding):
 
     assert replay_holding(holding).total_quantity == Decimal("0")
     assert InvestmentTransaction.all_objects.count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Currently held, estimated and combined — the departure, tested
+# ---------------------------------------------------------------------------
+# Market prices and unrealised gain are excluded by the BRD, and combining across
+# currencies by BR-18. The dashboard's holdings panel does all three at the
+# Product Owner's explicit instruction, so what is asserted here is that each
+# departure is made honestly: the estimate is dated, an absent price is named
+# rather than counted as zero, and a currency with no rate is excluded rather
+# than dropped silently.
+
+
+@pytest.fixture
+def two_currency_portfolio(brokerage, holding):
+    """USD 150 units at 10.00 with 50 sold at 12.00; AUD 200 units at 5.00.
+
+    The AUD holding is never re-priced, so its estimate equals its cost basis —
+    which is the honest answer, and the reason the panel dates its figures.
+    """
+    aud_account = Account.objects.create(
+        name="Aussie Brokerage", account_type=AccountType.INVESTMENT,
+        liquidity_tier=LiquidityTier.LONG, currency="AUD", opened_month="2026-01",
+    )
+    aussie = Holding.objects.create(
+        name="Bunnings Ltd", symbol="BUN", currency="AUD", account=aud_account
+    )
+
+    record(holding, action="Buy", on_date=date(2026, 1, 10), quantity=Decimal("150"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 3, 10), quantity=Decimal("50"), unit_price=Decimal("12"))
+    record(aussie, action="Buy", on_date=date(2026, 2, 5), quantity=Decimal("200"), unit_price=Decimal("5"))
+
+    ExchangeRate.objects.create(currency="AUD", rate_date=date(2026, 1, 1), rate=Decimal("0.65"))
+    return {"usd": holding, "aud": aussie}
+
+
+def test_the_three_figures_combine_across_currencies_through_the_one_service(
+    two_currency_portfolio,
+):
+    """100 USD units cost 1,000 and mark at 12.00 = 1,200.
+    200 AUD units cost 1,000 = USD 650, and mark at the same 5.00 they cost.
+
+    Cost basis 1,650. Estimated value 1,850. Estimated gain 200 — the USD holding's
+    2.00 a unit on 100 units, and nothing invented for the AUD one.
+    """
+    summary = held_summary("USD")
+
+    assert summary.holdings == 2
+    assert summary.cost_basis.api() == {"amount": "1650.00", "currency": "USD"}
+    assert summary.estimated_value.api() == {"amount": "1850.00", "currency": "USD"}
+    assert summary.estimated_gain.api() == {"amount": "200.00", "currency": "USD"}
+    # The estimate is only as fresh as its oldest price, and says so.
+    assert summary.priced_from == date(2026, 2, 5)
+    assert summary.unpriced == ()
+
+
+def test_a_holding_sold_out_is_not_currently_held(two_currency_portfolio):
+    """Its realised gain stands; it has nothing left to value."""
+    record(
+        two_currency_portfolio["usd"], action="Sell", on_date=date(2026, 4, 1),
+        quantity=Decimal("100"), unit_price=Decimal("12"),
+    )
+
+    summary = held_summary("USD")
+
+    assert summary.holdings == 1
+    assert summary.cost_basis.api() == {"amount": "650.00", "currency": "USD"}
+
+
+def test_a_currency_with_no_rate_is_excluded_and_named_never_zeroed(two_currency_portfolio):
+    """FR-46 survives the departure: the AUD holding leaves the total and says so."""
+    ExchangeRate.objects.all().delete()
+
+    summary = held_summary("USD")
+
+    assert summary.holdings == 1
+    assert summary.cost_basis.api() == {"amount": "1000.00", "currency": "USD"}
+    assert [row["holding"] for row in summary.exclusions] == ["Bunnings Ltd"]
+    assert "AUD" in summary.exclusions[0]["reason"]
+
+
+def test_a_held_holding_with_no_price_is_named_rather_than_valued_at_zero(
+    two_currency_portfolio,
+):
+    """And the gain is measured against the priced subset, so the two figures
+    shown beside each other always reconcile."""
+    gift = Holding.objects.create(
+        name="Inherited Shares", currency="USD", account=two_currency_portfolio["usd"].account
+    )
+    record(gift, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("10"), unit_price=Decimal("0"))
+
+    summary = held_summary("USD")
+
+    assert summary.unpriced == ("Inherited Shares",)
+    assert summary.holdings == 3
+    # Unchanged by a holding that contributes nothing to either figure.
+    assert summary.estimated_value.api() == {"amount": "1850.00", "currency": "USD"}
+    assert summary.estimated_gain.amount == (
+        summary.estimated_value.amount - summary.priced_cost_basis.amount
+    )
+
+
+def test_an_empty_system_states_zero_rather_than_nothing(db):
+    summary = held_summary("USD")
+
+    assert summary.holdings == 0
+    assert summary.cost_basis.api() == {"amount": "0.00", "currency": "USD"}
+    assert summary.estimated_value is None
+    assert summary.estimated_gain is None
+
+
+# ---------------------------------------------------------------------------
+# The trend — each point the position as at that month, sells included
+# ---------------------------------------------------------------------------
+
+
+def test_the_trend_is_the_position_as_at_each_month_not_today_plotted_backwards(
+    two_currency_portfolio,
+):
+    """The USD holding: 150 units bought in January, 50 sold in March.
+
+    January and February therefore hold 150 units at 10.00 — the sale has not
+    happened yet — and March onward holds 100. A trend built from today's position
+    would show 100 units in January and misstate every month before the sale.
+    """
+    rows = {
+        row["month"]: row
+        for row in held_trend(["2026-01", "2026-02", "2026-03"], "USD")
+    }
+
+    # January: 150 x 10.00 cost, valued at the same 10.00 — no other price yet.
+    assert rows["2026-01"]["cost_basis"] == "1500.00"
+    assert rows["2026-01"]["estimated_value"] == "1500.00"
+    # February adds the AUD holding: 1,000 AUD at 0.65 = 650.
+    assert rows["2026-02"]["cost_basis"] == "2150.00"
+    # March: 50 units gone at cost, and the remaining 100 now marked at 12.00.
+    assert rows["2026-03"]["cost_basis"] == "1650.00"
+    assert rows["2026-03"]["estimated_value"] == "1850.00"
+
+
+def test_a_month_before_anything_was_held_is_zero_not_absent(two_currency_portfolio):
+    """Derived from transactions rather than entered, so nothing held is nothing
+    held — unlike a net worth month with no balances recorded."""
+    rows = held_trend(["2025-12"], "USD")
+
+    assert rows == [{"month": "2025-12", "cost_basis": "0.00", "estimated_value": "0.00"}]
+
+
+def test_a_month_after_everything_was_sold_returns_to_zero(two_currency_portfolio):
+    record(
+        two_currency_portfolio["usd"], action="Sell", on_date=date(2026, 4, 1),
+        quantity=Decimal("100"), unit_price=Decimal("12"),
+    )
+    record(
+        two_currency_portfolio["aud"], action="Sell", on_date=date(2026, 4, 2),
+        quantity=Decimal("200"), unit_price=Decimal("5"),
+    )
+
+    rows = {row["month"]: row for row in held_trend(["2026-03", "2026-04"], "USD")}
+
+    assert rows["2026-03"]["cost_basis"] == "1650.00"
+    assert rows["2026-04"]["cost_basis"] == "0.00"

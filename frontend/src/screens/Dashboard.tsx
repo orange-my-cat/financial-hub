@@ -6,6 +6,13 @@
  * thing, in one order, and offers nothing to configure: no widgets, no drag and
  * drop, no personalisation.
  *
+ * **It reports the last closed month, not the present.** Balances are entered
+ * when a month ends, so a dashboard fixed to the month in progress would be empty
+ * for all but the last day of it. Which month that is is decided server-side by
+ * one service (`core.services.reporting_month`) and named in the subhead — the
+ * screen states its period rather than letting a month-old total pass for today's.
+ * The outstanding tasks panel is the exception, and stays anchored to now.
+ *
  * Panel order is fixed:
  *
  *   1. **Outstanding tasks** — the only bordered panel on the screen, because
@@ -14,8 +21,18 @@
  *   2. Net worth and its 24-month trend
  *   3. Cash flow for the month in the reporting currency — income, expenses,
  *      net and savings rate
- *   4. Investments by currency, never combined
+ *   4. Holdings — cost basis, estimated value and estimated gain, with the two
+ *      plotted over the same months
  *   5. Backup status
+ *
+ * The holdings panel is a **deliberate departure** from the BRD and the HLD, made
+ * at the Product Owner's instruction. This system has no market prices, so it has
+ * no unrealised gain; the panel estimates one anyway from the last price each
+ * holding was transacted at, and combines across currencies, which BR-18 forbids.
+ * Both departures are made in the open: every figure says `estimated`, the oldest
+ * price the estimate rests on is printed under it, an unpriced or untranslatable
+ * holding is named rather than valued at zero, and the Investments screen's own
+ * prohibitions are untouched.
  *
  * Two things appear only when they need to. When every contributing rate is
  * fresh there is no as-at strip and no disclosure control; when nothing is
@@ -50,12 +67,14 @@ import {
   BREACH,
   CHART_HEIGHT,
   CHART_MARGIN,
+  DASH,
   GRID,
   MIN_TICK_GAP,
+  REFERENCE,
   RISE,
   compactTick,
 } from '@/lib/charts'
-import { useDashboard, type FigureChange } from '@/lib/dashboard'
+import { useDashboard, type DashboardPayload, type FigureChange } from '@/lib/dashboard'
 import { formatDate, formatDecimal, formatMonth, formatMonthShort } from '@/lib/format'
 import { useViewState } from '@/lib/viewState'
 
@@ -110,9 +129,9 @@ function Change({
   )
 }
 
-/** Which of the three plots the pointer is over, and on which month. */
+/** Which of the four plots the pointer is over, and on which month. */
 interface Hover {
-  readonly plot: 'worth' | 'flow' | 'rate'
+  readonly plot: 'worth' | 'flow' | 'rate' | 'holdings'
   readonly month: string
 }
 
@@ -124,6 +143,8 @@ interface MonthFigures {
   readonly expense: string
   readonly net: string
   readonly savings_rate: string | null
+  readonly cost_basis: string | null
+  readonly estimated_value: string | null
 }
 
 /**
@@ -146,12 +167,15 @@ function MonthTooltip({
   currency,
   show,
   figures,
+  holdings = false,
 }: {
   readonly active?: boolean
   readonly label?: string | number
   readonly currency: string
   readonly show: boolean
   readonly figures: Readonly<Record<string, MonthFigures>>
+  /** Whether anything is held at all. Two rows of zeros are not worth the space. */
+  readonly holdings?: boolean
 }) {
   const month = active && show && typeof label === 'string' ? label : undefined
   const row = month ? figures[month] : undefined
@@ -186,14 +210,80 @@ function MonthTooltip({
           {/* No income is no denominator, in the tooltip as on the figure. */}
           {row.savings_rate === null ? '—' : `${row.savings_rate}%`}
         </dd>
+        {holdings && (
+          <>
+            <dt>Cost Basis</dt>
+            <dd className="mono">
+              {row.cost_basis === null
+                ? '—'
+                : `${formatDecimal(row.cost_basis)} ${currency}`}
+            </dd>
+            <dt>Estimated Value</dt>
+            <dd className="mono">
+              {/* Held, but with no price to value it at — not a value of zero. */}
+              {row.estimated_value === null
+                ? '—'
+                : `${formatDecimal(row.estimated_value)} ${currency}`}
+            </dd>
+          </>
+        )}
       </dl>
     </div>
   )
 }
 
+/**
+ * Which month the figures are for, in words, above everything else.
+ *
+ * The dashboard does not report the present, and a screen showing last month's
+ * net worth without saying so is a screen that will be misread once — which is
+ * once too often for a net worth figure. The month is named, and so is the reason
+ * it is that month.
+ */
+function Period({ reporting }: { readonly reporting: DashboardPayload['reporting_month'] }) {
+  const month = formatMonth(reporting.month)
+  const current = formatMonth(reporting.current_month)
+
+  if (reporting.basis === 'closed') {
+    return (
+      <p className="screen__subhead">
+        Figures for <strong>{month}</strong> — the last month with balances recorded.
+        Balances are stated as at a month’s last day, so {current} appears here once it
+        has been closed.
+      </p>
+    )
+  }
+
+  if (reporting.basis === 'current') {
+    return (
+      <p className="screen__subhead">
+        Figures for <strong>{month}</strong> — the month in progress, closed early:
+        every balance it requires is recorded.
+      </p>
+    )
+  }
+
+  if (reporting.basis === 'empty') {
+    return (
+      <p className="screen__subhead">
+        Figures for <strong>{month}</strong>. Nothing has been recorded yet — the
+        dashboard reports the last closed month as soon as there is one.
+      </p>
+    )
+  }
+
+  // Asked for explicitly in the URL, which is the one case where the month is
+  // the caller's choice rather than this screen's rule.
+  return (
+    <p className="screen__subhead">
+      Figures for <strong>{month}</strong>, as named in this link.
+    </p>
+  )
+}
+
 export function Dashboard() {
-  const { currency, to } = useViewState()
-  const dashboard = useDashboard(to, currency)
+  const { currency } = useViewState()
+  const dashboard = useDashboard(currency)
   const [hover, setHover] = useState<Hover | null>(null)
 
   /** One handler shape for all three plots — `activeLabel` is the month. */
@@ -230,16 +320,32 @@ export function Dashboard() {
   const hasHistory = chart.some((point) => point.total !== null)
 
   /*
+    Holdings: what was paid against what it is estimated to be worth, per month.
+    A month with nothing held plots zero for both — that is what owning nothing
+    looks like — but an *unpriced* month breaks the value line instead, because
+    "no price on record" is not "worth nothing".
+  */
+  const held = data.investments
+  const holdingsChart = data.investments_trend.map((point) => ({
+    month: point.month,
+    cost: Number(point.cost_basis),
+    value: point.estimated_value === null ? null : Number(point.estimated_value),
+  }))
+  const hasHoldings = holdingsChart.some((point) => point.cost !== 0 || point.value)
+
+  /*
     The two trends, merged by month for the shared tooltip. Keyed by month
     rather than zipped by index: the server sends one window to both, and a
     lookup that would produce nothing if that ever stopped being true is
     better than one that would quietly pair the wrong figures.
   */
   const flowByMonth = new Map(data.cashflow_trend.map((row) => [row.month, row]))
+  const heldByMonth = new Map(data.investments_trend.map((row) => [row.month, row]))
   const figures: Record<string, MonthFigures> = {}
   for (const worth of data.trend) {
     const cash = flowByMonth.get(worth.month)
     if (!cash) continue
+    const holding = heldByMonth.get(worth.month)
     figures[worth.month] = {
       worth: worth.total,
       completeness: worth.completeness,
@@ -247,11 +353,17 @@ export function Dashboard() {
       expense: cash.expense,
       net: cash.net,
       savings_rate: cash.savings_rate,
+      cost_basis: holding?.cost_basis ?? null,
+      estimated_value: holding?.estimated_value ?? null,
     }
   }
 
   return (
     <div className="dash">
+      {/* The period every figure below is for. First, because it qualifies all
+          of them. */}
+      <Period reporting={data.reporting_month} />
+
       {/*
         1 — Outstanding tasks, first on the screen and the only bordered panel
         on it, because this panel is the product's conscience. Everything else
@@ -315,7 +427,7 @@ export function Dashboard() {
             </>
           ) : (
             <div className="networth__none">
-              No balances recorded for {data.month} yet.
+              No balances recorded for {formatMonth(data.month)} yet.
             </div>
           )}
 
@@ -385,6 +497,7 @@ export function Dashboard() {
                       currency={currency}
                       show={hover?.plot === 'worth'}
                       figures={figures}
+                      holdings={hasHoldings}
                     />
                   }
                 />
@@ -547,6 +660,7 @@ export function Dashboard() {
                             currency={currency}
                             show={hover?.plot === 'flow'}
                             figures={figures}
+                            holdings={hasHoldings}
                           />
                         }
                       />
@@ -604,6 +718,7 @@ export function Dashboard() {
                             currency={currency}
                             show={hover?.plot === 'rate'}
                             figures={figures}
+                            holdings={hasHoldings}
                           />
                         }
                       />
@@ -627,36 +742,234 @@ export function Dashboard() {
         )}
       </section>
 
-      {/* 4 — Investments. Never combined across currencies. */}
-      <section className="panel">
-        <h2 className="panel__heading">Investments</h2>
-        <p className="fx__note">
-          In each holding’s own currency, never combined. Realised gains only — no
-          unrealised gain exists in this system.
-        </p>
-        {data.investments.length === 0 ? (
-          <p className="fx__note">No holdings.</p>
+      {/*
+        4 — Holdings. What is held now: what it cost, what it is worth on the last
+        price it traded at, and the difference.
+
+        Laid out like the two panels above and on the same grid, so the fourth plot
+        sits on the same x axis as the other three.
+      */}
+      <section className="panel dash__networth">
+        {held.holdings === 0 ? (
+          <>
+            <div className="dash__figure">
+              {/* Nothing held and everything excluded are different facts, and
+                  a panel that reported the second as the first would be hiding
+                  holdings behind a missing rate (FR-46). */}
+              {held.exclusions.length > 0 ? (
+                <p className="exclusion-notice">
+                  Every holding is excluded —{' '}
+                  {held.exclusions.map((row) => row.reason).join('; ')}. Nothing is
+                  counted as zero.
+                </p>
+              ) : (
+                <p className="fx__note">Nothing currently held.</p>
+              )}
+            </div>
+            <div />
+          </>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Currency</th>
-                <th className="numeric">Holdings</th>
-                <th className="numeric">Cost basis</th>
-                <th className="numeric">Realised gain this year</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.investments.map((block) => (
-                <tr key={block.currency}>
-                  <td className="mono">{block.currency}</td>
-                  <td className="numeric secondary">{block.holdings}</td>
-                  <td className="numeric">{formatDecimal(block.cost_basis)}</td>
-                  <td className="numeric">{formatDecimal(block.realised_gain_this_year)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            <div className="dash__figure">
+              <div className="holdings">
+                <div className="holdings__figure">
+                  <span className="label">Cost basis</span>
+                  <div className="holdings__value mono">
+                    <Amount
+                      value={held.cost_basis.amount}
+                      currency={held.cost_basis.currency}
+                    />
+                  </div>
+                  <div className="holdings__note secondary">
+                    {held.holdings} holding{held.holdings === 1 ? '' : 's'} held
+                  </div>
+                </div>
+
+                <div className="holdings__figure">
+                  <span className="label">Estimated value</span>
+                  <div className="holdings__value mono">
+                    {held.estimated_value ? (
+                      <Amount
+                        value={held.estimated_value.amount}
+                        currency={held.estimated_value.currency}
+                      />
+                    ) : (
+                      /* No price on record is not a value of nothing. */
+                      <span className="secondary">—</span>
+                    )}
+                  </div>
+                  {/* The whole basis of the figure above, in one line. An estimate
+                      resting on a price from years ago is not a current value, and
+                      this is the only place that can say so. */}
+                  {held.priced_from && (
+                    <div className="holdings__note secondary">
+                      At each holding’s last traded price, oldest{' '}
+                      {formatDate(held.priced_from)}
+                    </div>
+                  )}
+                </div>
+
+                <div className="holdings__figure">
+                  <span className="label">Estimated gain</span>
+                  <div
+                    className={`holdings__value mono ${
+                      held.estimated_gain?.amount.startsWith('-')
+                        ? 'money--breach'
+                        : 'money--rise'
+                    }`}
+                  >
+                    {held.estimated_gain ? (
+                      <Amount
+                        value={held.estimated_gain.amount}
+                        currency={held.estimated_gain.currency}
+                      />
+                    ) : (
+                      <span className="secondary">—</span>
+                    )}
+                  </div>
+                  <div className="holdings__note secondary">
+                    Estimated, not realised. Nothing here has been sold.
+                  </div>
+                </div>
+              </div>
+
+              {/* Only when a contributing rate is stale — as on the two panels
+                  above, and the same disclosure. */}
+              {held.any_stale && held.as_at && (
+                <details className="asat">
+                  <summary className="asat__summary">
+                    Rates as at {formatDate(held.as_at)}
+                  </summary>
+                  <table className="table asat__detail">
+                    <tbody>
+                      {held.rate_provenance.map((row) => (
+                        <tr key={row.pair}>
+                          <td className="mono">{row.pair}</td>
+                          <td className="secondary">{formatDate(row.as_at)}</td>
+                          <td className="secondary">{row.provenance}</td>
+                          <td>{row.stale ? <span className="carry">stale</span> : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              )}
+
+              {/* Held, but with no price ever recorded. Named rather than valued
+                  at zero, which would show the whole of its cost as a loss. */}
+              {held.unpriced.length > 0 && (
+                <p className="exclusion-notice">
+                  The estimate omits {held.unpriced.join(', ')} — no price on record.
+                  Measured against {held.priced_cost_basis
+                    ? formatDecimal(held.priced_cost_basis.amount)
+                    : '0.00'}{' '}
+                  of the cost basis above.
+                </p>
+              )}
+
+              {/* A holding whose currency has no rate leaves all three figures
+                  rather than being counted as zero (FR-46). */}
+              {held.exclusions.length > 0 && (
+                <p className="exclusion-notice">
+                  Excludes {held.exclusions.map((row) => row.holding).join(', ')} —{' '}
+                  {held.exclusions.map((row) => row.reason).join('; ')}
+                </p>
+              )}
+            </div>
+
+            <div className="dash__chart">
+              {hasHoldings && (
+                <>
+                  {/* Two series on one scale, which is legitimate here and is not
+                      on the cash flow panel: both are money, in one currency, and
+                      the distance between them *is* the figure being read. */}
+                  <div className="chartkey secondary">
+                    <span className="chartkey__item">
+                      <svg width="22" height="8" aria-hidden="true">
+                        <line
+                          x1="0"
+                          y1="4"
+                          x2="22"
+                          y2="4"
+                          stroke={REFERENCE}
+                          strokeWidth="2"
+                          strokeDasharray={DASH}
+                        />
+                      </svg>
+                      Cost basis
+                    </span>
+                    <span className="chartkey__item">
+                      <svg width="22" height="8" aria-hidden="true">
+                        <line x1="0" y1="4" x2="22" y2="4" stroke={ACCENT} strokeWidth="2" />
+                      </svg>
+                      Estimated value
+                    </span>
+                  </div>
+
+                  <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+                    <LineChart
+                      data={holdingsChart}
+                      margin={CHART_MARGIN}
+                      onMouseMove={track('holdings')}
+                      onMouseLeave={() => setHover(null)}
+                    >
+                      <CartesianGrid stroke={GRID} vertical={false} />
+                      <MonthBand month={hover?.month} />
+                      <XAxis
+                        dataKey="month"
+                        scale="band"
+                        tick={AXIS_TICK}
+                        tickLine={false}
+                        axisLine={AXIS_LINE}
+                        tickFormatter={formatMonthShort}
+                        interval="preserveStartEnd"
+                        minTickGap={MIN_TICK_GAP}
+                      />
+                      <YAxis
+                        tick={AXIS_TICK}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={compactTick}
+                        width={AXIS_WIDTH}
+                      />
+                      <Tooltip
+                        cursor={false}
+                        content={
+                          <MonthTooltip
+                            currency={currency}
+                            show={hover?.plot === 'holdings'}
+                            figures={figures}
+                            holdings={hasHoldings}
+                          />
+                        }
+                      />
+                      {/* Dashed and beneath: what was paid is the baseline the
+                          solid line is read against. */}
+                      <Line
+                        type="linear"
+                        dataKey="cost"
+                        stroke={REFERENCE}
+                        strokeWidth={2}
+                        strokeDasharray={DASH}
+                        dot={false}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                      />
+                      <Line
+                        type="linear"
+                        dataKey="value"
+                        stroke={ACCENT}
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </>
+              )}
+            </div>
+          </>
         )}
       </section>
 

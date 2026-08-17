@@ -9,7 +9,6 @@ in one order and does not invite fiddling.
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
 
 from django.http import HttpResponse
 from rest_framework.response import Response
@@ -29,10 +28,9 @@ from core.services.export import (
     net_worth_trend_csv,
 )
 from core.services.movement import movement
+from core.services.reporting_month import MonthBasis, ReportingMonth, latest_closed_month
 from core.services.tasks import outstanding_tasks, task_counts
-from investments.services.positions import positions
-
-CENTS = Decimal("0.01")
+from investments.services.positions import held_summary, held_trend
 
 
 class DashboardView(APIView):
@@ -41,11 +39,24 @@ class DashboardView(APIView):
         # client sends its resolved default explicitly, so a URL keeps fully
         # determining its response (§8.2).
         currency = request.query_params.get("currency", BASE_CURRENCY)
-        # Fixed to the current month. The date range does not apply here.
-        month = request.query_params.get("month") or month_of(date.today())
 
         preferences = Settings.load()
         service = NetWorthService(staleness_days=preferences.rate_staleness_days)
+
+        # The last month that has ended and has balances recorded — not the month
+        # in progress, which holds nothing until it closes (see
+        # core.services.reporting_month). The date range does not apply here.
+        #
+        # An explicit `month` still wins, so a URL keeps fully determining its
+        # response (§8.2); the response says which of the two happened.
+        requested = request.query_params.get("month")
+        reporting = (
+            ReportingMonth(requested, MonthBasis.REQUESTED, month_of(date.today()))
+            if requested
+            else latest_closed_month(service)
+        )
+        month = reporting.month
+
         result = service.for_month(month, currency)
 
         # 24 months, latest last, for the trend.
@@ -73,6 +84,9 @@ class DashboardView(APIView):
             {
                 "data": {
                     "month": month,
+                    # Why that month, so the screen states the period it covers
+                    # instead of appearing to report the present.
+                    "reporting_month": reporting.as_dict(),
                     "currency": currency,
                     "net_worth": {
                         "total": result.total.api() if result.is_reportable else None,
@@ -89,8 +103,16 @@ class DashboardView(APIView):
                     "exclusions": result.exclusion_notices(),
                     "rate_provenance": result.rate_provenance(),
                     "trend": trend,
-                    # The product's conscience.
-                    "tasks": [task.as_dict() for task in outstanding_tasks(month)],
+                    # The product's conscience — and the one panel here that is
+                    # about now rather than about the month reported above.
+                    #
+                    # Anchored to the current month deliberately, and called with
+                    # no argument to say so. FR-51 scopes this panel to what is
+                    # blocking the current month and the one before it; passing
+                    # the reported month would make it fall silent about the close
+                    # that is actually due, and disagree with the rail badge,
+                    # which counts the same tasks as at today.
+                    "tasks": [task.as_dict() for task in outstanding_tasks()],
                     # In the reporting currency, and never added to a balance.
                     # The per-currency breakdown lives on the Category report,
                     # where the currency a thing was bought in is the point.
@@ -104,7 +126,19 @@ class DashboardView(APIView):
                     # a point at the same place on screen while meaning two
                     # different months, which is worse than not aligning them.
                     "cashflow_trend": summary_trend(window, currency, service.translation),
-                    "investments": _investment_summary(),
+                    # A position, not a month: what is held *now*, valued at the
+                    # last price each holding was transacted at. Deliberately not
+                    # stated as at the reported month — "currently held" is the
+                    # question this panel answers — and its own labels carry the
+                    # dates it rests on. Borrows the request's translation service,
+                    # so the rate lookups are cached across the whole response.
+                    "investments": held_summary(currency, service.translation).as_dict(),
+                    # The same 24-month window as the two trends above, for the
+                    # same reason: four plots, one x axis, one horizontal position
+                    # per month down the whole screen. Each point is the position
+                    # as at that month rather than today's plotted backwards, so a
+                    # sale lands in the month it happened.
+                    "investments_trend": held_trend(window, currency, service.translation),
                     "backup": backup_status().as_dict(),
                 }
             }
@@ -116,33 +150,6 @@ def previous_n(month: str, count: int) -> str:
     for _ in range(count):
         result = previous(result)
     return result
-
-
-def _investment_summary() -> list[dict]:
-    """Holdings and realised gains by currency. Never combined (BR-18)."""
-    blocks: dict[str, dict] = {}
-    year = date.today().year
-
-    for position in positions():
-        holding = position.holding
-        block = blocks.setdefault(
-            holding.currency,
-            {"currency": holding.currency, "holdings": 0, "cost_basis": Decimal(0), "realised_gain_this_year": Decimal(0)},
-        )
-        block["holdings"] += 1
-        block["cost_basis"] += position.result.total_cost_basis
-        for disposal in position.result.disposals_in_year(year):
-            block["realised_gain_this_year"] += disposal.realised_gain
-
-    return [
-        {
-            "currency": block["currency"],
-            "holdings": block["holdings"],
-            "cost_basis": str(block["cost_basis"].quantize(CENTS)),
-            "realised_gain_this_year": str(block["realised_gain_this_year"].quantize(CENTS)),
-        }
-        for block in sorted(blocks.values(), key=lambda row: row["currency"])
-    ]
 
 
 #: How far before the first recorded month the spine may be extended. Ten

@@ -25,6 +25,7 @@ from cashflow.services.summary import (
 )
 from core.services.backup_status import backup_status
 from core.services.export import investments_csv, net_worth_csv
+from core.services.reporting_month import MonthBasis, latest_closed_month
 from core.services.tasks import outstanding_tasks
 from fx.models import ExchangeRate
 from investments.models import Holding
@@ -246,7 +247,11 @@ def test_the_dashboard_is_silent_about_rates_when_nothing_is_stale(signed_in, po
 
     assert body["net_worth"]["any_stale"] is False
     assert body["net_worth"]["as_at"] is None
-    assert body["tasks"] == []
+    # The tasks panel is not asserted here: it is anchored to the current month
+    # rather than to the month reported, so it does not go quiet just because the
+    # figures are for a month that closed cleanly. See
+    # test_the_tasks_panel_stays_anchored_to_now, and
+    # test_a_complete_month_raises_no_tasks for the silence itself.
 
 
 def test_the_dashboard_trend_is_twenty_four_months(signed_in, portfolio):
@@ -264,6 +269,122 @@ def test_the_dashboard_never_adds_cashflow_to_net_worth(signed_in, portfolio):
 
     assert isinstance(body["cashflow"], dict)
     assert "net_worth" not in str(body["cashflow"])
+
+
+# ---------------------------------------------------------------------------
+# The month the dashboard reports — the last close, not the present
+# ---------------------------------------------------------------------------
+#
+# Balances are entered when a month ends, so a dashboard fixed to the month in
+# progress is empty for all but the last day of it. `today` is injected rather
+# than mocked: the rule is entirely about which month "now" falls in, and a
+# fixture pinned to a date the real clock has passed would stop testing it.
+
+
+def test_the_reported_month_is_the_last_close_not_the_month_in_progress(portfolio):
+    """The fixture closed July. In August there is nothing else to report."""
+    reporting = latest_closed_month(today=date(2026, 8, 17))
+
+    assert reporting.month == "2026-07"
+    assert reporting.basis == MonthBasis.CLOSED
+    assert reporting.current_month == "2026-08"
+    assert reporting.is_current is False
+
+
+def test_a_month_whose_balances_are_all_in_is_the_month_reported(portfolio):
+    """An early close is a close. Every balance August needs is in on the 17th, so
+    standing back a month would hide finished work.
+
+    **The rate is deliberately not entered for the 17th.** August is therefore
+    Incomplete, and reported anyway: a month's rates are required on its as-at
+    date, which while the month runs is today and moves daily, so waiting for
+    Complete would mean waiting for a date that recedes. The rate carries forward
+    (ADR-09) and the response says so beside the total.
+    """
+    Balance.objects.create(account=portfolio["usd"], month="2026-08", amount=Decimal("11000"))
+    Balance.objects.create(account=portfolio["aud"], month="2026-08", amount=Decimal("51000"))
+
+    reporting = latest_closed_month(today=date(2026, 8, 17))
+
+    assert reporting.month == "2026-08"
+    assert reporting.basis == MonthBasis.CURRENT
+    assert reporting.is_current is True
+
+
+def test_a_month_missing_one_balance_is_not_a_close(portfolio):
+    """Partly entered is not entered. The point of standing back a month is not
+    showing a total assembled from half the accounts."""
+    Balance.objects.create(account=portfolio["usd"], month="2026-08", amount=Decimal("11000"))
+
+    reporting = latest_closed_month(today=date(2026, 8, 17))
+
+    assert reporting.month == "2026-07"
+    assert reporting.basis == MonthBasis.CLOSED
+
+
+def test_an_incomplete_close_is_still_the_month_reported(portfolio):
+    """A missing rate must not push the dashboard back past a month whose balances
+    are all in. The total is qualified by its completeness, never withheld on
+    account of the one thing the user is already being nagged about."""
+    ExchangeRate.objects.all().delete()
+    Balance.objects.create(account=portfolio["usd"], month="2026-06", amount=Decimal("9000"))
+
+    reporting = latest_closed_month(today=date(2026, 8, 17))
+
+    assert reporting.month == "2026-07"
+    assert reporting.basis == MonthBasis.CLOSED
+
+
+def test_a_balance_dated_ahead_of_today_is_not_a_close(portfolio):
+    """A month that has not ended has not been closed, whatever is entered."""
+    Balance.objects.create(account=portfolio["usd"], month="2026-12", amount=Decimal("1"))
+
+    assert latest_closed_month(today=date(2026, 8, 17)).month == "2026-07"
+
+
+def test_an_empty_system_reports_the_month_in_progress_and_says_so(db):
+    """State S1, first run. There is no close to fall back to, and the basis says
+    that rather than the screen implying a month was chosen for a reason."""
+    reporting = latest_closed_month(today=date(2026, 8, 17))
+
+    assert reporting.month == "2026-08"
+    assert reporting.basis == MonthBasis.EMPTY
+
+
+def test_the_dashboard_states_which_month_it_reports_and_why(signed_in, portfolio):
+    """Asserted against the real clock as an invariant, so it keeps meaning
+    something on every day this suite is run: the response never reports a month
+    it has not reached, and every figure on the screen is for the month named."""
+    body = signed_in.get("/api/dashboard/?currency=USD").json()["data"]
+
+    reporting = body["reporting_month"]
+
+    assert reporting["month"] == body["month"]
+    assert reporting["basis"] in {"closed", "current", "empty"}
+    assert reporting["month"] <= reporting["current_month"]
+    # The trend ends where the headline does — one month, one axis position.
+    assert body["trend"][-1]["month"] == body["month"]
+    assert body["cashflow"]["month"] == body["month"]
+
+
+def test_an_explicitly_named_month_still_wins(signed_in, portfolio):
+    """A URL fully determines its response (§8.2), and says it was asked."""
+    body = signed_in.get("/api/dashboard/?month=2026-07&currency=USD").json()["data"]
+
+    assert body["month"] == "2026-07"
+    assert body["reporting_month"]["basis"] == "requested"
+    assert body["net_worth"]["total"]["amount"] == "43000.00"
+
+
+def test_the_tasks_panel_stays_anchored_to_now(signed_in, portfolio):
+    """FR-51 scopes the conscience panel to the current month and the one before
+    it, and it does not follow the month the figures are for — it would otherwise
+    go quiet about the close that is actually due, and disagree with the rail
+    badge, which counts the same tasks as at today."""
+    body = signed_in.get("/api/dashboard/?month=2020-01").json()["data"]
+    badges = signed_in.get("/api/tasks/").json()["data"]
+
+    assert sum(task["count"] for task in body["tasks"]) == sum(badges.values())
 
 
 # ---------------------------------------------------------------------------
@@ -556,3 +677,74 @@ def test_a_task_appears_as_soon_as_an_account_holds_that_currency(portfolio):
 
     assert "rates_missing" in tasks
     assert "USD/MYR" in tasks["rates_missing"].message
+
+
+# ---------------------------------------------------------------------------
+# The holdings panel — the departure, as the dashboard serves it
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def holdings(portfolio):
+    """100 units bought at 10.00 in January, last traded at 12.00 in March."""
+    holding = Holding.objects.create(
+        name="Acme", currency="USD", account=portfolio["usd"], estimated_tax_percent=None
+    )
+    record(holding, action="Buy", on_date=date(2026, 1, 10), quantity=Decimal("100"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 3, 10), quantity=Decimal("40"), unit_price=Decimal("12"))
+    return holding
+
+
+def test_the_dashboard_states_the_three_holdings_figures_and_what_they_rest_on(
+    signed_in, holdings
+):
+    """60 units left, costing 600.00, marked at the 12.00 they last traded at."""
+    body = signed_in.get("/api/dashboard/?month=2026-07&currency=USD").json()["data"][
+        "investments"
+    ]
+
+    assert body["holdings"] == 1
+    assert body["cost_basis"] == {"amount": "600.00", "currency": "USD"}
+    assert body["estimated_value"] == {"amount": "720.00", "currency": "USD"}
+    assert body["estimated_gain"] == {"amount": "120.00", "currency": "USD"}
+    # The date the estimate rests on travels with it, or the figure reads as current.
+    assert body["priced_from"] == "2026-03-10"
+    assert body["unpriced"] == []
+
+
+def test_the_holdings_trend_shares_the_one_window_with_the_other_three_plots(
+    signed_in, holdings
+):
+    """Four plots, one x axis: a month sits at the same horizontal position in all
+    of them, so the windows cannot be allowed to differ."""
+    body = signed_in.get("/api/dashboard/?month=2026-07").json()["data"]
+
+    months = [point["month"] for point in body["investments_trend"]]
+
+    assert months == [point["month"] for point in body["trend"]]
+    assert len(months) == 24
+
+
+def test_the_holdings_trend_reflects_the_sale_in_the_month_it_happened(
+    signed_in, holdings
+):
+    """February holds 100 units at 10.00; April holds 60, marked at 12.00."""
+    body = signed_in.get("/api/dashboard/?month=2026-07").json()["data"]
+    rows = {point["month"]: point for point in body["investments_trend"]}
+
+    assert rows["2026-02"]["cost_basis"] == "1000.00"
+    assert rows["2026-02"]["estimated_value"] == "1000.00"
+    assert rows["2026-04"]["cost_basis"] == "600.00"
+    assert rows["2026-04"]["estimated_value"] == "720.00"
+
+
+def test_no_holdings_figure_reaches_net_worth(signed_in, portfolio, holdings):
+    """BR-01 and BR-12 survive the departure. Balances are entered, never derived:
+    a holding's estimated value is not an asset the system adds to anything.
+
+    The same 43,000 as the portfolio fixture alone, with a 720.00 estimate sitting
+    beside it and touching nothing."""
+    body = signed_in.get("/api/dashboard/?month=2026-07&currency=USD").json()["data"]
+
+    assert body["net_worth"]["total"] == {"amount": "43000.00", "currency": "USD"}
+    assert "estimated" not in str(body["net_worth"])

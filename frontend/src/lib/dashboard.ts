@@ -38,6 +38,22 @@ export interface FigureChange {
 
 export interface DashboardPayload {
   readonly month: string
+  /**
+   * Which month the figures are for, and why.
+   *
+   * `closed` — the last month that has ended and has balances recorded, which is
+   * the usual answer: balances are entered when a month ends, so the month in
+   * progress holds nothing until it closes. `current` — the month in progress,
+   * closed early, meaning every balance it requires is already in. `requested` —
+   * asked for explicitly in the URL. `empty` — nothing has ever been recorded, so
+   * there is no close to report.
+   */
+  readonly reporting_month: {
+    readonly month: string
+    readonly basis: 'closed' | 'current' | 'requested' | 'empty'
+    readonly current_month: string
+    readonly is_current: boolean
+  }
   readonly currency: CurrencyCode
   readonly net_worth: {
     readonly total: { amount: string; currency: CurrencyCode } | null
@@ -117,11 +133,60 @@ export interface DashboardPayload {
     net: string
     savings_rate: string | null
   }[]
-  readonly investments: readonly {
-    currency: CurrencyCode
-    holdings: number
+  /**
+   * What is held **now**, combined into the reporting currency.
+   *
+   * A departure from the BRD and from BR-18, made deliberately: the system has no
+   * market prices, so `estimated_value` is each holding's units at the last price
+   * it was transacted at, and `estimated_gain` is that less what those units cost
+   * — the figure the documents call unrealised gain. Both are estimates and both
+   * are labelled as such wherever they are rendered.
+   *
+   * `priced_from` is the oldest price the estimate rests on: a holding untouched
+   * since 2019 is "valued" at its 2019 price, and the panel says so rather than
+   * implying the figure is current. `unpriced` names held holdings with no price
+   * on record — left out of the estimate rather than valued at nothing — and
+   * `priced_cost_basis` is what the gain was measured against when those two sets
+   * differ, so the figures on screen always reconcile with each other.
+   */
+  readonly investments: {
+    readonly currency: CurrencyCode
+    readonly holdings: number
+    readonly cost_basis: Money
+    readonly estimated_value: Money | null
+    readonly estimated_gain: Money | null
+    readonly priced_cost_basis: Money | null
+    readonly priced_from: string | null
+    readonly unpriced: readonly string[]
+    readonly exclusions: readonly {
+      holding: string
+      currency: CurrencyCode
+      reason: string
+    }[]
+    readonly rate_provenance: readonly {
+      currency: CurrencyCode
+      pair: string
+      as_at: string
+      provenance: string
+      stale: boolean
+    }[]
+    readonly as_at: string | null
+    readonly any_stale: boolean
+  }
+  /**
+   * The same 24-month window as the trends above — the position **as at** each
+   * month, so a sale lands in the month it happened rather than being plotted
+   * backwards over months when the units were still held.
+   *
+   * Money is zero for a month with nothing held, which is honest here: holdings
+   * are derived from transactions rather than entered, so no transactions means
+   * nothing was owned. `estimated_value` is null only where something was held and
+   * none of it could be estimated, so the line breaks instead of dropping to zero.
+   */
+  readonly investments_trend: readonly {
+    month: string
     cost_basis: string
-    realised_gain_this_year: string
+    estimated_value: string | null
   }[]
   readonly backup: BackupStatus
 }
@@ -131,12 +196,22 @@ export interface SpineMonth {
   readonly state: CompletenessState
 }
 
-export function useDashboard(month: string, currency: string) {
+/**
+ * The dashboard's figures. No month is sent, and that is the point.
+ *
+ * Which month the dashboard reports is a rule about the data — the last month
+ * that has ended and has balances recorded, or the month in progress once it is
+ * complete — so it is answered by the one service that owns it and stated back in
+ * `reporting_month`. A month resolved here from `new Date()` would be a second
+ * definition of the same thing, and would disagree with the server's on either
+ * side of midnight on the first of a month.
+ */
+export function useDashboard(currency: string) {
   return useQuery({
-    queryKey: ['dashboard', month, currency],
+    queryKey: ['dashboard', currency],
     queryFn: () =>
       api
-        .get<{ data: DashboardPayload }>(`/dashboard/?month=${month}&currency=${currency}`)
+        .get<{ data: DashboardPayload }>(`/dashboard/?currency=${currency}`)
         .then((r) => r.data),
   })
 }

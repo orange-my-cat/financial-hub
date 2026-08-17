@@ -1,8 +1,9 @@
 """The FIFO replay engine.
 
 A pure function. Transactions in date order in; lot states, consumption, cost
-basis, realised gains and any inconsistency out. **No database writes, no stored
-lot state, no stored cost basis, no stored realised gain** (ADR-06). This module
+basis, realised gains, the last price transacted at and any inconsistency out.
+**No database writes, no stored lot state, no stored cost basis, no stored
+realised gain** (ADR-06). This module
 imports nothing from Django, and that is deliberate — the arithmetic that
 matters most in this system should be testable without a database, in
 milliseconds, against figures worked by hand.
@@ -159,6 +160,32 @@ class Distribution:
 
 
 @dataclass(frozen=True)
+class PriceObservation:
+    """The most recent price this holding was actually transacted at.
+
+    **A departure, and a knowing one.** The BRD and HLD exclude market prices and
+    therefore unrealised gain, on the grounds that a figure the system cannot
+    source is a figure it should not state. The dashboard's holdings panel now
+    estimates a value from this observation at the Product Owner's explicit
+    instruction. It is not a market price: it is the last price *the user typed*,
+    on the date they typed it, which is why both travel together and why every
+    figure derived from it is labelled an estimate and dated.
+
+    `split_adjusted` records that a split fell after the observation, so the price
+    has been divided by the ratio to be expressed per post-split unit. Without
+    that, a 2:1 split would double an estimated value on the strength of an
+    arithmetic error: twice the units at the pre-split price.
+    """
+
+    transaction_id: int
+    on_date: date
+    action: Action
+    #: Per unit, expressed in today's unit terms — see `split_adjusted`.
+    unit_price: Decimal
+    split_adjusted: bool = False
+
+
+@dataclass(frozen=True)
 class Inconsistency:
     """A sale that cannot be satisfied by the lots preceding it.
 
@@ -196,6 +223,8 @@ class ReplayResult:
     disposals: tuple[Disposal, ...]
     distributions: tuple[Distribution, ...]
     inconsistencies: tuple[Inconsistency, ...] = field(default_factory=tuple)
+    #: The last transacted price, or None where nothing priced has been recorded.
+    last_price: PriceObservation | None = None
 
     @property
     def is_consistent(self) -> bool:
@@ -221,6 +250,33 @@ class ReplayResult:
     def disposals_in_year(self, year: int) -> tuple[Disposal, ...]:
         return tuple(d for d in self.disposals if d.on_date.year == year)
 
+    # -- estimation, on the last price typed rather than a market price -------
+    #
+    # See PriceObservation: these are a deliberate departure, they are estimates,
+    # and they are None rather than zero wherever the estimate has no basis —
+    # nothing held, or nothing ever priced. An absent estimate is not a value of
+    # nothing, exactly as a missing rate is not a rate of zero (FR-46).
+
+    @property
+    def estimated_value(self) -> Decimal | None:
+        """Units still held, at the last price they were transacted at."""
+        if self.last_price is None or self.total_quantity == 0:
+            return None
+        return self.total_quantity * self.last_price.unit_price
+
+    @property
+    def estimated_gain(self) -> Decimal | None:
+        """The estimate above, less what those units cost.
+
+        This is the figure the BRD calls unrealised gain and declines to compute.
+        It is here at the Product Owner's instruction, it is an estimate, and the
+        word `estimated` travels with it everywhere it is rendered.
+        """
+        value = self.estimated_value
+        if value is None:
+            return None
+        return value - self.total_cost_basis
+
 
 def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
     """Replay a holding's transactions and return its computed state.
@@ -233,8 +289,26 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
     disposals: list[Disposal] = []
     distributions: list[Distribution] = []
     inconsistencies: list[Inconsistency] = []
+    last_price: PriceObservation | None = None
 
     for transaction in ordered:
+        # The last price typed, tracked in the same pass and in the same order as
+        # everything else here. In the sequence rather than derived afterwards
+        # because a split has to be able to rescale it: doing this from outside
+        # would mean sorting the transactions a second time and re-deriving the
+        # ordering this loop already has.
+        if transaction.unit_price > 0 and transaction.action in (
+            Action.BUY,
+            Action.SELL,
+            Action.REINVESTMENT,
+        ):
+            last_price = PriceObservation(
+                transaction_id=transaction.id,
+                on_date=transaction.on_date,
+                action=transaction.action,
+                unit_price=transaction.unit_price,
+            )
+
         if transaction.action in (Action.BUY, Action.REINVESTMENT):
             # Purchase fees form part of cost basis (BR-16). A reinvestment
             # creates a lot at the reinvestment price, dated to the
@@ -268,6 +342,19 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
                     lot.remaining_quantity *= transaction.split_ratio
                     lot.original_quantity *= transaction.split_ratio
 
+                # The last observed price is per *old* unit and every quantity has
+                # just been restated in new ones. Rescaling it here is what keeps
+                # an estimated value from doubling on a 2:1 split, which is the
+                # same total holding at half the price per unit.
+                if last_price is not None:
+                    last_price = PriceObservation(
+                        transaction_id=last_price.transaction_id,
+                        on_date=last_price.on_date,
+                        action=last_price.action,
+                        unit_price=last_price.unit_price / transaction.split_ratio,
+                        split_adjusted=True,
+                    )
+
         elif transaction.action is Action.DISTRIBUTION:
             # Cash against the holding. Changes no lot and no cost basis.
             distributions.append(
@@ -295,6 +382,7 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
         disposals=tuple(disposals),
         distributions=tuple(distributions),
         inconsistencies=tuple(inconsistencies),
+        last_price=last_price,
     )
 
 
