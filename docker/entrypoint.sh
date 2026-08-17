@@ -35,10 +35,11 @@ export PGPASSWORD="$POSTGRES_PASSWORD"
 # ---------------------------------------------------------------------------
 # 1. Wait for the database
 # ---------------------------------------------------------------------------
-# `data-center` is a shared container this compose file does not manage, so
-# there is no healthcheck dependency to lean on. On a cold Docker Desktop start
-# it is reliably slower to accept connections than this container is to start,
-# and without the wait the first run of every session appears to fail.
+# `data-center` is a shared container this application does not own, and there
+# is no stack in which to express a dependency on it — every tenant of
+# vibe-city is a standalone container. On a cold Docker Desktop start it is
+# reliably slower to accept connections than this container is to start, and
+# without the wait the first run of every session appears to fail.
 
 log "waiting for ${POSTGRES_HOST}:${POSTGRES_PORT} ..."
 for attempt in $(seq 1 60); do

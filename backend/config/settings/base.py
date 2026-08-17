@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 # backend/
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # The repository root. Absent inside the container, where configuration arrives
-# through compose's env_file.
+# through `docker run --env-file` instead.
 REPO_ROOT = BASE_DIR.parent
 
 load_dotenv(REPO_ROOT / ".env")
@@ -268,10 +268,10 @@ MASSIVE_TIMEOUT_SECONDS = int(os.environ.get("MASSIVE_TIMEOUT_SECONDS", "30"))
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-# stdout, captured by Docker's json-file driver and capped at 10 MB × 3 in
-# compose.yaml. `docker compose logs financial-hub` is the entire diagnostic
-# story a single-user system needs, and anything more elaborate is unjustified
-# (§9.2).
+# stdout, captured by Docker's json-file driver and capped at 10 MB × 3 by the
+# --log-opt flags in scripts/deploy.ps1. `docker logs financial-hub` is the
+# entire diagnostic story a single-user system needs, and anything more
+# elaborate is unjustified (§9.2).
 #
 # The `financial_hub` logger is where financially significant events go at info
 # level: balance upserts, rate entries, investment transaction changes, backup

@@ -216,6 +216,14 @@ docker compose -f compose.test.yaml down
 The `financial-hub` container joins `vibe-city`, **publishes no port**, and is reached
 only through `central-station` at `http://financial-hub.localhost`.
 
+It is a **standalone container, not a compose stack**, matching every other tenant of this
+platform. `vibe-city` is a Docker network and a naming theme, not a compose project:
+`central-station`, `control-tower`, `data-center` and `data-center-test` are each their own
+container and share nothing but the network. The run arguments live in
+`scripts/deploy.ps1` rather than in a compose file, which is the same reason
+`d:\Repositories\vibe-city\start.ps1` exists — version control, not the Docker daemon, is
+where they belong. The healthcheck is baked into the image for the same reason.
+
 ### One-time platform changes
 
 ```sh
@@ -242,11 +250,24 @@ downtime, only the two `docker exec` lines above.
 Switch `.env` to the production profile (both blocks are documented in `.env.example`),
 then:
 
-```sh
-docker compose up -d --build
-docker compose logs -f financial-hub
-docker compose exec financial-hub python manage.py smoke_test
+```powershell
+.\scripts\deploy.ps1            # build, recreate, wait for healthy, smoke test
+.\scripts\deploy.ps1 -NoBuild   # recreate from the image already built
 ```
+
+The script refuses to run against anything but `config.settings.prod` on
+`data-center:5432`/`financial_hub`, and refuses to start without an existing
+`BACKUP_HOST_DIR`. P-04 is enforced there rather than trusted to the person deploying.
+
+Afterwards:
+
+```sh
+docker logs -f financial-hub
+docker exec financial-hub python manage.py smoke_test
+```
+
+Recreating is safe and is the normal way to deploy a change: the container holds no state,
+because the database is in `data-center` and the dumps are on a bind mount.
 
 ### What the entrypoint does, in this order
 
@@ -276,9 +297,9 @@ live database and every dump together, and OI-12 stays open at Severe.
 1. Copy the repository to the target machine.
 2. Copy `.env` by hand. It does not travel with the repository.
 3. Copy the most recent dump.
-4. `docker compose up -d --build`.
-5. `docker compose exec -T financial-hub pg_restore --clean --if-exists --no-owner -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" < /backups/<file>.dump`
-6. `docker compose exec financial-hub python manage.py smoke_test`, and confirm a known
+4. `.\scripts\deploy.ps1`.
+5. `docker exec -i financial-hub pg_restore --clean --if-exists --no-owner -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" < /backups/<file>.dump`
+6. `docker exec financial-hub python manage.py smoke_test`, and confirm a known
    net worth figure is unchanged.
 
 Because disaster recovery and machine migration are the same procedure, every machine
@@ -322,7 +343,9 @@ pip freeze > backend/requirements.lock.txt      # the Dockerfile prefers this wh
 # package-lock.json is written by npm install and is committed
 ```
 
-Rollback depends on those pins, and on the previous compose file being retained.
+Rollback depends on those pins, and on the previous image tag being retained — `deploy.ps1`
+names the tag in one place, so reverting is editing `$image` and rerunning it with
+`-NoBuild`.
 
 ---
 

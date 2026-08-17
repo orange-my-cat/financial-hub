@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 def main() -> None:
     # The repository root, one level above backend/. Absent in the container,
-    # where configuration arrives through compose's env_file instead.
+    # where configuration arrives through `docker run --env-file` instead.
     load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
     if not os.environ.get("DJANGO_SETTINGS_MODULE"):

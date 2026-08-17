@@ -30,7 +30,7 @@ class HealthView(APIView):
     """Liveness. The one endpoint deliberately opened (§10.2).
 
     It reports that the process is answering and nothing else. It does not
-    touch the database on purpose: this is what compose's healthcheck polls,
+    touch the database on purpose: this is what the image's HEALTHCHECK polls,
     and a database blip should not restart an application that is otherwise
     perfectly able to explain the problem. Depth belongs to the smoke test,
     which is run by a person who wants an answer.

@@ -94,4 +94,19 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 8000
 
+# The healthcheck belongs to the image, not to a stack file. This is a
+# standalone container in the vibe-city idiom — there is no compose project to
+# carry a `healthcheck:` block, and `docker run --health-cmd` would put the
+# check in the daemon's copy of the run arguments instead of in version
+# control.
+#
+# It connects to the loopback address but presents the public host name.
+# Production ALLOWED_HOSTS is exactly `financial-hub.localhost`, so a request
+# carrying a `127.0.0.1` Host header is refused with a 400 before it reaches a
+# view, and the container would never report healthy. Overriding the header
+# keeps the check honest; widening ALLOWED_HOSTS to satisfy a self-test would
+# be the wrong repair.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request,sys; r=urllib.request.Request('http://127.0.0.1:8000/api/health/', headers={'Host': 'financial-hub.localhost'}); sys.exit(0 if urllib.request.urlopen(r, timeout=4).status == 200 else 1)"
+
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

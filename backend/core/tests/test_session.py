@@ -14,7 +14,7 @@ pytestmark = pytest.mark.django_db
 
 
 def test_health_is_open_deliberately(client):
-    """The one opened endpoint. It is what compose's healthcheck polls."""
+    """The one opened endpoint. It is what the image's HEALTHCHECK polls."""
     response = client.get("/api/health/")
 
     assert response.status_code == 200
