@@ -48,6 +48,20 @@ class Check:
     detail: str
 
 
+def _allowed_host() -> str | None:
+    """The first host name the application will admit, or None if it admits any.
+
+    Development lists `localhost` and a wildcard is possible under DEBUG; in
+    either case the loopback request needs no help and the header is left
+    alone.
+    """
+    for host in settings.ALLOWED_HOSTS:
+        if host in ("*", ".localhost"):
+            return None
+        return host.lstrip(".")
+    return None
+
+
 class Command(BaseCommand):
     help = "Assert that this deployment is answering, connected, migrated and backed up."
 
@@ -97,8 +111,19 @@ class Command(BaseCommand):
         name = "application responds"
         if skip:
             return Check(name, SKIP, "--skip-http")
+        # Connect to the loopback address, but present the name the application
+        # answers to. In production ALLOWED_HOSTS is exactly
+        # `financial-hub.localhost`, so a request carrying a `127.0.0.1` Host
+        # header is refused with a 400 before it reaches a view — the check
+        # would report the application down while it was serving perfectly well
+        # through nginx. Widening ALLOWED_HOSTS to satisfy a self-test would be
+        # the wrong repair.
+        request = urllib.request.Request(url)  # noqa: S310
+        host = _allowed_host()
+        if host:
+            request.add_header("Host", host)
         try:
-            with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310
+            with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
                 if response.status == 200:
                     return Check(name, PASS, f"200 from {url}")
                 return Check(name, FAIL, f"{response.status} from {url}")
