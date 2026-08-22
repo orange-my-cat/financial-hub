@@ -83,6 +83,15 @@ export interface TrendPoint {
   readonly rate: string
   readonly provenance: Provenance
   readonly derived: boolean
+  /**
+   * Movement from the previous point in the series, signed and served — never
+   * subtracted here. A rate is an exact decimal; `Number(a) - Number(b)` is a
+   * float difference of two figures the user reads (ADR-02, ADR-12).
+   *
+   * Null on the first point of the range, which has no predecessor inside it.
+   */
+  readonly change: string | null
+  readonly change_percent: string | null
 }
 
 export interface RateTrend {
@@ -231,6 +240,8 @@ export interface RateLoadPair {
   readonly replaced: number
   /** Dates left alone because the rate there was typed by hand (BRD §4.3). */
   readonly kept_manual: number
+  /** Rates cleared from the window before loading, hand-typed ones included. */
+  readonly removed: number
   readonly first_date: string | null
   readonly last_date: string | null
 }
@@ -240,19 +251,26 @@ export interface RateLoadResult {
   readonly start: string
   readonly end: string
   readonly dry_run: boolean
+  /** Whether the window was cleared before loading. The button always does. */
+  readonly truncated: boolean
   readonly fetched: number
   readonly written: number
   readonly kept_manual: number
+  readonly removed: number
   readonly pairs: readonly RateLoadPair[]
 }
 
 /**
- * Load the last 365 days of daily closes from the provider.
+ * Truncate and load: clear the last 365 days of stored rates, then store every
+ * daily close the provider returns for them.
  *
  * Takes a few seconds and no arguments: the window is fixed on the server, so
- * the browser cannot ask for a decade through a synchronous endpoint. Safe to
- * run repeatedly — a re-fetch replaces only rows an earlier fetch wrote, and
- * never a rate that was typed.
+ * the browser cannot ask for a decade through a synchronous endpoint — which
+ * matters more now that the call clears what it loads over. Safe to run
+ * repeatedly, and **destructive of hand entry**: a rate typed inside the window
+ * is replaced by the provider's close, and one typed on a date the provider has
+ * no close for is removed and not replaced. Soft-deleted either way, so the
+ * rows stay recoverable through the Django admin (ADR-03).
  */
 export function useLoadRates() {
   const invalidate = useFxInvalidation()

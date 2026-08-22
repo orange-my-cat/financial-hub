@@ -58,13 +58,18 @@ class AccountCreateSerializer(serializers.Serializer):
 
 
 class AccountUpdateSerializer(serializers.Serializer):
-    """Name, classification and currency. Status changes have their own actions,
-    because closing an account is not the same kind of act as renaming one."""
+    """Name, classification, currency and opening month.
+
+    Status changes are not here and have their own actions: closing an account is
+    not the same kind of act as renaming one, and `closed_month` is a
+    consequence of closing rather than a field to be typed.
+    """
 
     name = serializers.CharField(max_length=120, required=False)
     account_type = serializers.ChoiceField(choices=AccountType.choices, required=False)
     liquidity_tier = serializers.ChoiceField(choices=LiquidityTier.choices, required=False)
     currency = serializers.ChoiceField(choices=CURRENCY_CODES, required=False)
+    opened_month = serializers.RegexField(MONTH_REGEX, required=False)
 
 
 class CloseSerializer(serializers.Serializer):

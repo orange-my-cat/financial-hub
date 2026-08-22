@@ -30,7 +30,7 @@ from core.services.export import (
 from core.services.movement import movement
 from core.services.reporting_month import MonthBasis, ReportingMonth, latest_closed_month
 from core.services.tasks import outstanding_tasks, task_counts
-from investments.services.positions import held_summary, held_trend
+from investments.services.positions import held_summary_with_change, held_trend
 
 
 class DashboardView(APIView):
@@ -126,13 +126,16 @@ class DashboardView(APIView):
                     # a point at the same place on screen while meaning two
                     # different months, which is worse than not aligning them.
                     "cashflow_trend": summary_trend(window, currency, service.translation),
-                    # A position, not a month: what is held *now*, valued at the
-                    # last price each holding was transacted at. Deliberately not
-                    # stated as at the reported month — "currently held" is the
-                    # question this panel answers — and its own labels carry the
-                    # dates it rests on. Borrows the request's translation service,
-                    # so the rate lookups are cached across the whole response.
-                    "investments": held_summary(currency, service.translation).as_dict(),
+                    # The position as at the reported month, valued at the last
+                    # price each holding had been transacted at by then, with each
+                    # figure's movement on the month before. The same month as the
+                    # three panels above and the same month the plot beside it ends
+                    # on, so the whole screen covers one period. Borrows the
+                    # request's translation service, so the rate lookups are cached
+                    # across the whole response.
+                    "investments": held_summary_with_change(
+                        currency, service.translation, month=month
+                    ),
                     # The same 24-month window as the two trends above, for the
                     # same reason: four plots, one x axis, one horizontal position
                     # per month down the whole screen. Each point is the position

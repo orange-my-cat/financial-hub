@@ -29,6 +29,7 @@ from accounts.api.serializers import (
 )
 from accounts.models import Account
 from accounts.services import lifecycle
+from accounts.services.history import balance_history
 from accounts.services.month_close import month_close
 from accounts.services.net_worth import NetWorth, NetWorthService
 from accounts.services.slices import SliceDimension, slice_net_worth
@@ -99,6 +100,9 @@ class AccountDetailView(APIView):
         if "currency" in changes:
             lifecycle.change_currency(account, changes["currency"])
 
+        if "opened_month" in changes:
+            lifecycle.change_opened_month(account, changes["opened_month"])
+
         if "name" in changes:
             account.name = changes["name"]
             account.save(update_fields=["name", "updated_at"])
@@ -149,26 +153,11 @@ class AccountHistoryView(APIView):
 
     def get(self, request, pk: int):  # noqa: ARG002
         account = _account(pk)
-        rows = list(account.balances.order_by("-month"))
-
-        history = []
-        for index, balance in enumerate(rows):
-            older = rows[index + 1] if index + 1 < len(rows) else None
-            change = balance.amount - older.amount if older else None
-            history.append(
-                {
-                    "month": balance.month,
-                    "amount": str(balance.amount),
-                    "change": str(change) if change is not None else None,
-                    "previous_month": older.month if older else None,
-                }
-            )
-
         return Response(
             {
                 "data": {
                     "account": AccountSerializer(account).data,
-                    "history": history,
+                    **balance_history(account).as_dict(),
                 }
             }
         )

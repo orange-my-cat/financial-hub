@@ -7,6 +7,11 @@ This answers *how the month went overall*, and that question has no per-currency
 answer at all: three net figures in three currencies do not tell a person whether
 they saved anything.
 
+:func:`category_flow` is the same translation applied one category at a time —
+the combined breakdown a single diagram can be drawn from. It lives here rather
+than beside the category report because what defines it is the translation, and
+the translated figures are defined here.
+
 The BRD sanctions the translation — "FX applies to balances and cash flow only"
 (A36); only investment performance is barred from it (BR-18). The translation
 still goes through the one translation service, like every other crossing in the
@@ -304,3 +309,183 @@ def summary_trend(
             }
         )
     return points
+
+
+@dataclass(frozen=True)
+class FlowCategory:
+    """One category's month, after translation into the reporting currency."""
+
+    category_id: int
+    category: str
+    parent: str
+    direction: str
+    #: Full precision. Rounded once, at display.
+    total: Decimal
+    count: int
+
+    def as_dict(self, currency: str) -> dict:
+        return {
+            "category_id": self.category_id,
+            "category": self.category,
+            "parent": self.parent,
+            "direction": self.direction,
+            "total": Money(self.total, currency).api(),
+            "count": self.count,
+        }
+
+
+def category_flow(
+    month: str,
+    reporting_currency: str,
+    translation: TranslationService | None = None,
+) -> dict:
+    """Every category the month touched, combined into one currency.
+
+    The companion to :func:`cashflow.services.reporting.category_report`, and
+    its opposite in exactly one respect. That report is per currency and never
+    translated, because *what was spent on* is a question about money as it was
+    spent — a month's groceries in MYR and its rent in AUD are two facts. This
+    answers a question the split cannot: *where did the month go*, for a life
+    lived in more than one currency, where three lists side by side are not
+    something a person can read as one month.
+
+    Combining is the translation the BRD sanctions — "FX applies to balances and
+    cash flow only" (A36). Only investment performance is barred from it
+    (BR-18). It goes through the one translation service like every other
+    crossing, so the rate, its as-at date and its provenance travel with the
+    figures.
+
+    **The totals here are :func:`monthly_summary`'s totals, broken apart.** That
+    function computes the month's income and expense, its exclusions and its
+    provenance, and this one calls it rather than restating any of them — so the
+    diagram and the dashboard's four figures cannot disagree, and the month-end
+    rate is chosen in one place (§5.2.1).
+
+    **A missing rate excludes the whole currency** (FR-46). Its categories are
+    absent from the breakdown rather than present at zero, and the omission is
+    stated in the response beside the figures it changes.
+
+    Categories merge across currencies: groceries bought in MYR and groceries
+    bought in AUD are one category and one row, which is the point of
+    combining them.
+    """
+    if translation is None:
+        translation = TranslationService.from_settings()
+
+    # The headline figures, the exclusions and the provenance, all computed
+    # once. `excluded` is read back off it so a currency cannot be dropped from
+    # the totals and kept in the breakdown, or the reverse.
+    summary = monthly_summary(month, reporting_currency, translation)
+    excluded = {leg.currency for leg in summary.exclusions}
+
+    as_at = as_at_of(month)
+
+    rows = (
+        Transaction.objects.filter(
+            date__gte=month_start(month), date__lte=month_end(month)
+        )
+        .values(
+            "currency",
+            "direction",
+            "category_id",
+            "category__name",
+            "category__parent__name",
+        )
+        .annotate(total=Sum("amount"), count=Sum(1))
+        .order_by("currency", "direction", "category__parent__name", "category__name")
+    )
+
+    merged: dict[int, dict] = {}
+    for row in rows:
+        if row["currency"] in excluded:
+            continue
+
+        # One lookup per currency in practice: the resolver caches quotes, so
+        # every category in a currency is translated at the one rate the
+        # summary above used.
+        result = translation.translate(
+            Money(row["total"] or Decimal(0), row["currency"]), reporting_currency, as_at
+        )
+        if result.amount is None:
+            # Unreachable — the summary excluded every currency without a rate.
+            # A skip rather than an assertion, because the rule this stands in
+            # for is "exclude", and never "count as zero".
+            continue
+
+        entry = merged.setdefault(
+            row["category_id"],
+            {
+                "category": row["category__name"],
+                "parent": row["category__parent__name"] or "—",
+                "direction": row["direction"],
+                "total": Decimal(0),
+                "count": 0,
+            },
+        )
+        entry["total"] += result.amount
+        entry["count"] += row["count"]
+
+    children = sorted(
+        (
+            FlowCategory(
+                category_id=category_id,
+                category=entry["category"],
+                parent=entry["parent"],
+                direction=entry["direction"],
+                total=entry["total"],
+                count=entry["count"],
+            )
+            for category_id, entry in merged.items()
+        ),
+        key=lambda child: (child.direction, child.parent, child.category),
+    )
+
+    # Rolled up here rather than in the browser, for the reason ADR-02 gives:
+    # a parent total added client-side would be added in floats, and would stop
+    # agreeing with the children printed under it.
+    rollup: dict[tuple[str, str], dict] = {}
+    for child in children:
+        entry = rollup.setdefault(
+            (child.direction, child.parent),
+            {
+                "parent": child.parent,
+                "direction": child.direction,
+                "total": Decimal(0),
+                "count": 0,
+            },
+        )
+        entry["total"] += child.total
+        entry["count"] += child.count
+
+    parents = [
+        {
+            "parent": entry["parent"],
+            "direction": entry["direction"],
+            "total": Money(entry["total"], reporting_currency).api(),
+            "count": entry["count"],
+        }
+        for entry in sorted(
+            rollup.values(), key=lambda row: (row["direction"], row["parent"])
+        )
+    ]
+
+    return {
+        "month": month,
+        "currency": reporting_currency,
+        # A month with nothing left to draw. Not the same as a month that broke
+        # even, and not the same as a month excluded entirely — the exclusions
+        # below say which of the two this is.
+        "reportable": bool(children),
+        "income": summary.income.api(),
+        "expense": summary.expense.api(),
+        "net": summary.net.api(),
+        "parents": parents,
+        "children": [child.as_dict(reporting_currency) for child in children],
+        "exclusions": summary.exclusion_notices(),
+        "rate_provenance": summary.rate_provenance(),
+        # Silent when every contributing rate is fresh, as on net worth.
+        "as_at": summary.oldest_as_at.isoformat()
+        if (summary.oldest_as_at and summary.any_stale)
+        else None,
+        "any_stale": summary.any_stale,
+    }

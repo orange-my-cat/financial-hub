@@ -35,6 +35,7 @@ import {
   formatDecimal,
   formatMonth,
   formatPercent,
+  movementClass,
   parseAmountInput,
   roundDecimal,
 } from '@/lib/format'
@@ -42,21 +43,6 @@ import { useViewState } from '@/lib/viewState'
 import { icons } from '@/shell/icons'
 
 type RowState = 'idle' | 'saving' | 'saved' | 'error'
-
-/**
- * Rise or Breach, by sign and by whether the balance is owed.
- *
- * A liability moving up is more debt, which is not a rise, so the colour
- * inverts on it: green means the month moved in your favour here exactly as it
- * does everywhere else. A movement of zero takes neither colour — nothing
- * moved, and painting that green reports a rise that did not happen. The test
- * is on the string rather than on `Number(value)`: money carries no arithmetic
- * in the browser, and asking whether a figure is signed is not arithmetic.
- */
-function movementClass(value: string | null, isLiability: boolean): string {
-  if (!value || /^-?0(\.0*)?$/.test(value)) return ''
-  return value.startsWith('-') === isLiability ? 'money--rise' : 'money--breach'
-}
 
 // ---------------------------------------------------------------------------
 

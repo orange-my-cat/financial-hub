@@ -3,10 +3,18 @@
 Two things are being protected here, and neither is obvious from reading the
 happy path.
 
-**A typed rate is never overwritten by a fetched one** (BRD §4.3). It is the
-only reason `source` was captured from day one, and the failure it prevents is
+**A typed rate is never overwritten by a fetched one** (BRD §4.3) — on the
+backfill, which is what `load_daily_closes` does by default. It is the only
+reason `source` was captured from day one, and the failure it prevents is
 silent: a backfill restating the figure a month was actually closed on, from a
 source the user had already looked at and overridden.
+
+**A truncating load deliberately breaks that rule**, and the tests for it are
+grouped under their own heading below. `truncate=True` clears the window before
+loading, so what is stored afterwards is exactly the provider's series. It is
+what the FX screen's button does, it is off by default here, and the two things
+the tests pin down are that it never reaches outside its range and that what it
+clears is soft-deleted rather than gone.
 
 **A close never becomes a float.** The provider sends `0.70549` as a JSON
 number, and `json.loads` would hand back a float — ADR-02's entire objection,
@@ -375,8 +383,127 @@ def test_every_quoted_currency_is_loaded_when_none_is_named():
 
 
 # ---------------------------------------------------------------------------
+# Truncate and load — the replacement the screen's button performs
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_truncating_replaces_a_hand_typed_rate_with_the_providers_close():
+    """The BRD §4.3 departure, stated as a test so it cannot happen by accident."""
+    record_rate("AUD", MON, Decimal("0.66"))
+
+    outcome = load_daily_closes(
+        _fake(AUD=[(MON, "0.70549")]), MON, MON, truncate=True
+    )
+
+    assert ExchangeRate.objects.get(currency="AUD", rate_date=MON).rate == Decimal(
+        "0.70549"
+    )
+    assert outcome.removed == 1
+    assert outcome.kept_manual == 0
+    assert outcome.truncated is True
+
+
+@pytest.mark.django_db
+def test_a_typed_rate_the_provider_cannot_replace_is_removed_and_not_restored():
+    """The consequence worth knowing before pressing the button.
+
+    A month-end that fell on a weekend has a typed rate and no close to replace
+    it, so the rate is gone and that month re-reports on a rate carried from the
+    previous trading day. Asserted rather than left to be discovered.
+    """
+    record_rate("AUD", MON, Decimal("0.70549"))
+    record_rate("AUD", TUE, Decimal("0.66"))
+
+    outcome = load_daily_closes(
+        _fake(AUD=[(MON, "0.70600")]), MON, TUE, truncate=True
+    )
+
+    assert not ExchangeRate.objects.filter(currency="AUD", rate_date=TUE).exists()
+    assert outcome.removed == 2
+    assert outcome.written == 1
+
+
+@pytest.mark.django_db
+def test_what_a_truncating_load_clears_is_soft_deleted_and_recoverable():
+    """ADR-03 holds here too. The rows leave every calculation, not the database."""
+    record_rate("AUD", TUE, Decimal("0.66"))
+
+    load_daily_closes(_fake(AUD=[(MON, "0.70549")]), MON, TUE, truncate=True)
+
+    assert not ExchangeRate.objects.filter(rate_date=TUE).exists()
+    cleared = ExchangeRate.all_objects.get(currency="AUD", rate_date=TUE)
+    assert cleared.deleted_at is not None
+    assert cleared.rate == Decimal("0.66")
+
+
+@pytest.mark.django_db
+def test_truncating_never_reaches_outside_the_range_it_loads():
+    """The window is the whole safety property.
+
+    Everything before `start` is history the provider was not asked for and
+    cannot refill, so a load that cleared it would destroy a decade to refresh a
+    year.
+    """
+    record_rate("AUD", MON, Decimal("0.66"))
+
+    load_daily_closes(_fake(AUD=[(WED, "0.70549")]), TUE, WED, truncate=True)
+
+    assert ExchangeRate.objects.get(currency="AUD", rate_date=MON).rate == Decimal("0.66")
+
+
+@pytest.mark.django_db
+def test_truncating_only_clears_the_pairs_it_was_asked_for():
+    record_rate("MYR", MON, Decimal("4.0890"))
+
+    load_daily_closes(
+        _fake(AUD=[(MON, "0.70549")]), MON, MON, ("AUD",), truncate=True
+    )
+
+    assert ExchangeRate.objects.get(currency="MYR", rate_date=MON).rate == Decimal(
+        "4.0890"
+    )
+
+
+@pytest.mark.django_db
+def test_a_truncating_dry_run_says_what_it_would_clear_and_clears_nothing():
+    record_rate("AUD", MON, Decimal("0.66"))
+
+    outcome = load_daily_closes(
+        _fake(AUD=[(MON, "0.70549")]), MON, MON, dry_run=True, truncate=True
+    )
+
+    assert outcome.removed == 1
+    assert ExchangeRate.objects.get(currency="AUD", rate_date=MON).rate == Decimal("0.66")
+
+
+@pytest.mark.django_db
+def test_a_backfill_does_not_truncate_unless_it_is_asked_to():
+    """The default, restated at the seam. A decade-wide run must not clear one."""
+    record_rate("AUD", MON, Decimal("0.66"))
+
+    outcome = load_daily_closes(_fake(AUD=[(MON, "0.70549")]), MON, MON)
+
+    assert outcome.truncated is False
+    assert outcome.removed == 0
+    assert ExchangeRate.objects.get(currency="AUD", rate_date=MON).rate == Decimal("0.66")
+
+
+# ---------------------------------------------------------------------------
 # The last-365-days window, and the endpoint behind the button
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_button_truncates_its_window_without_being_asked():
+    """`load_recent` is the button, and the button replaces the year it loads."""
+    record_rate("AUD", MON, Decimal("0.66"))
+
+    outcome = load_recent(_fake(AUD=[(TUE, "0.70549")]), TUE)
+
+    assert outcome.truncated is True
+    assert outcome.removed == 1
+    assert not ExchangeRate.objects.filter(rate_date=MON).exists()
 
 
 @pytest.mark.django_db
@@ -402,6 +529,8 @@ def test_the_outcome_serialises_for_the_screen():
     assert body["provider"] == "fake"
     assert body["written"] == 3
     assert body["kept_manual"] == 0
+    assert body["truncated"] is False
+    assert body["removed"] == 0
     aud = next(pair for pair in body["pairs"] if pair["currency"] == "AUD")
     assert aud["pair"] == "AUD/USD"
     assert aud["first_date"] == MON.isoformat()

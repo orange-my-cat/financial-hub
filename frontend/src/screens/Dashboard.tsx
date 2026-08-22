@@ -9,9 +9,11 @@
  * **It reports the last closed month, not the present.** Balances are entered
  * when a month ends, so a dashboard fixed to the month in progress would be empty
  * for all but the last day of it. Which month that is is decided server-side by
- * one service (`core.services.reporting_month`) and named in the subhead — the
- * screen states its period rather than letting a month-old total pass for today's.
- * The outstanding tasks panel is the exception, and stays anchored to now.
+ * one service (`core.services.reporting_month`); a subhead names it whenever the
+ * choice needs explaining — a month closed early, an empty system, or a month
+ * named in the URL. The outstanding tasks panel is the exception: it is anchored
+ * to the calendar rather than to the figures, and asks about the close that is
+ * due — the last month that has ended, and the one before it.
  *
  * Panel order is fixed:
  *
@@ -68,6 +70,7 @@ import {
   CHART_HEIGHT,
   CHART_MARGIN,
   DASH,
+  FIT_DOMAIN,
   GRID,
   MIN_TICK_GAP,
   REFERENCE,
@@ -235,24 +238,14 @@ function MonthTooltip({
 /**
  * Which month the figures are for, in words, above everything else.
  *
- * The dashboard does not report the present, and a screen showing last month's
- * net worth without saying so is a screen that will be misread once — which is
- * once too often for a net worth figure. The month is named, and so is the reason
- * it is that month.
+ * Only the months that need explaining are captioned. The ordinary case — the
+ * last month with balances recorded — says nothing here; a month closed early, an
+ * empty system and a month named in the URL each carry a reason it is that month.
  */
 function Period({ reporting }: { readonly reporting: DashboardPayload['reporting_month'] }) {
   const month = formatMonth(reporting.month)
-  const current = formatMonth(reporting.current_month)
 
-  if (reporting.basis === 'closed') {
-    return (
-      <p className="screen__subhead">
-        Figures for <strong>{month}</strong> — the last month with balances recorded.
-        Balances are stated as at a month’s last day, so {current} appears here once it
-        has been closed.
-      </p>
-    )
-  }
+  if (reporting.basis === 'closed') return null
 
   if (reporting.basis === 'current') {
     return (
@@ -489,6 +482,7 @@ export function Dashboard() {
                   axisLine={false}
                   tickFormatter={compactTick}
                   width={AXIS_WIDTH}
+                  domain={FIT_DOMAIN}
                 />
                 <Tooltip
                   cursor={false}
@@ -709,7 +703,13 @@ export function Dashboard() {
                         axisLine={false}
                         tickFormatter={(value: number) => `${value}%`}
                         width={AXIS_WIDTH}
+                        domain={FIT_DOMAIN}
                       />
+                      {/* Zero is the line between saving and living off savings,
+                          so it is drawn whenever it is in view. With a fitted
+                          axis a wholly positive run puts it out of view, and
+                          Recharts drops it — correctly: there is nothing to
+                          mark. */}
                       <ReferenceLine y={0} stroke="rgba(233,233,237,.22)" />
                       <Tooltip
                         cursor={false}
@@ -743,8 +743,8 @@ export function Dashboard() {
       </section>
 
       {/*
-        4 — Holdings. What is held now: what it cost, what it is worth on the last
-        price it traded at, and the difference.
+        4 — Holdings. What was held as at the reported month: what it cost, what it
+        was worth on the last price it had traded at by then, and the difference.
 
         Laid out like the two panels above and on the same grid, so the fourth plot
         sits on the same x axis as the other three.
@@ -763,7 +763,7 @@ export function Dashboard() {
                   counted as zero.
                 </p>
               ) : (
-                <p className="fx__note">Nothing currently held.</p>
+                <p className="fx__note">Nothing held in {formatMonth(data.month)}.</p>
               )}
             </div>
             <div />
@@ -780,9 +780,9 @@ export function Dashboard() {
                       currency={held.cost_basis.currency}
                     />
                   </div>
-                  <div className="holdings__note secondary">
-                    {held.holdings} holding{held.holdings === 1 ? '' : 's'} held
-                  </div>
+                  {/* On the month before the reported one, as on the two panels
+                      above and over the same pair of months. */}
+                  <Change change={held.change.cost_basis} />
                 </div>
 
                 <div className="holdings__figure">
@@ -798,15 +798,7 @@ export function Dashboard() {
                       <span className="secondary">—</span>
                     )}
                   </div>
-                  {/* The whole basis of the figure above, in one line. An estimate
-                      resting on a price from years ago is not a current value, and
-                      this is the only place that can say so. */}
-                  {held.priced_from && (
-                    <div className="holdings__note secondary">
-                      At each holding’s last traded price, oldest{' '}
-                      {formatDate(held.priced_from)}
-                    </div>
-                  )}
+                  <Change change={held.change.estimated_value} />
                 </div>
 
                 <div className="holdings__figure">
@@ -827,9 +819,7 @@ export function Dashboard() {
                       <span className="secondary">—</span>
                     )}
                   </div>
-                  <div className="holdings__note secondary">
-                    Estimated, not realised. Nothing here has been sold.
-                  </div>
+                  <Change change={held.change.estimated_gain} />
                 </div>
               </div>
 
@@ -883,29 +873,6 @@ export function Dashboard() {
                   {/* Two series on one scale, which is legitimate here and is not
                       on the cash flow panel: both are money, in one currency, and
                       the distance between them *is* the figure being read. */}
-                  <div className="chartkey secondary">
-                    <span className="chartkey__item">
-                      <svg width="22" height="8" aria-hidden="true">
-                        <line
-                          x1="0"
-                          y1="4"
-                          x2="22"
-                          y2="4"
-                          stroke={REFERENCE}
-                          strokeWidth="2"
-                          strokeDasharray={DASH}
-                        />
-                      </svg>
-                      Cost basis
-                    </span>
-                    <span className="chartkey__item">
-                      <svg width="22" height="8" aria-hidden="true">
-                        <line x1="0" y1="4" x2="22" y2="4" stroke={ACCENT} strokeWidth="2" />
-                      </svg>
-                      Estimated value
-                    </span>
-                  </div>
-
                   <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
                     <LineChart
                       data={holdingsChart}
@@ -931,6 +898,7 @@ export function Dashboard() {
                         axisLine={false}
                         tickFormatter={compactTick}
                         width={AXIS_WIDTH}
+                        domain={FIT_DOMAIN}
                       />
                       <Tooltip
                         cursor={false}

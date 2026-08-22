@@ -372,6 +372,7 @@ def test_the_taxonomy_is_two_levels_and_no_deeper():
 
 @pytest.fixture
 def rent_template(db) -> RecurringTemplate:
+    """Rent on the 5th, monthly, from May."""
     return RecurringTemplate.objects.create(
         name="Rent",
         amount=Decimal("2200.00"),
@@ -379,36 +380,123 @@ def rent_template(db) -> RecurringTemplate:
         direction=Direction.EXPENSE,
         category=child("Rent"),
         frequency=Frequency.MONTHLY,
-        start_month="2026-05",
+        anchor_date=date(2026, 5, 5),
     )
 
 
-def test_a_template_proposes_every_period_and_posts_nothing(rent_template):
+def _salary(frequency: str, anchor: date) -> RecurringTemplate:
+    return RecurringTemplate.objects.create(
+        name="Salary",
+        amount=Decimal("3000.00"),
+        currency="AUD",
+        direction=Direction.INCOME,
+        category=child("Salary"),
+        frequency=frequency,
+        anchor_date=anchor,
+    )
+
+
+def test_a_template_proposes_every_occurrence_and_posts_nothing(rent_template):
     proposals = recurring.outstanding_proposals(through="2026-07")
 
-    assert [p.period for p in proposals] == ["2026-05", "2026-06", "2026-07"]
+    assert [p.occurrence.isoformat() for p in proposals] == [
+        "2026-05-05",
+        "2026-06-05",
+        "2026-07-05",
+    ]
     # Never posted automatically. Nothing exists until confirmed.
     assert Transaction.objects.count() == 0
 
 
-def test_confirming_creates_a_transaction_and_stops_the_proposal(rent_template):
-    recurring.confirm(rent_template.pk, "2026-06")
+def test_a_weekly_template_proposes_every_seventh_day():
+    """The anchor's weekday is the arrangement: 4 June 2026 is a Thursday."""
+    _salary(Frequency.WEEKLY, date(2026, 6, 4))
 
-    remaining = [p.period for p in recurring.outstanding_proposals(through="2026-07")]
-    assert remaining == ["2026-05", "2026-07"]
+    dates = [p.occurrence for p in recurring.outstanding_proposals(through="2026-06")]
+
+    assert [d.isoformat() for d in dates] == [
+        "2026-06-04",
+        "2026-06-11",
+        "2026-06-18",
+        "2026-06-25",
+    ]
+    assert {d.weekday() for d in dates} == {3}
+
+
+def test_a_fortnightly_template_proposes_every_fourteenth_day():
+    _salary(Frequency.FORTNIGHTLY, date(2026, 6, 4))
+
+    dates = [p.occurrence for p in recurring.outstanding_proposals(through="2026-07")]
+
+    assert [d.isoformat() for d in dates] == [
+        "2026-06-04",
+        "2026-06-18",
+        "2026-07-02",
+        "2026-07-16",
+        "2026-07-30",
+    ]
+
+
+def test_a_fortnightly_rhythm_crosses_months_without_resetting():
+    """The phase belongs to the anchor, not to the month it lands in."""
+    _salary(Frequency.FORTNIGHTLY, date(2026, 1, 29))
+
+    dates = [p.occurrence for p in recurring.outstanding_proposals(through="2026-03")]
+
+    assert [d.isoformat() for d in dates] == [
+        "2026-01-29",
+        "2026-02-12",
+        "2026-02-26",
+        "2026-03-12",
+        "2026-03-26",
+    ]
+
+
+def test_a_monthly_anchor_the_month_does_not_have_is_clamped():
+    """Rent due on the 31st is due on the 28th of February, then the 31st again.
+
+    Clamping the derived date rather than moving the anchor, so one short month
+    does not drag the arrangement permanently earlier.
+    """
+    assert recurring.add_months(date(2026, 1, 31), 1).isoformat() == "2026-02-28"
+    assert recurring.add_months(date(2026, 1, 31), 2).isoformat() == "2026-03-31"
+    assert recurring.add_months(date(2028, 1, 31), 1).isoformat() == "2028-02-29"
+
+
+def test_confirming_creates_a_transaction_and_stops_that_occurrence(rent_template):
+    recurring.confirm(rent_template.pk, date(2026, 6, 5))
+
+    remaining = [
+        p.occurrence.isoformat() for p in recurring.outstanding_proposals(through="2026-07")
+    ]
+    assert remaining == ["2026-05-05", "2026-07-05"]
     assert Transaction.objects.count() == 1
+
+
+def test_a_confirmed_transaction_falls_on_its_occurrence(rent_template):
+    result = recurring.confirm(rent_template.pk, date(2026, 6, 5))
+
+    assert result.transaction.date.isoformat() == "2026-06-05"
+
+
+def test_a_date_given_at_confirmation_still_wins(rent_template):
+    result = recurring.confirm(rent_template.pk, date(2026, 6, 5), on_date=date(2026, 6, 19))
+
+    assert result.transaction.date.isoformat() == "2026-06-19"
 
 
 def test_the_amount_is_adjustable_at_confirmation(rent_template):
     """The whole point of proposing rather than posting."""
-    result = recurring.confirm(rent_template.pk, "2026-06", amount=Decimal("2350.00"))
+    result = recurring.confirm(
+        rent_template.pk, date(2026, 6, 5), amount=Decimal("2350.00")
+    )
 
     assert result.transaction.amount == Decimal("2350.00")
     assert rent_template.amount == Decimal("2200.00")
 
 
 def test_a_confirmed_transaction_is_independent_of_its_template(rent_template):
-    result = recurring.confirm(rent_template.pk, "2026-06")
+    result = recurring.confirm(rent_template.pk, date(2026, 6, 5))
 
     rent_template.amount = Decimal("9999")
     rent_template.save()
@@ -417,47 +505,73 @@ def test_a_confirmed_transaction_is_independent_of_its_template(rent_template):
     assert result.transaction.amount == Decimal("2200.00")
 
 
-def test_a_skipped_period_stays_skipped(rent_template):
+def test_a_skipped_occurrence_stays_skipped(rent_template):
     """OI-09 — outstanding until confirmed or explicitly dismissed."""
-    recurring.dismiss(rent_template.pk, "2026-06")
+    recurring.dismiss(rent_template.pk, date(2026, 6, 5))
 
-    remaining = [p.period for p in recurring.outstanding_proposals(through="2026-07")]
-    assert "2026-06" not in remaining
+    remaining = [p.occurrence for p in recurring.outstanding_proposals(through="2026-07")]
+    assert date(2026, 6, 5) not in remaining
     assert RecurringDismissal.objects.count() == 1
     assert Transaction.objects.count() == 0
 
 
 def test_confirming_twice_is_refused(rent_template):
-    recurring.confirm(rent_template.pk, "2026-06")
+    recurring.confirm(rent_template.pk, date(2026, 6, 5))
 
     with pytest.raises(BusinessRuleError, match="already been confirmed"):
-        recurring.confirm(rent_template.pk, "2026-06")
+        recurring.confirm(rent_template.pk, date(2026, 6, 5))
 
 
-def test_a_quarterly_template_proposes_every_third_month():
-    template = RecurringTemplate.objects.create(
-        name="Insurance",
-        amount=Decimal("400"),
-        currency="AUD",
-        direction=Direction.EXPENSE,
-        category=child("Insurance"),
-        frequency=Frequency.QUARTERLY,
-        start_month="2026-01",
-    )
+def test_ending_stops_later_occurrences_and_leaves_history(rent_template):
+    recurring.confirm(rent_template.pk, date(2026, 5, 5))
 
-    periods = [p.period for p in recurring.outstanding_proposals(through="2026-08")]
+    recurring.end_template(rent_template, today=date(2026, 6, 20))
 
-    assert periods == ["2026-01", "2026-04", "2026-07"]
-    assert template.period_months == 3
+    rent_template.refresh_from_db()
+    assert rent_template.is_active is False
+    assert Transaction.objects.count() == 1
+    # Nothing after the day it ended, whatever month is asked for.
+    assert [
+        p.occurrence.isoformat() for p in recurring.outstanding_proposals(through="2026-12")
+    ] == ["2026-06-05"]
 
 
-def test_ending_a_template_stops_future_proposals_and_leaves_history(rent_template):
-    recurring.confirm(rent_template.pk, "2026-05")
+def test_ending_does_not_discard_occurrences_nobody_decided(rent_template):
+    """OI-09 — ending an arrangement is not a way to make its weeks disappear."""
+    recurring.end_template(rent_template, date(2026, 6, 30), today=date(2026, 8, 20))
 
-    recurring.end_template(rent_template, end_month="2026-06")
+    outstanding = [
+        p.occurrence.isoformat() for p in recurring.outstanding_proposals(through="2026-12")
+    ]
+    # May and June happened while it was running, and were never answered.
+    assert outstanding == ["2026-05-05", "2026-06-05"]
+
+
+def test_ending_on_a_future_date_leaves_it_running_until_then(rent_template):
+    """An arrangement known to be ending is not one that has ended."""
+    recurring.end_template(rent_template, date(2026, 9, 30), today=date(2026, 8, 20))
+
+    rent_template.refresh_from_db()
+    assert rent_template.is_active is True
+    assert [
+        p.occurrence.isoformat() for p in recurring.outstanding_proposals(through="2026-12")
+    ] == ["2026-05-05", "2026-06-05", "2026-07-05", "2026-08-05", "2026-09-05"]
+
+
+def test_cancelling_before_the_first_occurrence_proposes_nothing(rent_template):
+    """An end date earlier than the anchor is how "it never started" is written."""
+    recurring.end_template(rent_template, date(2026, 4, 30), today=date(2026, 8, 20))
 
     assert recurring.outstanding_proposals(through="2026-12") == []
-    assert Transaction.objects.count() == 1
+
+
+def test_an_end_date_never_proposes_past_the_month_asked_for(rent_template):
+    """The month bound comes first; an end date can only narrow it."""
+    recurring.end_template(rent_template, date(2027, 12, 31), today=date(2026, 8, 20))
+
+    assert [
+        p.occurrence.isoformat() for p in recurring.outstanding_proposals(through="2026-06")
+    ] == ["2026-05-05", "2026-06-05"]
 
 
 def test_an_unconfirmed_proposal_leaves_no_trace_in_reporting(rent_template):
@@ -529,6 +643,96 @@ def test_children_roll_up_to_their_parents():
 
     assert food["total"] == "420.00"
     assert food["count"] == 2
+
+
+def test_a_row_states_its_movement_on_the_month_before():
+    for month, amount in ((6, "200"), (7, "300")):
+        record_transaction(
+            on_date=date(2026, month, 5),
+            amount=Decimal(amount),
+            currency="USD",
+            category_id=child("Groceries").pk,
+        )
+
+    row = reporting.category_report("2026-07")[0]["children"][0]
+
+    assert row["total"] == "300.00"
+    assert row["change"] == {"change": "100.00", "change_percent": "50.0"}
+
+
+def test_a_parent_movement_is_rolled_up_not_summed_from_its_children():
+    for month, groceries, eating_out in ((6, "300", "100"), (7, "250", "200")):
+        for name, amount in (("Groceries", groceries), ("Eating Out", eating_out)):
+            record_transaction(
+                on_date=date(2026, month, 5),
+                amount=Decimal(amount),
+                currency="USD",
+                category_id=child(name).pk,
+            )
+
+    block = reporting.category_report("2026-07")[0]
+    food = next(row for row in block["parents"] if row["parent"] == "Food")
+
+    # 450 against 400 last month.
+    assert food["total"] == "450.00"
+    assert food["change"] == {"change": "50.00", "change_percent": "12.5"}
+
+
+def test_a_category_new_this_month_moves_from_zero():
+    """Absence and zero coincide in cash flow: last month genuinely spent none."""
+    record_transaction(
+        on_date=date(2026, 7, 5),
+        amount=Decimal("80"),
+        currency="USD",
+        category_id=child("Groceries").pk,
+    )
+
+    row = reporting.category_report("2026-07")[0]["children"][0]
+
+    # The whole total is the change, and a rise from nothing has no proportion.
+    assert row["change"] == {"change": "80.00", "change_percent": None}
+
+
+def test_a_movement_never_crosses_currencies():
+    """The comparison is per currency, like every other figure in this report."""
+    record_transaction(
+        on_date=date(2026, 6, 5),
+        amount=Decimal("400"),
+        currency="MYR",
+        category_id=child("Groceries").pk,
+    )
+    record_transaction(
+        on_date=date(2026, 7, 5),
+        amount=Decimal("100"),
+        currency="USD",
+        category_id=child("Groceries").pk,
+    )
+
+    blocks = {block["currency"]: block for block in reporting.category_report("2026-07")}
+
+    # July has no MYR at all, so only the USD block exists — and its change is
+    # against USD's own June, which was nothing. The MYR 400 is not subtracted.
+    assert list(blocks) == ["USD"]
+    assert blocks["USD"]["children"][0]["change"] == {
+        "change": "100.00",
+        "change_percent": None,
+    }
+
+
+def test_a_category_that_stopped_has_no_row_to_state_it_on():
+    """A limitation worth pinning: the report is this month's categories.
+
+    A category with nothing this month is absent rather than shown falling to
+    zero, because there is no row for a month in which nothing happened.
+    """
+    record_transaction(
+        on_date=date(2026, 6, 5),
+        amount=Decimal("400"),
+        currency="USD",
+        category_id=child("Groceries").pk,
+    )
+
+    assert reporting.category_report("2026-07") == []
 
 
 def test_a_month_outside_the_range_reports_nothing():

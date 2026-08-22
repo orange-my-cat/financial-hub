@@ -94,12 +94,17 @@ class Holding(SoftDeleteModel):
 
 
 class InvestmentTransaction(SoftDeleteModel):
-    """Buy, sell, split, distribution or reinvestment (BR-20).
+    """Buy, sell, split or reinvestment (BR-20).
 
     Every other corporate action — mergers, spin-offs, rights issues, returns of
     capital — is out of scope, and must be represented by hand as a sale and a
     purchase. The resulting figures will not reflect the true event, and the
     system offers no guidance rather than guessing.
+
+    A cash-only distribution is not one of these either, and not because it is
+    complex: at the Product Owner's instruction a distribution and the
+    reinvestment it funded are one transaction, and a distribution taken as cash
+    is not entered at all. See `investments.replay.Action`.
     """
 
     ACTION_CHOICES = [(action.value, action.value) for action in Action]
@@ -122,7 +127,7 @@ class InvestmentTransaction(SoftDeleteModel):
     fees = money_field(default=0)
     #: Splits: new units per old unit. 2 for 2:1, 0.1 for a 1:10 consolidation.
     split_ratio = quantity_field(default=0)
-    #: Distributions: the cash received.
+    #: Reinvestments: the cash the distribution paid, before it bought units.
     cash_amount = money_field(default=0)
 
     note = models.CharField(max_length=255, blank=True, default="")

@@ -5,6 +5,14 @@
  * the lower table only; the chart and the headline are unchanged, and there is
  * **no drill-down** anywhere.
  *
+ * The screen reads two different questions at once, and the two view controls
+ * divide cleanly between them. The **date range** governs the trend plot and
+ * the month-on-month table below it — how net worth moved. The **spine**
+ * selects the single month the headline figure and the slice table report —
+ * what it is at a moment. Changing months on the spine therefore restates the
+ * top figure and re-slices the table beneath it, and leaves the plot and the
+ * month-on-month table exactly as they were.
+ *
  * Two treatments are conditional, and their absence is the design:
  *
  *   * The **as-at strip** appears only when a contributing rate is stale. When
@@ -44,6 +52,7 @@ import {
   AXIS_WIDTH,
   CHART_HEIGHT,
   CHART_MARGIN,
+  FIT_DOMAIN,
   GRID,
   MIN_TICK_GAP,
   compactTick,
@@ -54,8 +63,9 @@ import {
   formatMonth,
   formatMonthShort,
   formatPercent,
+  movementClass,
 } from '@/lib/format'
-import { useViewState } from '@/lib/viewState'
+import { shiftMonths, useViewState } from '@/lib/viewState'
 
 const DIMENSIONS = [
   { key: 'type', label: 'Account Type' },
@@ -80,19 +90,6 @@ function Amount({
       <span className="money__code">{currency}</span>
     </span>
   )
-}
-
-/**
- * Rise or Breach, by sign — the one place this screen decides that.
- *
- * A movement of zero takes neither colour. Nothing moved, and painting that
- * green would report a rise that did not happen. The test is on the string
- * rather than on `Number(value)`: money carries no arithmetic in the browser,
- * and asking whether a figure is signed is not arithmetic.
- */
-function movementClass(value: string | null): string {
-  if (!value || /^-?0(\.0*)?$/.test(value)) return ''
-  return value.startsWith('-') ? 'money--breach' : 'money--rise'
 }
 
 /**
@@ -157,15 +154,35 @@ function TrendTooltip({
 }
 
 export function NetWorth() {
-  const { currency, from, to } = useViewState()
+  // `month` is the spine's selection; `from`/`to` are the reporting range. The
+  // two are separate values and this screen is the reason: it reports one month
+  // and a run of months side by side.
+  const { currency, from, to, month } = useViewState()
   const [dimension, setDimension] = useState<string>('type')
   /** Which month the pointer is over — the plot draws its own band, as the
       dashboard's three do, so the highlight sits behind the line. */
   const [hover, setHover] = useState<string | null>(null)
 
-  const netWorth = useNetWorth(to, currency)
+  const netWorth = useNetWorth(month, currency)
   const trend = useNetWorthTrend(from, to, currency)
-  const slice = useNetWorthSlice(to, currency, dimension)
+  const slice = useNetWorthSlice(month, currency, dimension)
+
+  /**
+   * How the selected month moved — its own two-month window, not a reading off
+   * the plot's trend.
+   *
+   * The net worth payload carries a total and no movement, so the change has to
+   * come from the trend service either way; the question is which trend. Taking
+   * it from the plot's would tie the headline to the reporting range, and the
+   * same selected month would gain and lose its change line as the reader
+   * moved the range end around it — or lose it outright for a month the spine
+   * can reach but the range does not cover. The headline is a month-at-a-time
+   * figure and asks a month-at-a-time question.
+   *
+   * The server computes the movement, as it must: money carries no arithmetic
+   * in the browser (ADR-12), so subtracting two totals here is not an option.
+   */
+  const movement = useNetWorthTrend(shiftMonths(month, -1), month, currency)
 
   const chart = useMemo(
     () =>
@@ -191,8 +208,8 @@ export function NetWorth() {
 
   /** `activeLabel` is the month, the same handler shape the dashboard uses. */
   const track = (state: MouseHandlerDataParam) => {
-    const month = state?.activeLabel
-    if (typeof month === 'string') setHover(month)
+    const hovered = state?.activeLabel
+    if (typeof hovered === 'string') setHover(hovered)
   }
 
   if (netWorth.isPending) return <div className="boot">Loading…</div>
@@ -200,7 +217,10 @@ export function NetWorth() {
 
   const { data, completeness, exclusions, rate_provenance: provenance } = netWorth.data
   const points = trend.data?.points ?? []
-  const latest = points[points.length - 1]
+  // Keyed by month rather than taken from the end of the two: the window's
+  // second point is the selected month, and saying so is cheaper to read than
+  // trusting the order.
+  const selected = movement.data?.points.find((point) => point.month === month)
 
   return (
     <div className="networth">
@@ -224,13 +244,13 @@ export function NetWorth() {
               same movement stated a second way, not a separate qualifier. The
               percentage is absent against a zero prior month, where a rise from
               nothing has no proportion. */}
-          {data.total && latest?.change && (
+          {data.total && selected?.change && (
             <div className="networth__change mono">
-              <span className={movementClass(latest.change)}>
-                {latest.change.startsWith('-') ? '' : '+'}
-                {formatDecimal(latest.change)}{' '}
-                {latest.change_percent && (
-                  <span className="secondary">({latest.change_percent}%)</span>
+              <span className={movementClass(selected.change)}>
+                {selected.change.startsWith('-') ? '' : '+'}
+                {formatDecimal(selected.change)}{' '}
+                {selected.change_percent && (
+                  <span className="secondary">({selected.change_percent}%)</span>
                 )}
               </span>
             </div>
@@ -309,6 +329,7 @@ export function NetWorth() {
                   axisLine={false}
                   tickFormatter={compactTick}
                   width={AXIS_WIDTH}
+                  domain={FIT_DOMAIN}
                 />
                 {/* No cursor rule: the band under the line is the highlight,
                     as it is on the dashboard. */}
@@ -318,7 +339,7 @@ export function NetWorth() {
                   dataKey="total"
                   stroke={ACCENT}
                   strokeWidth={2}
-                  dot={{ r: 2 }}
+                  dot={false}
                   // A gap stays a gap. Joining across months nobody recorded
                   // would draw a trend that did not happen.
                   connectNulls={false}

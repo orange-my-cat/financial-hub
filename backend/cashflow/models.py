@@ -15,16 +15,10 @@ because nothing ever adds them together.
 
 from __future__ import annotations
 
-from django.core.validators import RegexValidator
 from django.db import models
 
 from core.currencies import CURRENCY_CHOICES
 from core.models import SoftDeleteModel, money_field
-from core.months import MONTH_PATTERN
-
-month_validator = RegexValidator(regex=MONTH_PATTERN, message="Enter a month as YYYY-MM.")
-
-_MONTH_REGEX = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 
 class Direction(models.TextChoices):
@@ -159,11 +153,11 @@ class Transaction(SoftDeleteModel):
         blank=True,
         related_name="confirmed",
     )
-    #: The period this transaction satisfied, so the proposal stops recurring.
-    #: A confirmed transaction is thereafter independent of its template.
-    recurring_period = models.CharField(
-        max_length=7, null=True, blank=True, validators=[month_validator]
-    )
+    #: The occurrence this transaction satisfied, so that occurrence stops being
+    #: proposed. A date rather than a month because a weekly arrangement has four
+    #: or five of them in a month. A confirmed transaction is thereafter
+    #: independent of its template.
+    recurring_occurrence = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ["-date", "-id"]
@@ -172,17 +166,12 @@ class Transaction(SoftDeleteModel):
                 condition=models.Q(amount__gt=0),
                 name="cashflow_amount_is_positive",
             ),
-            models.CheckConstraint(
-                condition=models.Q(recurring_period__isnull=True)
-                | models.Q(recurring_period__regex=_MONTH_REGEX),
-                name="cashflow_recurring_period_is_a_month",
-            ),
         ]
         indexes = [
             models.Index(fields=["-date"], name="cashflow_txn_date"),
             models.Index(fields=["category", "-date"], name="cashflow_txn_cat_date"),
             models.Index(
-                fields=["recurring_template", "recurring_period"],
+                fields=["recurring_template", "recurring_occurrence"],
                 name="cashflow_txn_recurring",
             ),
         ]
@@ -192,9 +181,15 @@ class Transaction(SoftDeleteModel):
 
 
 class Frequency(models.TextChoices):
+    """How often an arrangement falls due.
+
+    Weekly and fortnightly are the reason the anchor is a date: a fortnightly
+    salary lands on a particular Thursday, and no month key can say which one.
+    """
+
+    WEEKLY = "Weekly", "Weekly"
+    FORTNIGHTLY = "Fortnightly", "Fortnightly"
     MONTHLY = "Monthly", "Monthly"
-    QUARTERLY = "Quarterly", "Quarterly"
-    ANNUAL = "Annual", "Annual"
 
 
 class RecurringTemplate(SoftDeleteModel):
@@ -215,11 +210,16 @@ class RecurringTemplate(SoftDeleteModel):
     )
     frequency = models.CharField(max_length=12, choices=Frequency.choices)
 
-    start_month = models.CharField(max_length=7, validators=[month_validator])
-    #: Ending a recurring item stops future proposals and leaves history intact.
-    end_month = models.CharField(
-        max_length=7, null=True, blank=True, validators=[month_validator]
-    )
+    #: The first occurrence, and the only thing that fixes the rhythm: every
+    #: later occurrence is counted from here. It carries the weekday a weekly or
+    #: fortnightly arrangement falls on and the day of the month a monthly one
+    #: does, which is why it is one date rather than a start plus a day.
+    anchor_date = models.DateField()
+    #: Ending a recurring item stops proposals after this date and leaves history
+    #: intact. Null while it runs indefinitely. Deliberately allowed to precede
+    #: the anchor date: an arrangement cancelled before its first occurrence is
+    #: one that never proposes anything, and that is how it is written.
+    end_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -229,46 +229,43 @@ class RecurringTemplate(SoftDeleteModel):
                 condition=models.Q(amount__gt=0),
                 name="cashflow_template_amount_is_positive",
             ),
-            models.CheckConstraint(
-                condition=models.Q(start_month__regex=_MONTH_REGEX),
-                name="cashflow_template_start_is_a_month",
-            ),
         ]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.frequency})"
 
     @property
-    def period_months(self) -> int:
-        return {
-            Frequency.MONTHLY: 1,
-            Frequency.QUARTERLY: 3,
-            Frequency.ANNUAL: 12,
-        }[self.frequency]
+    def step_days(self) -> int | None:
+        """Days between occurrences, or None for a monthly step.
+
+        A month is not a number of days, so monthly stepping is calendar
+        arithmetic and lives in the service with the clamping it needs.
+        """
+        return {Frequency.WEEKLY: 7, Frequency.FORTNIGHTLY: 14}.get(self.frequency)
 
 
 class RecurringDismissal(SoftDeleteModel):
-    """A period the user explicitly skipped.
+    """An occurrence the user explicitly skipped.
 
-    OI-09: a proposal for a skipped period remains outstanding until confirmed
-    **or explicitly dismissed**. Without this row a skipped month would either
-    nag forever or vanish silently, and the second is worse — a proposal that
-    disappears on its own is one the user never decided about.
+    OI-09: a proposal for a skipped occurrence remains outstanding until
+    confirmed **or explicitly dismissed**. Without this row a skipped week would
+    either nag forever or vanish silently, and the second is worse — a proposal
+    that disappears on its own is one the user never decided about.
     """
 
     template = models.ForeignKey(
         RecurringTemplate, on_delete=models.CASCADE, related_name="dismissals"
     )
-    period = models.CharField(max_length=7, validators=[month_validator])
+    occurrence = models.DateField()
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["template", "period"],
+                fields=["template", "occurrence"],
                 condition=models.Q(deleted_at__isnull=True),
-                name="cashflow_one_dismissal_per_period",
+                name="cashflow_one_dismissal_per_occurrence",
             ),
         ]
 
     def __str__(self) -> str:
-        return f"{self.template.name} skipped {self.period}"
+        return f"{self.template.name} skipped {self.occurrence:%Y-%m-%d}"

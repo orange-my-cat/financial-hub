@@ -377,22 +377,46 @@ def test_a_split_affects_only_lots_open_at_its_date_even_when_entered_later():
     assert result.total_quantity == Decimal("300")
 
 
-def test_a_distribution_changes_no_lot_and_no_cost_basis():
+def test_a_reinvestment_records_the_cash_and_the_units_it_bought():
+    """One event, both effects. There is no cash-only distribution to enter."""
     result = replay(
         [
             buy(1, date(2026, 1, 1), "100", "10.00"),
             ReplayTransaction(
                 id=2,
-                action=Action.DISTRIBUTION,
+                action=Action.REINVESTMENT,
                 on_date=date(2026, 6, 1),
+                quantity=Decimal("3"),
+                unit_price=Decimal("15.00"),
                 cash_amount=Decimal("45.00"),
             ),
         ]
     )
 
-    assert result.total_quantity == Decimal("100")
-    assert result.total_cost_basis == Decimal("1000.00")
+    # The income the holding paid out...
     assert result.total_distributions == Decimal("45.00")
+    # ...and the units that income bought, in the FIFO queue at what they cost.
+    assert result.total_quantity == Decimal("103")
+    assert result.total_cost_basis == Decimal("1045.00")
+
+
+def test_a_reinvestment_without_cash_distributes_nothing():
+    """Zero is not a distribution. The service refuses the entry; the engine
+    replays whatever it is given, and gives the queue its units either way."""
+    result = replay(
+        [
+            ReplayTransaction(
+                id=1,
+                action=Action.REINVESTMENT,
+                on_date=date(2026, 6, 1),
+                quantity=Decimal("3"),
+                unit_price=Decimal("15.00"),
+            ),
+        ]
+    )
+
+    assert result.distributions == ()
+    assert result.total_quantity == Decimal("3")
 
 
 def test_a_reinvestment_creates_a_lot_at_the_reinvestment_price():
@@ -401,17 +425,11 @@ def test_a_reinvestment_creates_a_lot_at_the_reinvestment_price():
             buy(1, date(2026, 1, 1), "100", "10.00"),
             ReplayTransaction(
                 id=2,
-                action=Action.DISTRIBUTION,
-                on_date=date(2026, 6, 1),
-                cash_amount=Decimal("45.00"),
-            ),
-            ReplayTransaction(
-                id=3,
                 action=Action.REINVESTMENT,
                 on_date=date(2026, 6, 1),
-                sequence=1,
                 quantity=Decimal("3"),
                 unit_price=Decimal("15.00"),
+                cash_amount=Decimal("45.00"),
             ),
         ]
     )
@@ -599,19 +617,27 @@ def test_a_holding_with_no_priced_transaction_has_no_estimate():
     assert result.estimated_gain is None
 
 
-def test_a_distribution_is_not_a_price_observation():
-    """Cash against a holding says nothing about what a unit is worth."""
+def test_a_reinvestment_is_a_price_observation():
+    """Cash alone says nothing about what a unit is worth, but a reinvestment
+    bought units at a price, and that price was transacted like any other.
+
+    This is the whole reason the two actions could be combined without losing
+    anything: the cash-only distribution that carried no price is no longer a
+    thing that can be entered."""
     result = replay(
         [
             buy(1, date(2026, 1, 10), "100", "10.00"),
             ReplayTransaction(
                 id=2,
-                action=Action.DISTRIBUTION,
+                action=Action.REINVESTMENT,
                 on_date=date(2026, 7, 1),
+                quantity=Decimal("4"),
+                unit_price=Decimal("10.50"),
                 cash_amount=Decimal("42.00"),
             ),
         ]
     )
 
-    assert result.last_price.on_date == date(2026, 1, 10)
-    assert result.estimated_value == Decimal("1000.00")
+    assert result.last_price.on_date == date(2026, 7, 1)
+    assert result.last_price.unit_price == Decimal("10.50")
+    assert result.estimated_value == Decimal("1092.00")

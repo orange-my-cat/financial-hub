@@ -6,8 +6,24 @@
  * other row offers Close, which preserves the history and excludes the
  * account from later months.
  *
- * Currency is still locked once balances exist (BR-08) — the API enforces it
- * and rejects the change; the table no longer marks it.
+ * **Edit opens the whole row**: the name, the classification, the opening month,
+ * and the currency while BR-08 still allows it. Free text saves on blur; a
+ * select and the month picker save on change, because their value is only ever
+ * complete. The name and the opening month restate nothing and carry no
+ * advisory; the classification says how many months move. They are one request
+ * each and different kinds of act, which is why the advisory belongs to one of
+ * them and not the others.
+ *
+ * The opening month is refused if it would move later than the earliest month
+ * the account has a balance in, or later than its closing month — the mirror of
+ * the rule that will not record a balance before an account opened. Closed is
+ * not editable beside it: it is a consequence of closing, cleared by reopening
+ * rather than retyped.
+ *
+ * Currency is locked once balances exist (BR-08). The control is offered only
+ * while the choice is still open and the figure is plain text afterwards — the
+ * API refuses the change either way, and a control that is always rejected is
+ * worse than no control at all.
  *
  * Every account is listed in the currency it is held in, and nothing on this
  * screen or the account detail beneath it is translated. The reporting-currency
@@ -20,11 +36,11 @@
  * refusal from the service appears under the row.
  */
 
-import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 
-import { AdvisoryList, ErrorBanner } from '@/components/Advisories'
-import { ApiError, type Advisory } from '@/lib/api'
+import { AdvisoryList, ErrorBanner } from "@/components/Advisories";
+import { ApiError, type Advisory } from "@/lib/api";
 import {
   ACCOUNT_TYPES,
   LIQUIDITY_TIERS,
@@ -37,37 +53,39 @@ import {
   useUpdateAccount,
   type Account,
   type AccountStatus,
-} from '@/lib/accounts'
-import { useDefaultCurrency } from '@/lib/fx'
-import { CURRENCIES } from '@/lib/money'
-import { icons } from '@/shell/icons'
+} from "@/lib/accounts";
+import { useDefaultCurrency } from "@/lib/fx";
+import { CURRENCIES, type CurrencyCode } from "@/lib/money";
+import { icons } from "@/shell/icons";
 
 function thisMonth(): string {
-  return new Date().toISOString().slice(0, 7)
+  return new Date().toISOString().slice(0, 7);
 }
 
 // ---------------------------------------------------------------------------
 
 function NewAccountForm() {
-  const create = useCreateAccount()
+  const create = useCreateAccount();
   // The default currency seeds the field; it never revises it. Once the form is
   // open the value is the user's, and a settings change behind it must not
   // reach in and alter what is about to be submitted.
-  const defaultCurrency = useDefaultCurrency()
+  const defaultCurrency = useDefaultCurrency();
   const [form, setForm] = useState({
-    name: '',
+    name: "",
     account_type: ACCOUNT_TYPES[0] as string,
     liquidity_tier: LIQUIDITY_TIERS[0] as string,
     currency: defaultCurrency as string,
     opened_month: thisMonth(),
-  })
+  });
 
   const fieldError = (name: string) =>
-    create.error instanceof ApiError ? create.error.fieldError(name) : undefined
+    create.error instanceof ApiError
+      ? create.error.fieldError(name)
+      : undefined;
 
   function submit(event: FormEvent) {
-    event.preventDefault()
-    create.mutate(form, { onSuccess: () => setForm({ ...form, name: '' }) })
+    event.preventDefault();
+    create.mutate(form, { onSuccess: () => setForm({ ...form, name: "" }) });
   }
 
   return (
@@ -82,7 +100,7 @@ function NewAccountForm() {
           </label>
           <input
             id="acc-name"
-            className={`input${fieldError('name') ? ' input--error' : ''}`}
+            className={`input${fieldError("name") ? " input--error" : ""}`}
             value={form.name}
             onChange={(event) => setForm({ ...form, name: event.target.value })}
             required
@@ -97,7 +115,9 @@ function NewAccountForm() {
             id="acc-type"
             className="input"
             value={form.account_type}
-            onChange={(event) => setForm({ ...form, account_type: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, account_type: event.target.value })
+            }
           >
             {ACCOUNT_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -115,7 +135,9 @@ function NewAccountForm() {
             id="acc-tier"
             className="input"
             value={form.liquidity_tier}
-            onChange={(event) => setForm({ ...form, liquidity_tier: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, liquidity_tier: event.target.value })
+            }
           >
             {LIQUIDITY_TIERS.map((tier) => (
               <option key={tier} value={tier}>
@@ -133,7 +155,9 @@ function NewAccountForm() {
             id="acc-currency"
             className="input mono"
             value={form.currency}
-            onChange={(event) => setForm({ ...form, currency: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, currency: event.target.value })
+            }
           >
             {CURRENCIES.map((code) => (
               <option key={code} value={code}>
@@ -152,16 +176,22 @@ function NewAccountForm() {
             type="month"
             className="input mono"
             value={form.opened_month}
-            onChange={(event) => setForm({ ...form, opened_month: event.target.value })}
+            onChange={(event) =>
+              setForm({ ...form, opened_month: event.target.value })
+            }
           />
         </div>
 
-        <button type="submit" className="btn btn--primary" disabled={create.isPending}>
-          {create.isPending ? 'Adding…' : 'Add Account'}
+        <button
+          type="submit"
+          className="btn btn--primary accounts__submit"
+          disabled={create.isPending}
+        >
+          {create.isPending ? "Adding…" : "Add Account"}
         </button>
       </form>
     </section>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -170,40 +200,89 @@ function AccountRow({
   account,
   onAdvisories,
 }: {
-  readonly account: Account
-  readonly onAdvisories: (advisories: readonly Advisory[]) => void
+  readonly account: Account;
+  readonly onAdvisories: (advisories: readonly Advisory[]) => void;
 }) {
-  const update = useUpdateAccount()
-  const closeAccount = useCloseAccount()
-  const dormant = useSetDormant()
-  const reopen = useReopenAccount()
-  const remove = useDeleteAccount()
-  const [editing, setEditing] = useState(false)
+  const update = useUpdateAccount();
+  const closeAccount = useCloseAccount();
+  const dormant = useSetDormant();
+  const reopen = useReopenAccount();
+  const remove = useDeleteAccount();
+  const [editing, setEditing] = useState(false);
 
-  function reclassify(field: 'account_type' | 'liquidity_tier', value: string) {
+  function reclassify(field: "account_type" | "liquidity_tier", value: string) {
     update.mutate(
       { id: account.id, [field]: value },
       { onSuccess: (response) => onAdvisories(response.advisories) },
-    )
+    );
+  }
+
+  /**
+   * Renaming and reclassifying are the same call and not the same act.
+   *
+   * A reclassification restates history and says how many months move; a rename
+   * changes a label and restates nothing, so it carries no advisory and the
+   * service keeps the two apart. Saved on blur rather than per keystroke,
+   * because every figure in this system is computed on read and a request per
+   * character would refetch the screen thirty times to rename an account.
+   *
+   * A field that was not changed sends nothing: an idle blur is not an edit.
+   */
+  function rename(value: string) {
+    const named = value.trim();
+    if (named === "" || named === account.name) return;
+    update.mutate({ id: account.id, name: named });
+  }
+
+  /**
+   * The opening month, saved the moment a whole one is picked.
+   *
+   * On change rather than on blur, unlike the name: a month input's value is
+   * either empty or a complete month, so there is no half-typed state to guard
+   * against — and a picker the user closes without leaving the cell would
+   * otherwise look as though it had done nothing.
+   *
+   * The service refuses a month later than the earliest recorded balance, and
+   * later than the closing month. Both refusals appear under the row.
+   */
+  function reopenMonth(value: string) {
+    if (value === "" || value === account.opened_month) return;
+    update.mutate({ id: account.id, opened_month: value });
   }
 
   // None of these actions asks first, so a refusal has to be visible: it is the
   // only thing distinguishing a rejected click from one that did nothing.
   const error =
-    closeAccount.error ?? dormant.error ?? reopen.error ?? remove.error ?? update.error
+    closeAccount.error ??
+    dormant.error ??
+    reopen.error ??
+    remove.error ??
+    update.error;
 
   return (
     <>
       <tr>
         <td>
-          <Link to={`/accounts/${account.id}`}>{account.name}</Link>
+          {editing ? (
+            <input
+              className="input input--grid input--cell"
+              defaultValue={account.name}
+              aria-label="Account name"
+              onBlur={(event) => rename(event.target.value)}
+            />
+          ) : (
+            <Link to={`/accounts/${account.id}`}>{account.name}</Link>
+          )}
         </td>
         <td className="secondary">
           {editing ? (
             <select
-              className="input input--grid"
+              className="input input--grid input--cell"
               value={account.account_type}
-              onChange={(event) => reclassify('account_type', event.target.value)}
+              aria-label="Account type"
+              onChange={(event) =>
+                reclassify("account_type", event.target.value)
+              }
             >
               {ACCOUNT_TYPES.map((type) => (
                 <option key={type} value={type}>
@@ -218,9 +297,12 @@ function AccountRow({
         <td className="secondary">
           {editing ? (
             <select
-              className="input input--grid"
+              className="input input--grid input--cell"
               value={account.liquidity_tier}
-              onChange={(event) => reclassify('liquidity_tier', event.target.value)}
+              aria-label="Liquidity tier"
+              onChange={(event) =>
+                reclassify("liquidity_tier", event.target.value)
+              }
             >
               {LIQUIDITY_TIERS.map((tier) => (
                 <option key={tier} value={tier}>
@@ -232,79 +314,136 @@ function AccountRow({
             account.liquidity_tier
           )}
         </td>
-        <td className="mono">{account.currency}</td>
-        <td className="secondary mono">{account.opened_month}</td>
-        <td className="secondary mono">{account.closed_month ?? '—'}</td>
-        <td className="accounts__actions">
-          <button type="button" className="link-button" onClick={() => setEditing(!editing)}>
-            {editing ? 'Done' : 'Reclassify'}
-          </button>
-
-          {account.status === 'Closed' ? (
-            <button type="button" className="link-button" onClick={() => reopen.mutate(account.id)}>
-              Reopen
-            </button>
+        {/* BR-08: fixed once balances exist. Offered while it is still the
+            user's to choose and static text after — the API refuses the change
+            either way, and an editable control that is always rejected is worse
+            than no control. */}
+        <td className="mono">
+          {editing && !account.currency_locked ? (
+            <select
+              className="input input--grid input--cell"
+              value={account.currency}
+              aria-label="Currency"
+              onChange={(event) =>
+                update.mutate({
+                  id: account.id,
+                  currency: event.target.value as CurrencyCode,
+                })
+              }
+            >
+              {CURRENCIES.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
           ) : (
-            <>
-              {/* Dormancy and closure are both undone by reopen — it returns the
-                  account to Open, and the closing month it clears is already
-                  null here. Called Reactivate because a dormant account was
-                  never shut. */}
-              {account.status === 'Dormant' ? (
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => reopen.mutate(account.id)}
-                >
-                  Reactivate
-                </button>
-              ) : (
-                account.has_history && (
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => dormant.mutate(account.id)}
-                  >
-                    Dormant
-                  </button>
-                )
-              )}
-              {/* Closes in the current month. The service refuses if a later
-                  balance exists, and that refusal is the row's error. */}
+            account.currency
+          )}
+        </td>
+        {/* Editable, unlike Closed beside it: an opening month can be typed
+            wrong, whereas a closing month is a consequence of closing the
+            account and is cleared by reopening it rather than retyped. */}
+        <td className="secondary mono">
+          {editing ? (
+            <input
+              type="month"
+              className="input input--grid input--cell mono"
+              value={account.opened_month}
+              aria-label="Opened month"
+              onChange={(event) => reopenMonth(event.target.value)}
+            />
+          ) : (
+            account.opened_month
+          )}
+        </td>
+        <td className="secondary mono">{account.closed_month ?? "—"}</td>
+        <td className="accounts__actions">
+          <div className="accounts__actions-set">
+            {/* Called Edit rather than Reclassify: it now opens the name, the
+              opening month and, where BR-08 still permits it, the currency —
+              and reclassifying is only one of the things it does. */}
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => setEditing(!editing)}
+            >
+              {editing ? "Done" : "Edit"}
+            </button>
+
+            {account.status === "Closed" ? (
               <button
                 type="button"
                 className="link-button"
-                onClick={() =>
-                  closeAccount.mutate({ id: account.id, closed_month: thisMonth() })
-                }
+                onClick={() => reopen.mutate(account.id)}
               >
-                Close
+                Reopen
               </button>
-            </>
-          )}
+            ) : (
+              <>
+                {/* Dormancy and closure are both undone by reopen — it returns the
+                  account to Open, and the closing month it clears is already
+                  null here. Called Reactivate because a dormant account was
+                  never shut. */}
+                {account.status === "Dormant" ? (
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => reopen.mutate(account.id)}
+                  >
+                    Reactivate
+                  </button>
+                ) : (
+                  account.has_history && (
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => dormant.mutate(account.id)}
+                    >
+                      Dormant
+                    </button>
+                  )
+                )}
+                {/* Closes in the current month. The service refuses if a later
+                  balance exists, and that refusal is the row's error. */}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() =>
+                    closeAccount.mutate({
+                      id: account.id,
+                      closed_month: thisMonth(),
+                    })
+                  }
+                >
+                  Close
+                </button>
+              </>
+            )}
 
-          {/* Only for accounts with no history. Everything else is closed. */}
-          {!account.has_history && (
-            <button
-              type="button"
-              className="link-button link-button--breach"
-              onClick={() => remove.mutate(account.id)}
-            >
-              Delete
-            </button>
-          )}
+            {/* Only for accounts with no history. Everything else is closed. */}
+            {!account.has_history && (
+              <button
+                type="button"
+                className="link-button link-button--breach"
+                onClick={() => remove.mutate(account.id)}
+              >
+                Delete
+              </button>
+            )}
+          </div>
         </td>
       </tr>
 
       {error !== null && (
-        <tr className="accounts__error-row">
+        <tr className="table__message-row">
           <td colSpan={7}>
             <ErrorBanner error={error} />
           </td>
         </tr>
       )}
     </>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -316,9 +455,9 @@ function AccountRow({
  * and the screen has to admit where it went.
  */
 const GROUPS = [
-  { status: 'Open', heading: 'Active Accounts' },
-  { status: 'Dormant', heading: 'Dormant Accounts' },
-] as const satisfies readonly { status: AccountStatus; heading: string }[]
+  { status: "Open", heading: "Active Accounts" },
+  { status: "Dormant", heading: "Dormant Accounts" },
+] as const satisfies readonly { status: AccountStatus; heading: string }[];
 
 /**
  * Three tables stacked down the page only read as one register if their
@@ -329,15 +468,20 @@ const GROUPS = [
 function AccountColumns() {
   return (
     <colgroup>
-      <col style={{ width: '22%' }} />
-      <col style={{ width: '16%' }} />
-      <col style={{ width: '13%' }} />
-      <col style={{ width: '8%' }} />
-      <col style={{ width: '9%' }} />
-      <col style={{ width: '9%' }} />
-      <col style={{ width: '23%' }} />
+      {/* The name takes the width, because it is the only column here with no
+          fixed vocabulary and no bound on its length — and it is the one the
+          edit row puts a free-text field in. Opened is wider than Closed for
+          the same reason: it carries a month picker, and Closed carries a
+          month or an em dash. */}
+      <col style={{ width: "25%" }} />
+      <col style={{ width: "15%" }} />
+      <col style={{ width: "12%" }} />
+      <col style={{ width: "7%" }} />
+      <col style={{ width: "11%" }} />
+      <col style={{ width: "7%" }} />
+      <col style={{ width: "23%" }} />
     </colgroup>
-  )
+  );
 }
 
 function AccountTable({
@@ -345,12 +489,12 @@ function AccountTable({
   accounts,
   onAdvisories,
 }: {
-  readonly heading: string
-  readonly accounts: readonly Account[]
-  readonly onAdvisories: (advisories: readonly Advisory[]) => void
+  readonly heading: string;
+  readonly accounts: readonly Account[];
+  readonly onAdvisories: (advisories: readonly Advisory[]) => void;
 }) {
   // An empty group is not a fact worth a panel of its own.
-  if (accounts.length === 0) return null
+  if (accounts.length === 0) return null;
 
   return (
     <section className="panel">
@@ -371,25 +515,29 @@ function AccountTable({
         </thead>
         <tbody>
           {accounts.map((account) => (
-            <AccountRow key={account.id} account={account} onAdvisories={onAdvisories} />
+            <AccountRow
+              key={account.id}
+              account={account}
+              onAdvisories={onAdvisories}
+            />
           ))}
         </tbody>
       </table>
     </section>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
 
 export function Accounts() {
-  const accounts = useAccounts()
-  const [advisories, setAdvisories] = useState<readonly Advisory[]>([])
-  const [showClosed, setShowClosed] = useState(false)
+  const accounts = useAccounts();
+  const [advisories, setAdvisories] = useState<readonly Advisory[]>([]);
+  const [showClosed, setShowClosed] = useState(false);
 
-  if (accounts.isPending) return <div className="boot">Loading…</div>
-  if (!accounts.data) return <ErrorBanner error={accounts.error} />
+  if (accounts.isPending) return <div className="boot">Loading…</div>;
+  if (!accounts.data) return <ErrorBanner error={accounts.error} />;
 
-  const closed = accounts.data.filter((account) => account.status === 'Closed')
+  const closed = accounts.data.filter((account) => account.status === "Closed");
 
   return (
     <div className="accounts">
@@ -402,8 +550,8 @@ export function Accounts() {
         <section className="panel">
           <h2 className="panel__heading">Nothing Here Yet</h2>
           <p className="fx__note">
-            The system starts empty and is never seeded. Add an account above, then close
-            a month.
+            The system starts empty and is never seeded. Add an account above,
+            then close a month.
           </p>
         </section>
       ) : (
@@ -411,7 +559,9 @@ export function Accounts() {
           <AccountTable
             key={status}
             heading={heading}
-            accounts={accounts.data.filter((account) => account.status === status)}
+            accounts={accounts.data.filter(
+              (account) => account.status === status,
+            )}
             onAdvisories={setAdvisories}
           />
         ))
@@ -434,11 +584,11 @@ export function Accounts() {
             className="link-button accounts__disclosure-button"
             onClick={() => setShowClosed(!showClosed)}
           >
-            {icons[showClosed ? 'hide' : 'show']}
-            {showClosed ? 'Hide Closed Accounts' : 'Show Closed Accounts'}
+            {icons[showClosed ? "hide" : "show"]}
+            {showClosed ? "Hide Closed Accounts" : "Show Closed Accounts"}
           </button>
         </p>
       )}
     </div>
-  )
+  );
 }

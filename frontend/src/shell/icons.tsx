@@ -18,6 +18,7 @@
 
 import {
   ArrowLeftRight,
+  ArrowRightLeft,
   CalendarCheck,
   ChartColumn,
   Check,
@@ -55,6 +56,7 @@ export type IconName =
   | 'show'
   | 'hide'
   | 'saved'
+  | 'swap'
 
 export const icons: Record<IconName, ReactElement> = {
   dashboard: <LayoutGrid {...base} />,
@@ -75,4 +77,13 @@ export const icons: Record<IconName, ReactElement> = {
   // The bare tick in a Month Close row, in place of the word "saved". Sized
   // inline: it sits in a table of 11.5px figures, not in the chrome.
   saved: <Check {...inline} />,
+  // Reverses which side of a pair a rate is read from, beside the two currency
+  // selects on FX Rates. Deliberately *not* `ArrowLeftRight`, which is Cash
+  // flow's glyph for money out and money in: two arrows stacked read as an
+  // exchange of position, and one glyph carrying two meanings is one too many.
+  //
+  // It moves no money. There is no transfer affordance anywhere in this
+  // application, and this is not one — it swaps a direction of quotation, and
+  // the accessible name on the button says so.
+  swap: <ArrowRightLeft {...inline} />,
 }

@@ -199,6 +199,55 @@ def change_currency(account: Account, currency: str) -> LifecycleResult:
     return LifecycleResult(account=account)
 
 
+def change_opened_month(account: Account, month: str) -> LifecycleResult:
+    """Correcting the month the account started in.
+
+    Two refusals, and each is the mirror of a rule that already exists rather
+    than a new one invented here.
+
+    **Not later than the earliest month it has history in.** `upsert_balance`
+    will not record a balance before the opened month; moving the opened month
+    forward past a balance already recorded would strand that balance outside the
+    account's own life, and every report would then be counting a month the
+    account did not exist in. The earliest recorded balance is the limit.
+
+    **Not later than the closing month.** The database refuses this by check
+    constraint (`accounts_closed_not_before_opened`). This says so in words
+    first, because an IntegrityError is a 500 and a mistyped month is ordinary
+    user error.
+
+    Nothing is restated and no advisory is raised: unlike a reclassification,
+    this moves no month between asset and liability and changes no figure. It
+    widens or narrows the window the account is expected in, which the
+    completeness state already derives on read (ADR-05).
+    """
+    require_month(month)
+    if account.opened_month == month:
+        return LifecycleResult(account=account)
+
+    if account.closed_month is not None and month > account.closed_month:
+        raise BusinessRuleError(
+            f"{account.name} closed in {account.closed_month}, so it cannot have "
+            f"opened in {month}.",
+            code="opened_after_closed",
+            field="opened_month",
+        )
+
+    earliest = account.balances.order_by("month").values_list("month", flat=True).first()
+    if earliest is not None and month > earliest:
+        raise BusinessRuleError(
+            f"{account.name} has a balance recorded for {earliest}, so it cannot "
+            f"have opened in {month}. An account's opening month cannot move "
+            f"later than the earliest month it has history in.",
+            code="opened_after_history",
+            field="opened_month",
+        )
+
+    account.opened_month = month
+    account.save(update_fields=["opened_month", "updated_at"])
+    return LifecycleResult(account=account)
+
+
 # ---------------------------------------------------------------------------
 # Balances
 # ---------------------------------------------------------------------------

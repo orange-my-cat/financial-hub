@@ -134,7 +134,9 @@ export interface DashboardPayload {
     savings_rate: string | null
   }[]
   /**
-   * What is held **now**, combined into the reporting currency.
+   * What was held **as at the reported month**, combined into the reporting
+   * currency — the same month as every figure above, and the month the holdings
+   * plot ends on.
    *
    * A departure from the BRD and from BR-18, made deliberately: the system has no
    * market prices, so `estimated_value` is each holding's units at the last price
@@ -143,8 +145,9 @@ export interface DashboardPayload {
    * are labelled as such wherever they are rendered.
    *
    * `priced_from` is the oldest price the estimate rests on: a holding untouched
-   * since 2019 is "valued" at its 2019 price, and the panel says so rather than
-   * implying the figure is current. `unpriced` names held holdings with no price
+   * since 2019 is "valued" at its 2019 price, and prices recorded after the month
+   * are not used at all — a price typed in August is not what a holding was worth
+   * in March. `unpriced` names held holdings with no price
    * on record — left out of the estimate rather than valued at nothing — and
    * `priced_cost_basis` is what the gain was measured against when those two sets
    * differ, so the figures on screen always reconcile with each other.
@@ -172,6 +175,20 @@ export interface DashboardPayload {
     }[]
     readonly as_at: string | null
     readonly any_stale: boolean
+    readonly month: string
+    readonly previous_month: string
+    /**
+     * Each figure's movement on the month before the reported one. Two month-end
+     * positions, so the change subtracts from the figure it is shown under.
+     *
+     * Both halves are null where either month's figure does not exist — an
+     * estimate nobody could make is not an estimate of nothing (FR-46).
+     */
+    readonly change: {
+      readonly cost_basis: FigureChange
+      readonly estimated_value: FigureChange
+      readonly estimated_gain: FigureChange
+    }
   }
   /**
    * The same 24-month window as the trends above — the position **as at** each

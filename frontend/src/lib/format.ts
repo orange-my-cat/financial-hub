@@ -112,6 +112,31 @@ export function formatPercent(value: string, places = 1): string {
   return `${positive ? '+' : ''}${formatted}%`
 }
 
+/**
+ * Rise or Breach, by sign and by whether the balance is owed — in one place.
+ *
+ * A liability moving up is more debt, which is not a rise, so the colour
+ * inverts on it: green means the month moved in your favour here exactly as it
+ * does everywhere else. A movement of zero takes neither colour — nothing
+ * moved, and painting that green reports a rise that did not happen.
+ *
+ * The test is on the string rather than on `Number(value)`: money carries no
+ * arithmetic in the browser, and asking whether a figure is signed is not
+ * arithmetic.
+ *
+ * An explicit `+` is accepted, because the FX trend serves its movements signed
+ * both ways — and `+0.000000` has to reach the same answer as `0.000000` here,
+ * or a rate that held would be painted as a rise.
+ *
+ * Shared because Month Close, Net Worth, Account detail and the FX trend all
+ * colour the same kind of movement, and a screen that decided locally whether
+ * zero is green made the same figure a different colour on the next page.
+ */
+export function movementClass(value: string | null, isLiability = false): string {
+  if (!value || /^[+-]?0(\.0*)?$/.test(value)) return ''
+  return value.startsWith('-') === isLiability ? 'money--rise' : 'money--breach'
+}
+
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
@@ -143,42 +168,72 @@ export function parseAmountInput(raw: string): string | null {
 // Dates
 // ---------------------------------------------------------------------------
 
-// `13 Aug 2026`, unambiguously. The user operates across two date conventions,
-// so day/month ordering is sidestepped entirely rather than chosen between.
-const DAY_MONTH_YEAR = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-})
+// An abbreviated month is three letters, always. The platform's own idea of a
+// short month is not: current CLDR data abbreviates September as `Sept` under
+// `en-GB`, and leaves June and July unabbreviated altogether under `en-AU`, so
+// a column sized for three characters is at the mercy of whichever ICU build
+// the browser shipped with. The table is fixed here instead.
+const MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
 
-const MONTH_YEAR = new Intl.DateTimeFormat('en-GB', {
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-})
+const MONTHS_LONG = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const
 
-// `Aug 26` — for chart axis ticks, where two dozen of them share one line.
-const MONTH_SHORT_YEAR = new Intl.DateTimeFormat('en-GB', {
-  month: 'short',
-  year: '2-digit',
-  timeZone: 'UTC',
-})
+/** `2026-08` or `2026-08-31` → `[2026, 8]`. */
+function yearAndMonth(iso: string): [string, number] {
+  const [year = '', month = ''] = iso.split('-')
+  return [year, Number(month)]
+}
 
 /**
- * Format an ISO calendar date (`2026-08-13`) as `13 Aug 2026`.
+ * Format an ISO calendar date (`2026-08-13`) as `13 Aug 2026` — unambiguously.
+ * The user operates across two date conventions, so day/month ordering is
+ * sidestepped entirely rather than chosen between.
  *
- * Parsed as UTC. Financial dates carry no time component and no offset
- * (BR-24), so there is no local midnight for a timezone to shift them across.
+ * Read off the string rather than through a `Date`. Financial dates carry no
+ * time component and no offset (BR-24), so there is no midnight for a timezone
+ * to shift them across, and none is invented here.
  */
 export function formatDate(iso: string): string {
-  return DAY_MONTH_YEAR.format(new Date(`${iso}T00:00:00Z`))
+  const [year, month] = yearAndMonth(iso)
+  const day = Number(iso.slice(8, 10))
+  return `${day} ${MONTHS_SHORT[month - 1]} ${year}`
 }
 
 /** Format `2026-08` or `2026-08-31` as `Aug 2026`. */
 export function formatMonth(iso: string): string {
-  const [year, month] = iso.split('-')
-  return MONTH_YEAR.format(new Date(`${year}-${month}-01T00:00:00Z`))
+  const [year, month] = yearAndMonth(iso)
+  return `${MONTHS_SHORT[month - 1]} ${year}`
+}
+
+/** Format `2026-08` or `2026-08-31` as `August 2026`. */
+export function formatMonthLong(iso: string): string {
+  const [year, month] = yearAndMonth(iso)
+  return `${MONTHS_LONG[month - 1]} ${year}`
 }
 
 /**
@@ -186,11 +241,37 @@ export function formatMonth(iso: string): string {
  * share one line and the century is never the thing in doubt.
  */
 export function formatMonthShort(iso: string): string {
-  const [year, month] = iso.split('-')
-  return MONTH_SHORT_YEAR.format(new Date(`${year}-${month}-01T00:00:00Z`))
+  const [year, month] = yearAndMonth(iso)
+  return `${MONTHS_SHORT[month - 1]} ${year.slice(2)}`
+}
+
+/**
+ * Format `2026-08-13` as `13 Aug` — for chart axis ticks on a daily series,
+ * where two dozen of them share one line. The day is what such a series is
+ * indexed by, and the range it sits in is stated in the header above the plot;
+ * the hover box gives the full date.
+ */
+export function formatDayShort(iso: string): string {
+  const [, month] = yearAndMonth(iso)
+  return `${Number(iso.slice(8, 10))} ${MONTHS_SHORT[month - 1]}`
 }
 
 /** `2026-08` — the reporting month a date falls in. */
 export function monthOf(iso: string): string {
   return iso.slice(0, 7)
+}
+
+/**
+ * `2026-08-31` — the last calendar day of a month, whether that is the 28th,
+ * 29th, 30th or 31st. Day 0 of the next month, in UTC for the same reason
+ * `formatDate` parses in UTC: a financial date carries no time and no offset
+ * (BR-24), so there is no local midnight to slip across.
+ *
+ * Takes `2026-08` or any ISO date inside the month, so a caller holding a full
+ * date need not trim it first. Here rather than on a screen because three
+ * screens ask the same question — the month-end boundary has one definition.
+ */
+export function monthEnd(iso: string): string {
+  const [year, month] = iso.split('-').map(Number)
+  return new Date(Date.UTC(year ?? 1970, month ?? 1, 0)).toISOString().slice(0, 10)
 }

@@ -1,283 +1,314 @@
 /**
- * Investments — holdings, the open-lot FIFO queue, entry, and realised gains.
+ * Investments — the register of holdings, entry, and realised gains.
  *
- * Every figure stays in its holding's own currency. This is the one screen the
- * reporting-currency toggle does not apply to, and it says so in the subhead.
+ * Built as Accounts is: a register whose first column is a link, and one
+ * subpage per row where that row's history is read *and written*. A holding's
+ * name opens its transaction breakdown — every buy, sale, split, distribution
+ * and reinvestment, with what the replay engine made of each — and the form that
+ * records the next one.
  *
- * **The open-lot queue gets a full column**, because it is the thing that makes
- * cost basis legible — a list of purchase dates with what remains of each and
- * what that remainder cost. Without it, "cost basis" is a number the user has
- * to take on trust.
+ * So this screen creates holdings and lists them, and records nothing. The
+ * design handoff puts buy/sell entry here with a holding picker; the Product
+ * Owner moved it to the holding's page, where there is no holding to pick.
  *
- * Two prohibitions are stated in copy here, not merely implemented:
+ * **A departure from the design handoff, and a deliberate one.** The handoff
+ * gives the open-lot FIFO queue a full column on this screen, one block per
+ * holding. That does not survive a portfolio of any size: eight holdings became
+ * eight stacked tables and the screen stopped answering "what do I hold" in
+ * favour of answering "what is in every lot of everything". The queue moved to
+ * the holding's own page, where it sits beside the register it explains, and
+ * this screen states cost basis and lot count per row so the figure is still
+ * one click from its workings.
  *
- *   * **Unrealised gain does not exist in this system.** No market prices are
- *     held, so there is no paper gain, no portfolio return percentage and no
- *     total return anywhere.
- *   * **Estimated tax is a percentage you typed, not a calculation.** No
- *     jurisdiction's rules are applied, and every net figure is indicative.
+ * Every figure stays in its holding's own currency; the reporting-currency
+ * toggle does not apply. The subhead that said so, and the two prohibition
+ * paragraphs the BRD requires in copy, were removed at the Product Owner's
+ * instruction — see the comment where they stood. Both prohibitions are still
+ * stated on a holding's own page, beside the figures they govern.
+ *
+ * **Edit opens the row's editable facts**: name, symbol, instrument type and the
+ * estimated tax percentage. Not the account and not the currency — a holding is
+ * scoped to one account as a one-way door, and its currency is the one every
+ * figure beside it is stated in. The API declines both, so this is a rule rather
+ * than a screen that happens not to offer them.
  *
  * A holding invalidated by a historic edit is **flagged, never blocked** — the
- * advisory names the offending sale, the figures still display, and entry still
+ * advisory appears under its row, the figures still display, and entry still
  * works.
  */
 
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 
 import { ErrorBanner } from '@/components/Advisories'
 import { useAccounts } from '@/lib/accounts'
-import { formatDate, formatDecimal } from '@/lib/format'
+import { formatDecimal } from '@/lib/format'
 import { useDefaultCurrency } from '@/lib/fx'
 import {
   INSTRUMENT_TYPES,
   useCreateHolding,
+  useDeleteHolding,
   useHoldings,
-  useRealisedGains,
-  useRecordInvestment,
   useUpdateHolding,
-  type InvestmentAction,
   type Position,
 } from '@/lib/investments'
 import { CURRENCIES } from '@/lib/money'
-
-const ACTIONS: readonly InvestmentAction[] = [
-  'Buy',
-  'Sell',
-  'Split',
-  'Distribution',
-  'Reinvestment',
-]
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+import { icons } from '@/shell/icons'
 
 // ---------------------------------------------------------------------------
 
-function LotQueue({ position }: { readonly position: Position }) {
-  if (position.lots.length === 0) {
-    return <p className="fx__note">No open lots.</p>
+function HoldingRow({ position }: { readonly position: Position }) {
+  const update = useUpdateHolding()
+  const remove = useDeleteHolding()
+  const [editing, setEditing] = useState(false)
+
+  /**
+   * Saved on blur, and only where something changed.
+   *
+   * Every figure in this system is computed on read, so a request per keystroke
+   * would refetch the register — and each holding's whole replayed position
+   * with it — once per character. An idle blur is not an edit and sends
+   * nothing.
+   */
+  function edit(field: 'name' | 'symbol' | 'estimated_tax_percent', value: string) {
+    const trimmed = value.trim()
+
+    // The percentage clears to null, which is a meaning: no estimate has been
+    // given and the net figure equals the gross. A name clears to nothing at
+    // all, so an empty one is a mis-swipe rather than an instruction.
+    if (field === 'estimated_tax_percent') {
+      if (trimmed === (position.estimated_tax_percent ?? '')) return
+      update.mutate({ id: position.id, estimated_tax_percent: trimmed || null })
+      return
+    }
+
+    if (field === 'name' && trimmed === '') return
+    if (trimmed === position[field]) return
+    update.mutate({ id: position.id, [field]: trimmed })
   }
 
   return (
-    <table className="table">
-      <thead>
-        <tr>
-          <th>Acquired</th>
-          <th className="numeric">Remaining</th>
-          <th className="numeric">Unit cost</th>
-          <th className="numeric">Cost basis</th>
-        </tr>
-      </thead>
-      <tbody>
-        {position.lots.map((lot) => (
-          <tr key={lot.transaction_id}>
-            <td className="mono">
-              {formatDate(lot.acquired)}
-              {lot.from_reinvestment && (
-                <sup className="mark mark--carried" title="From a reinvestment">
-                  r
-                </sup>
+    <>
+      <tr>
+        <td>
+          {editing ? (
+            <div className="invest__edit">
+              {/* Sized by the flex row, not by `input--cell`: these two share
+                  a cell, so neither of them is the width of it. */}
+              <input
+                className="input input--grid invest__edit-name"
+                defaultValue={position.name}
+                aria-label="Holding name"
+                onBlur={(event) => edit('name', event.target.value)}
+              />
+              <input
+                className="input input--grid mono invest__edit-symbol"
+                defaultValue={position.symbol}
+                aria-label="Symbol"
+                onBlur={(event) => edit('symbol', event.target.value)}
+              />
+            </div>
+          ) : (
+            <>
+              <Link to={`/investments/${position.id}`}>{position.name}</Link>
+              {/* The symbol as a chip, because that is what it is: a short fixed
+                  label that confirms which instrument the name means, not a
+                  second phrase to read on from the name into. */}
+              {position.symbol && (
+                <span className="tag tag--symbol mono">{position.symbol}</span>
               )}
+            </>
+          )}
+        </td>
+        <td className="secondary">
+          {editing ? (
+            <select
+              className="input input--grid input--cell"
+              value={position.instrument_type}
+              aria-label="Instrument type"
+              onChange={(event) =>
+                update.mutate({ id: position.id, instrument_type: event.target.value })
+              }
+            >
+              {INSTRUMENT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          ) : (
+            position.instrument_type
+          )}
+        </td>
+        {/* Neither of these is ever editable. A holding is scoped to one account
+            as a one-way door (§13.4), and its currency is the currency every
+            figure beside it is stated in and never translated from (BR-18). The
+            API's update serialiser declines both. */}
+        <td className="secondary">{position.account}</td>
+        <td className="numeric">{formatDecimal(position.total_quantity, 4)}</td>
+        <td className="numeric">{formatDecimal(position.total_cost_basis)}</td>
+        <td className="mono">{position.currency}</td>
+        {/* Closed gains only. There is no unrealised gain in this system, so
+            nothing here is waiting on a price: what has been sold is all that
+            is counted, and the percentage is that gain over what those units
+            cost — never over a value of units still held. */}
+        <td className="numeric">
+          {position.realised_gain === null ? (
+            <span className="secondary">—</span>
+          ) : (
+            <span
+              className={
+                position.realised_gain.startsWith('-')
+                  ? 'money money--breach'
+                  : 'money money--rise'
+              }
+            >
+              {formatDecimal(position.realised_gain)}
+            </span>
+          )}
+        </td>
+        <td className="numeric secondary">
+          {position.realised_gain_percent === null
+            ? '—'
+            : `${position.realised_gain_percent}%`}
+        </td>
+        {/* Changing this restates the net figure on every historic sale,
+            including sales already reported — free, because nothing was
+            stored (BR-21). Editable here and on the holding's own page, with one
+            mutation behind both. */}
+        <td className="numeric secondary">
+          {editing ? (
+            <input
+              className="input input--grid mono numeric-input"
+              inputMode="decimal"
+              defaultValue={position.estimated_tax_percent ?? ''}
+              aria-label="Estimated tax percent"
+              onBlur={(event) => edit('estimated_tax_percent', event.target.value)}
+            />
+          ) : position.estimated_tax_percent ? (
+            `${position.estimated_tax_percent}%`
+          ) : (
+            '—'
+          )}
+        </td>
+        <td className="accounts__actions">
+          <div className="accounts__actions-set">
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => setEditing(!editing)}
+            >
+              {editing ? 'Done' : 'Edit'}
+            </button>
+
+            {/* Only for holdings nothing was ever recorded against. Everything
+                else keeps its history — a sold-out holding still realised a gain
+                that has been reported (ADR-14). */}
+            {position.transaction_count === 0 && (
+              <button
+                type="button"
+                className="link-button link-button--breach"
+                onClick={() => remove.mutate(position.id)}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+
+      {/* Flagged, never blocked. The figures above still stand. */}
+      {!position.consistent &&
+        position.inconsistencies.map((problem) => (
+          <tr className="table__message-row" key={problem.transaction_id}>
+            <td colSpan={10}>
+              <div className="advisory" role="status">
+                <span className="advisory__label">Advisory · Retroactively invalid</span>
+                <span className="advisory__body">{problem.message}</span>
+              </div>
             </td>
-            <td className="numeric">{formatDecimal(lot.remaining_quantity, 4)}</td>
-            <td className="numeric">{formatDecimal(lot.unit_cost, 4)}</td>
-            <td className="numeric">{formatDecimal(lot.remaining_cost)}</td>
           </tr>
         ))}
-        <tr className="table__total">
-          <td>Total</td>
-          <td className="numeric">{formatDecimal(position.total_quantity, 4)}</td>
-          <td />
-          <td className="numeric">
-            {formatDecimal(position.total_cost_basis)}
-            <span className="money__code">{position.currency}</span>
+
+      {/* Neither action asks first, so a refusal has to be visible: it is the
+          only thing distinguishing a rejected edit from one that did nothing. */}
+      {(update.error ?? remove.error) !== null && (
+        <tr className="table__message-row">
+          <td colSpan={10}>
+            <ErrorBanner error={update.error ?? remove.error} />
           </td>
         </tr>
-      </tbody>
-    </table>
+      )}
+    </>
   )
 }
 
-// ---------------------------------------------------------------------------
+/**
+ * Three tables stacked down the page only read as one register if their columns
+ * line up, and separate tables under auto layout each size to their own
+ * content. `.table--fixed` plus this shared colgroup pins the geometry, as it
+ * does on Accounts.
+ */
+function HoldingColumns() {
+  return (
+    <colgroup>
+      {/* A third of the register to the name, and it earns it twice over: it is
+          the only column with no fixed vocabulary and no bound on its length —
+          "Betashares Wealth Builder Diversified All Growth Geared (30-40% LVR)
+          Complex ETF" is a real holding — and it is the column the edit row puts
+          a free-text field and a symbol field into. Every other column here
+          holds a term this application already fixed, a figure of known width,
+          or two link labels. */}
+      <col style={{ width: '28%' }} />
+      <col style={{ width: '7%' }} />
+      <col style={{ width: '11%' }} />
+      <col style={{ width: '9%' }} />
+      <col style={{ width: '9%' }} />
+      <col style={{ width: '5%' }} />
+      <col style={{ width: '9%' }} />
+      <col style={{ width: '6%' }} />
+      <col style={{ width: '6%' }} />
+      <col style={{ width: '10%' }} />
+    </colgroup>
+  )
+}
 
-function TransactionForm({ holdings }: { readonly holdings: readonly Position[] }) {
-  const record = useRecordInvestment()
-  const [form, setForm] = useState({
-    holdingId: '',
-    action: 'Buy' as InvestmentAction,
-    date: today(),
-    quantity: '',
-    unit_price: '',
-    fees: '',
-    split_ratio: '',
-    cash_amount: '',
-  })
-
-  const needsQuantity = ['Buy', 'Sell', 'Reinvestment'].includes(form.action)
-  const needsRatio = form.action === 'Split'
-  const needsCash = form.action === 'Distribution'
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    if (!form.holdingId) return
-
-    record.mutate(
-      {
-        holdingId: Number(form.holdingId),
-        action: form.action,
-        date: form.date,
-        quantity: form.quantity || '0',
-        unit_price: form.unit_price || '0',
-        fees: form.fees || '0',
-        split_ratio: form.split_ratio || '0',
-        cash_amount: form.cash_amount || '0',
-      },
-      { onSuccess: () => setForm({ ...form, quantity: '', unit_price: '', fees: '' }) },
-    )
-  }
+function HoldingTable({
+  heading,
+  positions,
+}: {
+  readonly heading: string
+  readonly positions: readonly Position[]
+}) {
+  // An empty group is not a fact worth a panel of its own.
+  if (positions.length === 0) return null
 
   return (
     <section className="panel">
-      <h2 className="panel__heading">Record a Transaction</h2>
-      <p className="fx__note">
-        Corporate actions are limited to fees, splits and reinvestment. Mergers,
-        spin-offs, rights issues and returns of capital are out of scope — representing
-        one by hand as a sale and a purchase will not reflect the true event.
-      </p>
+      <h2 className="panel__heading">{heading}</h2>
 
-      <ErrorBanner error={record.error} />
-
-      <div className="seg invest__actions" role="group" aria-label="Action">
-        {ACTIONS.map((action) => (
-          <button
-            key={action}
-            type="button"
-            className={`seg__option${form.action === action ? ' seg__option--on' : ''}`}
-            aria-pressed={form.action === action}
-            onClick={() => setForm({ ...form, action })}
-          >
-            {action}
-          </button>
-        ))}
-      </div>
-
-      <form className="invest__form" onSubmit={submit}>
-        <div className="field">
-          <label className="field__label" htmlFor="inv-holding">
-            Holding
-          </label>
-          <select
-            id="inv-holding"
-            className="input"
-            value={form.holdingId}
-            onChange={(event) => setForm({ ...form, holdingId: event.target.value })}
-            required
-          >
-            <option value="">Choose…</option>
-            {holdings.map((holding) => (
-              <option key={holding.id} value={holding.id}>
-                {holding.name} ({holding.currency})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="field">
-          <label className="field__label" htmlFor="inv-date">
-            Date
-          </label>
-          <input
-            id="inv-date"
-            type="date"
-            className="input mono"
-            value={form.date}
-            onChange={(event) => setForm({ ...form, date: event.target.value })}
-          />
-        </div>
-
-        {needsQuantity && (
-          <>
-            <div className="field">
-              <label className="field__label" htmlFor="inv-quantity">
-                Quantity
-              </label>
-              <input
-                id="inv-quantity"
-                className="input mono numeric-input"
-                inputMode="decimal"
-                value={form.quantity}
-                onChange={(event) => setForm({ ...form, quantity: event.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label className="field__label" htmlFor="inv-price">
-                Unit price
-              </label>
-              <input
-                id="inv-price"
-                className="input mono numeric-input"
-                inputMode="decimal"
-                value={form.unit_price}
-                onChange={(event) => setForm({ ...form, unit_price: event.target.value })}
-              />
-            </div>
-            <div className="field">
-              <label className="field__label" htmlFor="inv-fees">
-                Fees
-              </label>
-              <input
-                id="inv-fees"
-                className="input mono numeric-input"
-                inputMode="decimal"
-                value={form.fees}
-                onChange={(event) => setForm({ ...form, fees: event.target.value })}
-              />
-              <span className="fx__note">
-                {form.action === 'Sell'
-                  ? 'Deducted from proceeds.'
-                  : 'Added to cost basis.'}
-              </span>
-            </div>
-          </>
-        )}
-
-        {needsRatio && (
-          <div className="field">
-            <label className="field__label" htmlFor="inv-ratio">
-              Ratio
-            </label>
-            <input
-              id="inv-ratio"
-              className="input mono numeric-input"
-              inputMode="decimal"
-              placeholder="2"
-              value={form.split_ratio}
-              onChange={(event) => setForm({ ...form, split_ratio: event.target.value })}
-            />
-            <span className="fx__note">2 for a 2:1 split, 0.1 for a 1:10 consolidation.</span>
-          </div>
-        )}
-
-        {needsCash && (
-          <div className="field">
-            <label className="field__label" htmlFor="inv-cash">
-              Cash received
-            </label>
-            <input
-              id="inv-cash"
-              className="input mono numeric-input"
-              inputMode="decimal"
-              value={form.cash_amount}
-              onChange={(event) => setForm({ ...form, cash_amount: event.target.value })}
-            />
-          </div>
-        )}
-
-        <button type="submit" className="btn btn--primary" disabled={record.isPending}>
-          Record
-        </button>
-      </form>
+      <table className="table table--fixed">
+        <HoldingColumns />
+        <thead>
+          <tr>
+            <th>Holding</th>
+            <th>Type</th>
+            <th>Account</th>
+            <th className="numeric">Quantity</th>
+            <th className="numeric">Cost Basis</th>
+            <th>Currency</th>
+            <th className="numeric">Realised Gain</th>
+            <th className="numeric">% Gain</th>
+            <th className="numeric">Est. Tax</th>
+            <th aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {positions.map((position) => (
+            <HoldingRow key={position.id} position={position} />
+          ))}
+        </tbody>
+      </table>
     </section>
   )
 }
@@ -322,13 +353,15 @@ function NewHolding() {
   return (
     <section className="panel">
       <h2 className="panel__heading">Add a Holding</h2>
-      <p className="fx__note">
-        A holding belongs to one account and cannot be moved. The same instrument at two
-        brokers is two holdings with independent FIFO queues.
-      </p>
+      {/* The note that stood here — a holding belongs to one account and cannot
+          be moved, and the same instrument at two brokers is two holdings with
+          independent FIFO queues — was removed at the Product Owner's
+          instruction. The rule still holds and the API still enforces it: the
+          account field is absent from the update serialiser, so the move is
+          rejected rather than merely undocumented (§13.4). */}
       <ErrorBanner error={create.error} />
 
-      <form className="invest__form" onSubmit={submit}>
+      <form className="invest__form invest__form--holding" onSubmit={submit}>
         <div className="field">
           <label className="field__label" htmlFor="hold-name">
             Name
@@ -407,7 +440,7 @@ function NewHolding() {
         </div>
         <div className="field">
           <label className="field__label" htmlFor="hold-tax">
-            Estimated tax %
+            Est. tax %
           </label>
           <input
             id="hold-tax"
@@ -419,7 +452,11 @@ function NewHolding() {
             }
           />
         </div>
-        <button type="submit" className="btn btn--primary" disabled={create.isPending}>
+        <button
+          type="submit"
+          className="btn btn--primary invest__submit"
+          disabled={create.isPending}
+        >
           Add
         </button>
       </form>
@@ -431,145 +468,95 @@ function NewHolding() {
 
 export function Investments() {
   const holdings = useHoldings()
-  const gains = useRealisedGains()
-  const update = useUpdateHolding()
+  const [showSold, setShowSold] = useState(false)
 
   if (holdings.isPending) return <div className="boot">Loading…</div>
   if (!holdings.data) return <ErrorBanner error={holdings.error} />
 
-  const { holdings: positions, prohibitions } = holdings.data
+  const { holdings: positions } = holdings.data
+
+  /**
+   * Grouped on lot count and transaction count, never on a quantity compared
+   * against zero: the two are integers the server counted, and a holding is
+   * held exactly when it has an open lot.
+   *
+   * Sold-out holdings hide behind a disclosure rather than vanishing, for the
+   * same reason closed accounts do — a sold-out holding realised a gain that
+   * has been reported, and the screen has to admit where it went.
+   */
+  const held = positions.filter((position) => position.lot_count > 0)
+  const untraded = positions.filter((position) => position.transaction_count === 0)
+  const soldOut = positions.filter(
+    (position) => position.lot_count === 0 && position.transaction_count > 0,
+  )
 
   return (
     <div className="invest">
-      <p className="screen__subhead">
-        Every figure is in its holding’s own currency and is never translated. The
-        reporting currency does not apply to this screen.
-      </p>
+      {/* The subhead and the two prohibition paragraphs were removed from this
+          screen at the Product Owner's instruction. Both are departures worth
+          naming rather than losing.
 
-      {/* Stated in copy, not merely implemented. */}
-      <div className="prohibitions">
-        <p>{prohibitions.unrealised_gain}</p>
-        <p>{prohibitions.estimated_tax}</p>
-      </div>
+          The subhead: the design handoff has every screen state which view
+          control it obeys, because a control that silently does nothing is worse
+          than one that is visibly inert. The rail still renders the currency
+          toggle at 40% opacity here; nothing now says why.
+
+          The prohibitions: the BRD and the handoff both require them in copy on
+          the screen, not merely in the implementation. They are still stated on
+          a holding's own page, beside the figures they govern, and the API still
+          returns them so any screen can state them again. */}
+
+      {/* Above the register, as the create form is on Accounts: the thing that
+          makes a row exist comes before the rows. */}
+      <NewHolding />
 
       {positions.length === 0 ? (
         <section className="panel">
-          <p className="fx__note">No holdings yet.</p>
+          <h2 className="panel__heading">Nothing Here Yet</h2>
+          <p className="fx__note">
+            The system starts empty and is never seeded. Add a holding above, then
+            record what you bought.
+          </p>
         </section>
       ) : (
-        positions.map((position) => (
-          <section className="panel invest__holding" key={position.id}>
-            <div className="invest__head">
-              <div>
-                <h2 className="panel__heading">
-                  {position.name}{' '}
-                  {position.symbol && <span className="secondary mono">{position.symbol}</span>}
-                </h2>
-                <div className="secondary">
-                  {position.instrument_type} · {position.account} ·{' '}
-                  <span className="mono">{position.currency}</span> · {position.lot_count} lot
-                  {position.lot_count === 1 ? '' : 's'}
-                </div>
-              </div>
+        <>
+          <HoldingTable heading="Holdings Held" positions={held} />
+          <HoldingTable heading="Holdings Not Yet Traded" positions={untraded} />
+          {showSold && <HoldingTable heading="Sold-Out Holdings" positions={soldOut} />}
 
-              <label className="invest__tax">
-                <span className="label">Est. tax %</span>
-                <input
-                  className="input mono"
-                  inputMode="decimal"
-                  defaultValue={position.estimated_tax_percent ?? ''}
-                  onBlur={(event) =>
-                    update.mutate({
-                      id: position.id,
-                      estimated_tax_percent: event.target.value || null,
-                    })
-                  }
-                />
-              </label>
-            </div>
-
-            {/* Flagged, never blocked. Figures still display below. */}
-            {!position.consistent &&
-              position.inconsistencies.map((problem) => (
-                <div className="advisory" key={problem.transaction_id} role="status">
-                  <span className="advisory__label">Advisory · Retroactively invalid</span>
-                  <span className="advisory__body">{problem.message}</span>
-                </div>
-              ))}
-
-            <LotQueue position={position} />
-          </section>
-        ))
+          {/* Silent when nothing is sold out — an empty disclosure invites a
+              click that reveals nothing. */}
+          {soldOut.length > 0 && (
+            <p className="accounts__disclosure">
+              <button
+                type="button"
+                className="link-button accounts__disclosure-button"
+                onClick={() => setShowSold(!showSold)}
+              >
+                {icons[showSold ? 'hide' : 'show']}
+                {showSold ? 'Hide Sold-Out Holdings' : 'Show Sold-Out Holdings'}
+              </button>
+            </p>
+          )}
+        </>
       )}
 
-      <TransactionForm holdings={positions} />
-      <NewHolding />
+      {/* Entry is not on this screen. Recording a transaction happens on the
+          holding's own page, at the Product Owner's instruction — see the note
+          in components/Holding.tsx for what that trades away. Open a holding
+          from the register above. */}
 
-      <section className="panel">
-        <h2 className="panel__heading">Realised Gains</h2>
-        <p className="fx__note">
-          Grouped by currency and never summed across them. Net figures are indicative
-          estimates using the percentage you typed.
-        </p>
+      {/* The Realised Gains panel that stood here was removed from this screen
+          at the Product Owner's instruction. Two things it did are worth naming
+          rather than losing.
 
-        {(gains.data?.currencies ?? []).length === 0 ? (
-          <p className="fx__note">No sales recorded.</p>
-        ) : (
-          (gains.data?.currencies ?? []).map((block) => (
-            <div key={block.currency} className="invest__gains">
-              <h3 className="invest__gains-heading mono">{block.currency}</h3>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Sale date</th>
-                    <th>Holding</th>
-                    <th className="numeric">Proceeds</th>
-                    <th className="numeric">Fees</th>
-                    <th className="numeric">Cost basis</th>
-                    <th className="numeric">Gross gain</th>
-                    <th className="numeric">Est. tax</th>
-                    <th className="numeric">Net gain</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {block.sales.map((sale) => (
-                    <tr key={sale.transaction_id}>
-                      <td className="mono">{formatDate(sale.date)}</td>
-                      <td>{sale.holding}</td>
-                      <td className="numeric">{formatDecimal(sale.proceeds)}</td>
-                      <td className="numeric secondary">{formatDecimal(sale.fees)}</td>
-                      <td className="numeric">{formatDecimal(sale.cost_basis)}</td>
-                      <td className="numeric">
-                        <span className={sale.is_loss ? 'money money--breach' : 'money money--rise'}>
-                          {formatDecimal(sale.realised_gain)}
-                        </span>
-                      </td>
-                      <td className="numeric secondary">
-                        {/* Losses are shown gross; no percentage is applied. */}
-                        {sale.tax_applied ? `${sale.estimated_tax_percent}%` : '—'}
-                      </td>
-                      <td className="numeric">
-                        {formatDecimal(sale.net_realised_gain)}
-                        {sale.tax_applied && <span className="indicative"> indicative</span>}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="table__total">
-                    <td>Total, {block.currency} only</td>
-                    <td colSpan={4} />
-                    <td className="numeric">{formatDecimal(block.gross)}</td>
-                    <td />
-                    <td className="numeric">
-                      {formatDecimal(block.net)}
-                      {block.tax_applied && <span className="indicative"> indicative</span>}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          ))
-        )}
-      </section>
+          It stated the grouping rule in copy — by currency, never summed across
+          them (BR-18) — and it was the only place a sale's proceeds, fees and
+          cost basis appeared beside the gain they produced. Both survive: the
+          register above now carries realised gain and its percentage per
+          holding, a holding's own page lists its sales with the lots each one
+          consumed, and `/api/investments/realised-gains/` still serves the
+          report unchanged (REP-11) for the CSV export. */}
     </div>
   )
 }

@@ -130,20 +130,12 @@
   }
 }
 
-.fx__form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  max-width: 340px;
-}
-
-/* The provider load, under the missing-and-stale table it answers. Separated by
-   a rule rather than a heading: it is an action on the panel above it, not a
-   fifth section of the screen. */
+/* The provider load, under the states it clears. The rule that separated it was
+   removed at the Product Owner's instruction; the gap alone now sets it apart,
+   which suits what it is — an action on the column it sits in rather than a
+   section of its own. */
 .fx__load {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--row-rule);
+  margin-top: 24px;
 }
 
 .fx__load .btn {
@@ -154,19 +146,6 @@
   margin-bottom: 0;
 }
 
-/* The direction, stated beside every field. The single easiest thing in this
-   system to get backwards. */
-.fx__convention {
-  color: var(--ink-45);
-  font-weight: 400;
-}
-
-/* The wrong-way check, shown at the moment of typing. */
-.fx__inverse {
-  font-size: var(--size-secondary);
-  color: var(--ink-45);
-}
-
 .fx__trend-controls {
   display: flex;
   align-items: flex-end;
@@ -174,29 +153,93 @@
   margin-bottom: 14px;
 }
 
+/* The two sides share the column, equally, whatever it is wide: a pair is two
+   currencies of the same standing, and a select sized to its content makes the
+   longer code look like the subject and the shorter one like its qualifier. */
 .fx__trend-select {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .fx__trend-select .input {
   min-height: 30px;
   padding: 2px 8px;
+  width: 100%;
 }
 
-.fx__derived {
-  font-size: var(--size-secondary);
-  color: var(--accent-light);
+/* The direction, between the two selects. Aligned with the fields rather than
+   their labels, which is where the eye reads the pair from. */
+.fx__pair-arrow {
+  color: var(--ink-45);
   padding-bottom: 6px;
 }
 
-.fx__trend-legend {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--size-col);
-  color: var(--ink-45);
-  margin-bottom: 6px;
+/* The header's segmented control, in a 380px column instead of a header bar,
+   and with its legend gone: the five presets divide the column between them, so
+   the control spans the same width as the two selects under it rather than
+   sitting as a cluster at the column's left edge. */
+.fx__range {
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.fx__range .seg__option {
+  flex: 1;
+  text-align: center;
+}
+
+/* Missing and stale, in the trend panel's left column. Three columns rather
+   than the table's five: the column is 380px wide, and the pair's own quote
+   convention — the column that went — is stated beside the entry field for it. */
+.fx__status {
+  margin-top: 18px;
+}
+
+.fx__status-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.fx__status-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 3px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--row-rule);
+  font-size: var(--size-secondary);
+}
+
+.fx__status-row:last-child {
+  border-bottom: none;
+}
+
+/* At the far edge of the column, so the ages line up as a column of their own
+   against the codes at the left. */
+.fx__status-date {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.fx__status-none {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 6px;
+}
+
+/* The swap, at the end of the pair row. Sized by `.btn--icon` and pinned to
+   the foot of the row like the selects it sits beside, so the three controls
+   share one baseline. */
+.fx__swap {
+  flex: 0 0 auto;
 }
 
 .fx__chart {
@@ -284,6 +327,24 @@
   font-size: var(--size-cell);
 }
 
+/*
+  An inline editor fills the column it edits in.
+
+  An input left at its intrinsic width is sized by the browser to about twenty
+  characters, which has nothing to do with the column it is sitting in. The
+  result is a box that starts at the column's left edge and stops short of its
+  right one, so an open editor does not line up with its own heading or with the
+  same value on any other row — and a register whose columns stop agreeing with
+  each other while it is being edited is the thing this table is for.
+
+  Applied by name rather than to every `.input--grid` in a table: Month Close
+  caps its balance field deliberately, and Cash flow's row editor is sized
+  around its own columns.
+*/
+.input--cell {
+  width: 100%;
+}
+
 .numeric-input {
   text-align: right;
   width: 100%;
@@ -339,16 +400,66 @@
 /* Accounts                                                                  */
 /* ------------------------------------------------------------------------ */
 
+/*
+  Name wide, the four fixed-vocabulary fields narrow, the button its own width.
+
+  Auto-fit gave all six cells an equal share, which spent as much width on a
+  three-letter currency code as on the account name — the one field here with no
+  fixed vocabulary and no bound on its length. The four selects only ever hold
+  terms this application has already fixed, so each is sized to its longest term
+  instead: Investment/Brokerage, Liquidity Tier's four tiers, a currency code, a
+  month.
+*/
 .accounts__form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns:
+    minmax(220px, 2fr) /* Name */
+    minmax(148px, 1fr) /* Type */
+    minmax(120px, 0.8fr) /* Liquidity Tier */
+    minmax(84px, 0.5fr) /* Currency */
+    minmax(116px, 0.7fr) /* Opened */
+    auto; /* Add Account */
   gap: 14px;
   align-items: end;
 }
 
+/* Below this the six columns stop fitting and the fields wrap, as they did at
+   every width before. */
+@media (max-width: 1000px) {
+  .accounts__form {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+/* Narrower than its column, never shorter than the fields it closes: it sits on
+   their bottom edge, so it keeps the full input height and gives up only the
+   width it was never using. */
+.accounts__submit,
+.invest__submit {
+  justify-self: start;
+}
+
 /* The column is a fixed share of the table now, so a row carrying every action
    can outgrow it. Individual labels never break; the set wraps instead. */
+/*
+  The flex lives one level in, and that is the whole point of the wrapper.
+
+  `display: flex` on a `td` takes the cell out of table layout: it stops
+  stretching to its row's height and sizes to its own content instead. While
+  every cell in a row held one line of text that was invisible — they were all
+  the same height anyway. The moment any other cell grows, which is exactly what
+  opening an inline editor does, this cell stayed short and its bottom border
+  sat ten pixels above every other cell's. The row rule broke in the middle of
+  the row, under this column.
+
+  So the cell stays a cell and the buttons get a box of their own to be laid out
+  in.
+*/
 .accounts__actions {
+  vertical-align: middle;
+}
+
+.accounts__actions-set {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -356,18 +467,84 @@
   white-space: nowrap;
 }
 
-/* A refusal belongs against the row that caused it, not at the top of the
-   screen where it loses its subject. No hover tint — it is not a row. */
-.accounts__error-row td {
+/* A refusal or an advisory belongs against the row that caused it, not at the
+   top of the screen where it loses its subject. No hover tint — it is not a
+   row. Shared by every table that answers a row action in place. */
+.table__message-row td {
   padding: 8px var(--cell-pad) 12px;
 }
 
-.accounts__error-row:hover {
+.table__message-row:hover {
   background: none;
+}
+
+/* The advisory's own margin assumes a panel below it; against a row the next
+   row is the boundary. */
+.table__message-row .advisories {
+  margin-top: 0;
+}
+
+/* A row that opens onto its children. Styled as the cell's own text rather than
+   as a control: the arrow says it is openable, and a button that looked like a
+   button would put a second visual weight in every first column. */
+/* The whole row opens it, so the whole row shows that it will. */
+.disclosure-row {
+  cursor: pointer;
+}
+
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.disclosure:hover {
+  color: var(--ink);
+}
+
+.disclosure__arrow {
+  color: var(--ink-45);
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+/* One glyph turned, not two glyphs swapped: a second character would shift the
+   label by its own width the moment a row opened. */
+.disclosure[aria-expanded='true'] .disclosure__arrow {
+  transform: rotate(90deg);
+}
+
+/* Indented to start where the parent's name does, so a child reads as belonging
+   to the row above rather than as another parent. */
+.disclosure__child {
+  padding-left: calc(var(--cell-pad) + 21px);
 }
 
 .link-button--breach {
   color: var(--breach);
+}
+
+/* A row action that saves rather than destroys. The base .link-button warms to
+   breach on hover, which would read as a warning on a Save. */
+.link-button--commit {
+  color: var(--accent-light);
+}
+
+.link-button--commit:hover:not(:disabled) {
+  color: var(--accent-light);
+}
+
+.link-button:disabled {
+  opacity: 0.5;
+  cursor: progress;
 }
 
 /* Reveals the closed accounts, which are hidden by default. A row action earns
@@ -490,6 +667,7 @@
 .detail__name {
   font-family: var(--face-display);
   font-size: var(--size-title);
+  margin-top: 16px;
   margin-bottom: 8px;
 }
 
@@ -509,11 +687,13 @@
   color: var(--ink-70);
 }
 
+/* Stretched, not start-aligned: the figure and the plot read as one band across
+   the row, so neither column ends short of the other. */
 .detail__body {
   display: grid;
   grid-template-columns: 330px minmax(0, 1fr);
   gap: var(--panel-gap);
-  align-items: start;
+  align-items: stretch;
 }
 
 @media (max-width: 1100px) {
@@ -522,11 +702,49 @@
   }
 }
 
-.detail__direction {
-  font-size: var(--size-body);
-  color: var(--ink-85);
-  margin: 0 0 14px;
+/* The plot is the taller of the two, so it sets the row height. Centred rather
+   than top-hugging for the case where the figure column is the taller one. */
+.detail__trend {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
+
+/*
+  One rule under the row, not one per column.
+
+  A panel rules its own bottom edge, which is right when panels stack: the rule
+  runs the width of the page. Side by side it is wrong twice over — each border
+  stops at its column and the gutter between them stays blank, so a single
+  divider reads as two dashes. The two columns give up their borders and the
+  full-width panel beneath them draws the line, once, across everything.
+*/
+.detail__figure,
+.detail__trend {
+  border-bottom: none;
+  /* The grid gap alone spaces the row off the rule, so the line sits the same
+     distance below content as it does on any stacked panel. */
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+/*
+  The row above gave up its bottom borders, so whatever follows draws the rule
+  instead — once, across the full width. `.detail__history` does it inside the
+  grid on account detail; this does it for a holding, where the row is followed
+  by stacked panels rather than by one that spans the grid.
+*/
+.detail__body + .panel {
+  border-top: 1px solid var(--divider);
+}
+
+/* The figure and the plot share the top row; the month table runs the full
+   width beneath them, where a long history has room to be read as a list. */
+.detail__history {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--divider);
+}
+
 
 .detail__stats {
   margin: 0;
@@ -564,22 +782,13 @@
   gap: 8px;
 }
 
-.cashflow__month {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.cashflow__month .input {
-  min-height: 28px;
-  padding: 2px 8px;
-}
-
-/* A single row of quick entry. Entry speed is the whole battle. */
+/* A single row of quick entry, in entry order: date, what it was, what it cost.
+   Entry speed is the whole battle, so the seven controls stay on one line and
+   the two selects are the only ones given room to grow. */
 .cashflow__form {
   display: grid;
-  grid-template-columns: 150px 130px 90px minmax(200px, 1fr) minmax(160px, 1fr) auto;
+  grid-template-columns:
+    150px minmax(150px, 1fr) minmax(150px, 1fr) minmax(160px, 1fr) 130px 90px auto;
   gap: 12px;
   align-items: end;
 }
@@ -590,49 +799,175 @@
   }
 }
 
-/* The absence needs explaining, so it is explained. */
-.transfer-note {
-  border-left: 2px solid var(--divider);
-  padding-left: 12px;
-  margin-top: 14px;
-}
+/* Each control as wide as what it holds, not as wide as its neighbours. An
+   `auto-fit` grid gave a three-letter currency code the same room as a name,
+   which reads as eight fields of unknown importance.
 
-.proposals {
+   The three that take a currency, an amount and a date are the entry row's own
+   widths, deliberately: the two forms ask for several of the same things, and a
+   field that changes size between them looks like a different field. */
+.recurring__form {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns:
+    minmax(150px, 1fr) /* name       */
+    minmax(150px, 1fr) /* parent     */
+    minmax(160px, 1fr) /* category   */
+    120px /* frequency  */
+    150px /* anchor     */
+    130px /* amount     */
+    90px /* currency   */
+    auto; /* add        */
   gap: 12px;
+  align-items: end;
 }
 
+/* Too narrow for one line, so two — and proportional on both. A recurring item
+   is defined once and then left alone, so this form has never been the speed
+   trial the entry row is; wrapping costs it nothing. */
+@media (max-width: 1200px) {
+  .recurring__form {
+    grid-template-columns:
+      minmax(150px, 1fr)
+      minmax(150px, 1fr)
+      minmax(160px, 1fr)
+      auto;
+  }
+}
+
+/* The absence needs explaining, so it is explained. */
+/* One strip, scrolled sideways rather than wrapped down the page. A month of
+   weekly arrangements is a queue with an order to it — undecided first, oldest
+   first — and a grid that wraps turns that one line into rows the eye has to
+   re-enter. The panel keeps its height whatever the month holds. */
+.proposals {
+  display: flex;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  gap: 10px;
+  /* Room for the scrollbar, so it never sits over the actions it would cover. */
+  padding-bottom: 8px;
+}
+
+/* A card, and bounded like one. A strip that scrolls sideways has no edge of
+   the page to end each item against, so the border is what says where one
+   occurrence stops and the next begins — the reason this panel keeps a box
+   where the rest of the screen divides with a rule. Small with it: a month's
+   arrangements are a row to glance along, not five documents. */
 .proposal {
+  /* Fixed, not `1fr`: a strip that stretched its cards to fill the row would
+     show four wide ones and hide the fifth entirely. */
+  flex: 0 0 205px;
   border: 1px solid var(--divider);
   border-radius: var(--radius-panel);
-  padding: 12px;
+  padding: 8px 10px 9px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 1px;
+}
+
+/* Where the queue ends and the record begins. The answered cards are contiguous
+   at the far end, so one wider gap at the join says it — and a month answered
+   right through has no join, and gets none. */
+.proposal:not(.proposal--decided) + .proposal--decided {
+  margin-left: 12px;
 }
 
 .proposal__head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  font-size: var(--size-body);
+  gap: 10px;
+  font-size: var(--size-cell);
 }
 
-.proposal__amount {
-  font-size: 19px;
+/* An answered occurrence stays on the list and stops competing for attention:
+   the work on this panel is the rows still asking something. */
+.proposal--decided {
+  opacity: 0.6;
+}
+
+/* One fact per line — the date, the category, the status — rather than a run of
+   them separated by dots. A card 205px wide cannot hold the three on one line
+   without wrapping at a width nobody chose, and stacked they line up down the
+   strip: every card's status sits at the same height as its neighbours'. */
+.proposal__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--size-secondary);
+  color: var(--ink-55);
+}
+
+/* The three states, in the colours the rest of the application already uses
+   for the same three meanings: taken, let go, still owed. Outstanding keeps
+   plain ink — it is the ordinary case, and colouring it would leave nothing
+   for the two that are not. */
+.proposal__status--confirmed {
+  color: var(--rise);
+}
+
+.proposal__status--skipped {
+  color: var(--ink-30);
 }
 
 .proposal__actions {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .proposal__actions .btn {
-  min-height: 28px;
-  padding: 3px 10px;
-  font-size: var(--size-cell);
+  min-height: 22px;
+  padding: 1px 8px;
+  font-size: var(--size-secondary);
+}
+
+/* Right-aligned like the numeric column it sits beside, and never wrapping
+   mid-label — the pair of actions wraps as a set instead. A wrapper inside the
+   cell for the same reason as the amount pair: a flex `td` is not a table cell,
+   so it draws neither its own row rule in line with its neighbours nor the
+   cells after it in place. */
+.cashflow__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+/* Amount and its currency share one cell, in the column order they are read
+   in. The amount takes the slack; the code takes what it needs. A wrapper
+   inside the cell rather than the cell itself — a flex `td` is no longer a
+   table cell, and the actions after it would drop to their own line. */
+.cashflow__amount-cell {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.cashflow__amount-cell .numeric-input {
+  max-width: 110px;
+}
+
+.cashflow__amount-cell select {
+  flex: 0 0 auto;
+}
+
+/* One diagram per currency, stacked. The caption is the only thing naming the
+   currency on the plot itself, so it sits above rather than beside: a label to
+   one side of a Sankey reads as a node. */
+.cashflow__flow {
+  margin: 0 0 var(--panel-gap);
+}
+
+.cashflow__flow:last-child {
+  margin-bottom: 0;
+}
+
+/* Recharts hangs its own focus outline on the plot wrapper. */
+.cashflow__flow .recharts-wrapper:focus {
+  outline: none;
 }
 
 .cashflow__totals {
@@ -651,23 +986,6 @@
 /* ------------------------------------------------------------------------ */
 
 /* Stated on the screen, not merely implemented. */
-.prohibitions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-left: 2px solid var(--divider);
-  padding: 4px 0 4px 12px;
-  margin-bottom: var(--panel-gap);
-  max-width: 78ch;
-}
-
-.prohibitions p {
-  margin: 0;
-  font-size: var(--size-secondary);
-  color: var(--ink-55);
-  line-height: 1.55;
-}
-
 .invest__head {
   display: flex;
   justify-content: space-between;
@@ -694,29 +1012,245 @@
   gap: 8px;
 }
 
+/*
+  Record a Transaction, filling the panel.
+
+  It was `auto-fit, minmax(150px, 1fr)`: equal columns, and equal is the wrong
+  ratio — a date needs more room than a fee. So the fields grow instead of
+  tiling. Each has a basis sized to what it actually holds and the same growth
+  factor, so the row spans the full width with the proportions kept: the date
+  stays the widest, the figures share the rest evenly, and Record takes only the
+  width of the word.
+
+  The consequence is deliberate and worth naming: a split has one field, so on a
+  split the ratio input is as wide as the panel. That is what spanning the width
+  means with a variable field set, and the alternative — a capped field with the
+  row ending short — is the ragged edge this replaced.
+*/
 .invest__form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   align-items: end;
 }
 
-.invest__gains {
-  margin-bottom: 22px;
+/* Basis, not width: one figure's worth. The widest thing any of these holds is
+   a quantity at ten decimal places, which is what a reinvestment's fractional
+   units come to. */
+.invest__form > .field {
+  flex: 1 1 126px;
 }
 
-.invest__gains-heading {
-  font-size: var(--size-cell);
+/* A bigger basis, and not by preference: below about this the browser clips its
+   own date picker indicator, which is the only affordance saying the field has
+   one. */
+.invest__form > .field--date {
+  flex: 1 1 152px;
+}
+
+/* Both of these fight the growth otherwise — `.input` has no width of its own
+   and `.numeric-input` caps at 160px for the narrow cell editors it was written
+   for, which would leave the input short inside a field that had grown. */
+.invest__form .input {
+  width: 100%;
+}
+
+.invest__form .numeric-input {
+  max-width: none;
+}
+
+/* Never grows. A button stretched across a share of the row reads as a bar. */
+.invest__form > .btn {
+  flex: 0 0 auto;
+}
+
+/*
+  Add a Holding, sized by what each field actually holds — the Accounts create
+  form's geometry, on this form's seven columns.
+
+  Equal columns are wrong here and were wrong there: an instrument name runs to
+  sixty characters while a symbol is four and a currency is three, so under
+  `auto-fit` the name field is the only one that is ever short of room and five
+  others sit half empty. The name takes the slack; everything with a known width
+  gives it up.
+*/
+.invest__form--holding {
+  grid-template-columns:
+    minmax(220px, 2.4fr) /* Name */
+    minmax(80px, 0.5fr) /* Symbol */
+    minmax(96px, 0.6fr) /* Type */
+    minmax(84px, 0.5fr) /* Currency */
+    minmax(160px, 1.2fr) /* Account */
+    minmax(88px, 0.5fr) /* Est. tax % */
+    auto; /* Add */
+}
+
+/* Below this the seven columns stop fitting and the fields wrap, as they did at
+   every width before. */
+@media (max-width: 1100px) {
+  .invest__form--holding {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+}
+
+/* The holding summary was a full-width band of figures and is now the 330px
+   figure column beside the plot, so it uses `.detail__figure` and
+   `.detail__stats` — the account trend's own two — rather than a second pair
+   that would drift from them. */
+
+/*
+  A lot a sale consumed, revealed under the sale that consumed it.
+
+  Unruled and tight: these rows are the workings of the row above, not entries of
+  their own, so they must not read as more sales. The missing bottom border is
+  what joins each group to its sale — the rule returns on the next sale row,
+  which is where the list actually moves on.
+
+  The indent is `.disclosure__child`, applied in the markup: it is the same
+  relationship the category report's subcategories have to their parent, and
+  lining a lot up under its sale is the same measurement as lining a subcategory
+  up under its category. It was a flat 22px here, which was right until the sale
+  date grew an arrow in front of it.
+*/
+.invest__consumed td {
+  border-bottom: none;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/*
+  The symbol chip, beside a holding's name — in the register, and in the title on
+  the holding's own page.
+
+  `.tag` a step down, because the name is what is being read and the symbol is
+  what confirms it, and inline-block so the chip is a single box its line can
+  centre rather than an inline run whose padding fights the line box around it.
+  That is what carries it from a table row to a display-size heading unchanged:
+  it centres on whatever it sits beside.
+*/
+.tag--symbol {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: var(--size-secondary);
   color: var(--ink-55);
-  margin-bottom: 6px;
+  vertical-align: middle;
 }
 
-/* Every net-of-tax figure is labelled, on every screen and every export. */
-.indicative {
-  font-size: 0.8em;
-  color: var(--carry);
-  margin-left: 5px;
+/*
+  The same chip in the page title, and the loudest thing on the page after the
+  title itself.
+
+  Sized in `em` and not from the type scale on purpose: the chip belongs to the
+  heading it sits in, so it holds its proportion if the title size ever moves,
+  and the scale has no step between 13px and 22px that suits a 27px heading.
+  `--radius-chip` is a table-row radius and reads as a square corner at this
+  size, so this one is fully rounded — the shape the register's chip only
+  implies.
+
+  Filled, and filled *neutrally*: weight here comes from the surface and ink
+  scales, never from a hue. Colour in this application is semantic only — accent
+  means interactive, carry means stale, breach means missing, rise means up — and
+  a ticker is none of those things, so tinting the pill would state something
+  untrue about it (tokens.css).
+*/
+.detail__name .tag--symbol {
+  margin-left: 14px;
+  padding: 4px 16px;
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  border-color: var(--input-border);
+  background: var(--surface);
+  color: var(--ink);
+  vertical-align: 0.12em;
 }
+
+/*
+  Name and symbol share one cell, so editing them shares it too — side by side,
+  each field the width of what it holds.
+
+  They were stacked while the column was a quarter of the register, on the
+  grounds that splitting it two ways left neither field wide enough. At a third
+  it splits comfortably, and stacking now costs more than it buys: two rows of
+  controls made the edit row twice the height of every other row, so opening an
+  editor shoved the rest of the register down the page.
+
+  The proportions are the two fields' actual content. A symbol is a ticker —
+  four or five characters — so it takes a fixed width sized to hold six in the
+  mono face and not one pixel more. The name has no bound on its length, so it
+  takes everything left over. Wrapping is the fallback for a narrow viewport,
+  where the stacked arrangement is right again.
+*/
+.invest__edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/*
+  `min-width: 0` on both, and it is load-bearing rather than defensive.
+
+  A flex item's automatic minimum size is its intrinsic width, and for an
+  `<input>` that is the browser's default field size — about 205px, which has
+  nothing to do with what the field holds. Without this the symbol cannot shrink
+  to the 64px it is asked for, the two fields cannot fit on one line, and the row
+  silently falls back to the stacked layout this rule exists to replace.
+*/
+.invest__edit-name {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.invest__edit-symbol {
+  flex: 0 0 64px;
+  min-width: 0;
+}
+
+/*
+  The action, colour-coded in the transaction register — one colour per action.
+
+  No new hue was invented for it: each is an existing role, and each has a
+  reading that fits the action wearing it. Rise where units come in, breach where
+  they go out, carry on the one action funded by what the holding paid out rather
+  than by money the user put in.
+
+  The text, not a chip: the pill this replaced put a second visual weight in
+  every row of a register that runs thirty rows for a fortnightly buyer, which is
+  a lot of boxes to read past to reach the figures. The coloured thing is the
+  word, so each row still reads correctly with no colour at all.
+*/
+.action {
+  /* Split, and anything untoned: the cell's own colour, unchanged. */
+  color: inherit;
+}
+
+/* Units in. */
+.action--buy {
+  color: var(--rise);
+}
+
+/* Units out. Not an error and not a warning: a sale is an ordinary thing that
+   happens to move the holding down, which is exactly what breach means in a
+   change column. */
+.action--sell {
+  color: var(--breach);
+}
+
+/* The distribution that funded it came from the holding, not from the user — the
+   one row here that is both income and a purchase. */
+.action--reinvestment {
+  color: var(--carry);
+}
+
+/* The per-currency gains blocks and the `indicative` suffix that went with
+   every net figure were styled here. Both are gone from the markup — the
+   Realised Gains panel with them, and the suffix in favour of `Est.` in the
+   column header — so the rules go rather than sit here waiting for a class name
+   nothing writes. The rule they served has not changed: a net-of-tax figure is
+   still labelled as an estimate wherever it appears, including in the CSV
+   export's own description. */
 
 /* ------------------------------------------------------------------------ */
 /* Dashboard                                                                 */
@@ -770,38 +1304,9 @@
   margin: 6px 0 8px;
 }
 
-/* What a holdings figure rests on, under the figure. Sized as a movement line is
-   on the two panels above, because it occupies the same place and answers the
-   same question — "how should I read the number above this". */
-.holdings__note {
-  font-size: var(--size-secondary);
-  line-height: 1.35;
-}
-
 .cashsum__change {
   font-size: var(--size-cell);
   color: var(--ink-70);
-}
-
-/* The only plot on this screen with two series, so the only one that needs a key.
-   Two lines on one scale is legitimate here and is not on the cash flow panel:
-   both series are money in one currency, and the distance between them is itself
-   the figure being read.
-
-   Above the plot rather than inside it — Recharts' own legend eats plot height
-   and reserves it whether or not the series are drawn. */
-.chartkey {
-  display: flex;
-  gap: 16px;
-  font-size: var(--size-secondary);
-  padding-left: var(--panel-pad);
-  margin-bottom: 4px;
-}
-
-.chartkey__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 /* Two stacked plots reading as one figure, sharing the month axis printed

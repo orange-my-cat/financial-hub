@@ -15,11 +15,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.api.responses import with_advisories
-from core.currencies import CURRENCY_CODES
+from core.currencies import BASE_CURRENCY, CURRENCY_CODES, REPORTING_CURRENCY_CODES
 from core.months import MONTH_PATTERN
 from core.services.exceptions import NotFoundError
 from cashflow.models import Direction, Frequency, RecurringTemplate, Transaction
-from cashflow.services import categories, recurring, reporting
+from cashflow.services import categories, recurring, reporting, summary
 from cashflow.services.entry import (
     delete_transaction,
     record_transaction,
@@ -57,6 +57,20 @@ class MonthSerializer(serializers.Serializer):
     month = serializers.RegexField(MONTH_REGEX)
 
 
+class FlowSerializer(serializers.Serializer):
+    """A month, and the currency to state it in.
+
+    The reporting currencies only. Gold denominates a balance and is never a
+    unit a report is stated in (OI-01), so a month recorded in XAU is
+    translated into the diagram like any other currency and never drawn as one.
+    """
+
+    month = serializers.RegexField(MONTH_REGEX)
+    currency = serializers.ChoiceField(
+        choices=REPORTING_CURRENCY_CODES, default=BASE_CURRENCY
+    )
+
+
 class TrendSerializer(serializers.Serializer):
     from_month = serializers.RegexField(MONTH_REGEX)
     to_month = serializers.RegexField(MONTH_REGEX)
@@ -80,13 +94,20 @@ class TemplateSerializer(serializers.Serializer):
     currency = serializers.ChoiceField(choices=CURRENCY_CODES)
     category_id = serializers.IntegerField()
     frequency = serializers.ChoiceField(choices=Frequency.choices)
-    start_month = serializers.RegexField(MONTH_REGEX)
-    end_month = serializers.RegexField(MONTH_REGEX, required=False, allow_null=True)
+    #: The first occurrence. Every later one is counted from it.
+    anchor_date = serializers.DateField()
+    end_date = serializers.DateField(required=False, allow_null=True)
+
+
+class EndTemplateSerializer(serializers.Serializer):
+    #: Optional. Omitted, the template stops proposing from now on.
+    end_date = serializers.DateField(required=False, allow_null=True)
 
 
 class ConfirmSerializer(serializers.Serializer):
     template_id = serializers.IntegerField()
-    period = serializers.RegexField(MONTH_REGEX)
+    #: Which occurrence is being decided, by the date it falls on.
+    occurrence = serializers.DateField()
     amount = serializers.DecimalField(
         max_digits=19, decimal_places=4, min_value=Decimal("0.0001"), required=False
     )
@@ -107,16 +128,9 @@ def _transaction(pk: int) -> Transaction:
 
 
 def _payload(row: Transaction) -> dict:
-    return {
-        "id": row.pk,
-        "date": row.date.isoformat(),
-        "amount": str(row.amount.quantize(Decimal("0.01"))),
-        "currency": row.currency,
-        "direction": row.direction,
-        "category_id": row.category_id,
-        "category": row.category.name,
-        "note": row.note,
-    }
+    # One serialiser for the month list, entry and edit alike, so the row the
+    # client renders after saving is the row it would have refetched.
+    return reporting.transaction_row(row)
 
 
 # ---------------------------------------------------------------------------
@@ -211,29 +225,28 @@ class CategoryDetailView(APIView):
 # ---------------------------------------------------------------------------
 
 
+def _template_payload(row: RecurringTemplate) -> dict:
+    # One shape for the list and for whatever an action returns, so the row the
+    # client renders after ending a template is the row it would have refetched.
+    return {
+        "id": row.pk,
+        "name": row.name,
+        "amount": str(row.amount.quantize(Decimal("0.01"))),
+        "currency": row.currency,
+        "direction": row.direction,
+        "category_id": row.category_id,
+        "category": row.category.name,
+        "parent": row.category.parent.name if row.category.parent_id else row.category.name,
+        "frequency": row.frequency,
+        "anchor_date": row.anchor_date.isoformat(),
+        "end_date": row.end_date.isoformat() if row.end_date else None,
+        "is_active": row.is_active,
+    }
+
+
 class RecurringTemplateView(APIView):
     def get(self, request):  # noqa: ARG002
-        rows = RecurringTemplate.objects.select_related("category").all()
-        return Response(
-            {
-                "data": [
-                    {
-                        "id": row.pk,
-                        "name": row.name,
-                        "amount": str(row.amount.quantize(Decimal("0.01"))),
-                        "currency": row.currency,
-                        "direction": row.direction,
-                        "category_id": row.category_id,
-                        "category": row.category.name,
-                        "frequency": row.frequency,
-                        "start_month": row.start_month,
-                        "end_month": row.end_month,
-                        "is_active": row.is_active,
-                    }
-                    for row in rows
-                ]
-            }
-        )
+        return Response({"data": [_template_payload(row) for row in recurring.templates()]})
 
     def post(self, request):
         fields = _validated(TemplateSerializer, request.data)
@@ -245,18 +258,36 @@ class RecurringTemplateView(APIView):
             direction=category.direction,
             category=category,
             frequency=fields["frequency"],
-            start_month=fields["start_month"],
-            end_month=fields.get("end_month"),
+            anchor_date=fields["anchor_date"],
+            end_date=fields.get("end_date"),
         )
         return Response({"data": {"id": template.pk}}, status=http.HTTP_201_CREATED)
 
 
+class RecurringEndView(APIView):
+    """Stop future proposals. History is untouched (BR-14)."""
+
+    def post(self, request, pk: int):
+        fields = _validated(EndTemplateSerializer, request.data)
+        template = recurring.end_template(
+            recurring.get_template(pk), end_date=fields.get("end_date")
+        )
+        return Response({"data": _template_payload(template)})
+
+
 class ProposalListView(APIView):
-    """Outstanding proposals — derived, never stored."""
+    """The month's outstanding proposals — derived, never stored.
+
+    The month is required rather than defaulted. This screen always knows which
+    month it is showing, and a request that omitted it would be answered with a
+    list about some other month, which is the failure the parameter exists to
+    prevent. Occurrences outside it are not lost: the dashboard's tasks panel
+    counts every one still awaiting a decision (OI-09).
+    """
 
     def get(self, request):
-        through = request.query_params.get("through")
-        proposals = recurring.outstanding_proposals(through=through)
+        query = _validated(MonthSerializer, request.query_params)
+        proposals = recurring.proposals_for_month(query["month"])
         return Response({"data": [proposal.as_dict() for proposal in proposals]})
 
 
@@ -265,7 +296,7 @@ class ProposalConfirmView(APIView):
         fields = _validated(ConfirmSerializer, request.data)
         result = recurring.confirm(
             fields["template_id"],
-            fields["period"],
+            fields["occurrence"],
             amount=fields.get("amount"),
             on_date=fields.get("date"),
         )
@@ -277,7 +308,7 @@ class ProposalConfirmView(APIView):
 class ProposalDismissView(APIView):
     def post(self, request):
         fields = _validated(ConfirmSerializer, request.data)
-        recurring.dismiss(fields["template_id"], fields["period"])
+        recurring.dismiss(fields["template_id"], fields["occurrence"])
         return Response(status=http.HTTP_204_NO_CONTENT)
 
 
@@ -298,6 +329,22 @@ class CategoryReportView(APIView):
                     "currencies": reporting.category_report(query["month"]),
                 }
             }
+        )
+
+
+class CategoryFlowView(APIView):
+    """The month's categories combined into one currency.
+
+    A separate endpoint rather than a parameter on the category report, because
+    the two answer different questions and only one of them translates. A
+    response that could do either would need a reader to check which it had
+    done before trusting a total.
+    """
+
+    def get(self, request):
+        query = _validated(FlowSerializer, request.query_params)
+        return Response(
+            {"data": summary.category_flow(query["month"], query["currency"])}
         )
 
 

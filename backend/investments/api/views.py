@@ -14,15 +14,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.currencies import CURRENCY_CODES
-from investments.models import Holding, InstrumentType, InvestmentTransaction
+from investments.models import InstrumentType, InvestmentTransaction
 from investments.replay import Action
 from investments.services.positions import (
     HoldingPosition,
+    create_holding,
     get_holding,
+    holding_detail,
     positions,
     realised_gains_by_currency,
     record,
     replay_holding,
+    update_holding,
 )
 
 #: Stated in copy on the screen, and returned by the API so the screen cannot
@@ -93,7 +96,7 @@ class HoldingListView(APIView):
 
     def post(self, request):
         fields = _validated(HoldingSerializer, request.data)
-        holding = Holding.objects.create(**fields)
+        holding = create_holding(**fields)
         return Response(
             {"data": HoldingPosition(holding, replay_holding(holding)).as_dict()},
             status=http.HTTP_201_CREATED,
@@ -102,39 +105,18 @@ class HoldingListView(APIView):
 
 class HoldingDetailView(APIView):
     def get(self, request, pk: int):  # noqa: ARG002
-        holding = get_holding(pk)
-        result = replay_holding(holding)
+        # The holding's own screen: the position, the open lot queue, and the
+        # transaction register with what replay made of each row. The service
+        # assembles all of it; nothing is computed here.
         return Response(
-            {
-                "data": {
-                    **HoldingPosition(holding, result).as_dict(),
-                    "transactions": [
-                        {
-                            "id": row.pk,
-                            "action": row.action,
-                            "date": row.date.isoformat(),
-                            "quantity": str(row.quantity),
-                            "unit_price": str(row.unit_price),
-                            "fees": str(row.fees),
-                            "split_ratio": str(row.split_ratio),
-                            "cash_amount": str(row.cash_amount),
-                            "note": row.note,
-                        }
-                        for row in holding.transactions.all()
-                    ],
-                }
-            }
+            {"data": {**holding_detail(get_holding(pk)), "prohibitions": PROHIBITIONS}}
         )
 
     def patch(self, request, pk: int):
-        holding = get_holding(pk)
         fields = _validated(HoldingUpdateSerializer, request.data)
-        for field, value in fields.items():
-            setattr(holding, field, value)
-        holding.save()
-        # Changing the percentage restates the net figure on all historic sales,
-        # including sales already reported (BR-21). Free, because nothing was
-        # stored.
+        # One service call. The rule about which facts are editable, and the
+        # refusal when a name is already taken, both live there (§5.2.2).
+        holding = update_holding(get_holding(pk), fields)
         return Response({"data": HoldingPosition(holding, replay_holding(holding)).as_dict()})
 
     def delete(self, request, pk: int):  # noqa: ARG002

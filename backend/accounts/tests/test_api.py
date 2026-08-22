@@ -14,6 +14,7 @@ from decimal import Decimal
 import pytest
 
 from accounts.models import Account, AccountType, Balance, LiquidityTier
+from accounts.services import lifecycle
 from fx.models import ExchangeRate
 
 pytestmark = pytest.mark.django_db
@@ -122,6 +123,175 @@ def test_reclassifying_returns_the_restatement_advisory_and_saves(signed_in, por
     assert body["advisories"][0]["kind"] == "historic_restatement"
     assert body["advisories"][0]["detail"]["crosses_asset_liability_boundary"] is True
     assert body["data"]["account_type"] == "Loan/Mortgage"
+
+
+def test_an_account_can_be_renamed_without_restating_anything(signed_in, portfolio):
+    """A rename is a label change, not a reclassification.
+
+    It moves no month between asset and liability and changes no figure, so it
+    carries no advisory — which is what keeps the restatement advisory meaning
+    something when it does appear.
+    """
+    response = signed_in.patch(
+        f"/api/accounts/{portfolio['usd'].pk}/",
+        data={"name": "Everyday Transaction"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["name"] == "Everyday Transaction"
+    assert body["advisories"] == []
+    # Classification untouched by a rename.
+    assert body["data"]["account_type"] == "Current/Checking"
+    assert body["data"]["liquidity_tier"] == "Instant"
+
+
+def test_renaming_an_account_leaves_its_balances_and_net_worth_alone(signed_in, portfolio):
+    before = signed_in.get("/api/net-worth/?month=2026-07&currency=USD").json()["data"]
+
+    signed_in.patch(
+        f"/api/accounts/{portfolio['usd'].pk}/",
+        data={"name": "Renamed"},
+        content_type="application/json",
+    )
+
+    after = signed_in.get("/api/net-worth/?month=2026-07&currency=USD").json()["data"]
+    assert after["total"] == before["total"]
+    assert {row["name"] for row in after["accounts"]} >= {"Renamed"}
+
+
+def test_a_rename_and_a_reclassification_in_one_call_do_both(signed_in, portfolio):
+    """The view keeps them apart deliberately — one save, one service call — so
+    the advisory belongs to the reclassification and not to the rename."""
+    response = signed_in.patch(
+        f"/api/accounts/{portfolio['aud'].pk}/",
+        data={"name": "CommBank Offset", "liquidity_tier": "Locked"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["name"] == "CommBank Offset"
+    assert body["data"]["liquidity_tier"] == "Locked"
+    assert body["advisories"][0]["kind"] == "historic_restatement"
+
+
+def test_the_opening_month_can_be_corrected_backwards(signed_in, portfolio):
+    """Widening the window restates nothing and raises no advisory.
+
+    It changes no figure and moves no month between asset and liability; it makes
+    the account expected in more months, and completeness derives that on read
+    (ADR-05).
+    """
+    response = signed_in.patch(
+        f"/api/accounts/{portfolio['usd'].pk}/",
+        data={"opened_month": "2025-03"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["opened_month"] == "2025-03"
+    assert response.json()["advisories"] == []
+
+
+def test_the_opening_month_cannot_move_past_a_recorded_balance(signed_in, portfolio):
+    """The mirror of `upsert_balance`, which will not record a balance before an
+    account opened. Moving the opening month forward past one would strand that
+    balance outside the account's own life."""
+    response = signed_in.patch(
+        f"/api/accounts/{portfolio['usd'].pk}/",
+        data={"opened_month": "2026-08"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "opened_after_history"
+    assert "opened_month" in response.json()["error"]["field_errors"]
+    portfolio["usd"].refresh_from_db()
+    assert portfolio["usd"].opened_month == "2026-01"
+
+
+def test_the_opening_month_cannot_move_past_the_closing_month(signed_in):
+    """A database check constraint refuses this too. The service says so in words
+    first, because an IntegrityError is a 500 and a mistyped month is not."""
+    account = Account.objects.create(
+        name="Old Card",
+        account_type=AccountType.CREDIT_CARD,
+        liquidity_tier=LiquidityTier.INSTANT,
+        currency="USD",
+        opened_month="2025-01",
+    )
+    lifecycle.close(account, "2025-06")
+
+    response = signed_in.patch(
+        f"/api/accounts/{account.pk}/",
+        data={"opened_month": "2025-09"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "opened_after_closed"
+    account.refresh_from_db()
+    assert account.opened_month == "2025-01"
+
+
+def test_an_account_with_no_history_can_open_in_any_month_up_to_now(signed_in):
+    account = Account.objects.create(
+        name="Fresh",
+        account_type=AccountType.SAVINGS,
+        liquidity_tier=LiquidityTier.SHORT,
+        currency="USD",
+        opened_month="2026-01",
+    )
+
+    response = signed_in.patch(
+        f"/api/accounts/{account.pk}/",
+        data={"opened_month": "2026-08"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["opened_month"] == "2026-08"
+
+
+def test_setting_the_opening_month_to_what_it_already_is_is_not_a_refusal(signed_in, portfolio):
+    """Otherwise an edit row that saves on change would refuse the value it is
+    already showing the moment the picker is touched."""
+    response = signed_in.patch(
+        f"/api/accounts/{portfolio['usd'].pk}/",
+        data={"opened_month": "2026-01"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+
+
+def test_a_rename_and_an_opening_month_in_one_call_do_both(signed_in, portfolio):
+    response = signed_in.patch(
+        f"/api/accounts/{portfolio['aud'].pk}/",
+        data={"name": "CommBank Saver 2", "opened_month": "2025-11"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["name"] == "CommBank Saver 2"
+    assert body["opened_month"] == "2025-11"
+
+
+def test_the_currency_of_an_account_with_balances_is_still_refused(signed_in, portfolio):
+    """BR-08. The screen only offers the control while the choice is open; the
+    API is what actually holds the line."""
+    response = signed_in.patch(
+        f"/api/accounts/{portfolio['usd'].pk}/",
+        data={"currency": "AUD"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    portfolio["usd"].refresh_from_db()
+    assert portfolio["usd"].currency == "USD"
 
 
 def test_an_account_with_history_cannot_be_deleted(signed_in, portfolio):
@@ -397,9 +567,61 @@ def test_account_history_is_in_the_accounts_own_currency(signed_in, portfolio):
     assert body["account"]["currency"] == "AUD"
     assert body["history"][0]["month"] == "2026-07"
     assert body["history"][0]["amount"] == "50000.0000"
-    assert body["history"][0]["change"] == "2000.0000"
+    # Change and its proportion both come from core.services.movement, so they
+    # are rounded once for display — the change to the cent, the percentage to a
+    # tenth — and agree with what the dashboard states for the same movement.
+    assert body["history"][0]["change"] == "2000.00"
+    assert body["history"][0]["change_percent"] == "4.2"
     # The oldest month has nothing to compare against.
     assert body["history"][-1]["change"] is None
+    assert body["history"][-1]["change_percent"] is None
+
+
+def test_account_history_states_the_three_offsets_the_panel_shows(signed_in, portfolio):
+    # 2026-07 is the latest. A month, a quarter and a year behind it: only the
+    # month and the quarter are recorded, and the quarter is deliberately not
+    # the second-oldest record — 2026-05 sits between it and the latest.
+    for month, amount in (("2026-06", "48000"), ("2026-05", "45000"), ("2026-04", "40000")):
+        Balance.objects.create(
+            account=portfolio["aud"], month=month, amount=Decimal(amount)
+        )
+
+    moved = signed_in.get(f"/api/accounts/{portfolio['aud'].pk}/history/").json()["data"][
+        "movement"
+    ]
+
+    assert moved["month_on_month"] == {
+        "month": "2026-06",
+        "change": "2000.00",
+        "change_percent": "4.2",
+    }
+    # Three calendar months back, not three records back: 2026-04, not 2026-05.
+    assert moved["quarter_on_quarter"] == {
+        "month": "2026-04",
+        "change": "10000.00",
+        "change_percent": "25.0",
+    }
+    # 2025-07 has no balance, so there is nothing to measure against. Not zero,
+    # and not the oldest record standing in for a year ago.
+    assert moved["year_on_year"] == {
+        "month": "2025-07",
+        "change": None,
+        "change_percent": None,
+    }
+
+
+def test_an_account_with_no_balances_has_no_movement_to_state(signed_in, portfolio):
+    portfolio["usd"].balances.all().delete()
+
+    body = signed_in.get(f"/api/accounts/{portfolio['usd'].pk}/history/").json()["data"]
+
+    assert body["history"] == []
+    for offset in ("month_on_month", "quarter_on_quarter", "year_on_year"):
+        assert body["movement"][offset] == {
+            "month": None,
+            "change": None,
+            "change_percent": None,
+        }
 
 
 # ---------------------------------------------------------------------------

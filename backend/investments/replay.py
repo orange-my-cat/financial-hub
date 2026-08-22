@@ -45,12 +45,23 @@ class Action(StrEnum):
     They are rare, individually complex, and each behaves differently; a user
     representing one manually as a sale and a purchase gets figures that do not
     reflect the true event, and the system says so rather than pretending.
+
+    **There is no cash-only distribution.** BR-20 had two actions here — a
+    Distribution that paid cash and a Reinvestment that bought units — and one
+    real event needed both, entered twice against the same holding on the same
+    date. At the Product Owner's instruction they are one action: a reinvestment
+    carries the cash the distribution paid *and* the units that cash bought, so
+    it is the only action in this system with two money effects.
+
+    A distribution taken as cash is therefore not enterable, deliberately. Cash
+    that reaches an account shows up where every other balance change does — at
+    the next close, in the balance itself (BR-01) — and this module never claimed
+    to be a cash ledger.
     """
 
     BUY = "Buy"
     SELL = "Sell"
     SPLIT = "Split"
-    DISTRIBUTION = "Distribution"
     REINVESTMENT = "Reinvestment"
 
 
@@ -119,6 +130,24 @@ class Consumption:
     acquired: date
     quantity: Decimal
     cost_basis: Decimal
+
+
+@dataclass(frozen=True)
+class Acquisition:
+    """A buy or a reinvestment, and what it added to cost basis.
+
+    The engine works this out anyway in order to open the lot; returning it is
+    what lets a transaction register state what a purchase cost without a second
+    definition of the arithmetic living somewhere else. `quantity` is as
+    entered — a later split restates the lot, not the purchase that happened.
+    """
+
+    transaction_id: int
+    on_date: date
+    quantity: Decimal
+    #: Units x price plus fees. Purchase fees form part of cost basis (BR-16).
+    cost: Decimal
+    from_reinvestment: bool
 
 
 @dataclass(frozen=True)
@@ -225,6 +254,10 @@ class ReplayResult:
     inconsistencies: tuple[Inconsistency, ...] = field(default_factory=tuple)
     #: The last transacted price, or None where nothing priced has been recorded.
     last_price: PriceObservation | None = None
+    #: Every purchase and what it cost, in replay order. Not a lot state: a lot
+    #: that has since been sold down still has an acquisition here, because the
+    #: purchase still happened.
+    acquisitions: tuple[Acquisition, ...] = field(default_factory=tuple)
 
     @property
     def is_consistent(self) -> bool:
@@ -242,6 +275,16 @@ class ReplayResult:
     def realised_gain(self) -> Decimal:
         """Across this holding only. Never summed across currencies (BR-18)."""
         return sum((disposal.realised_gain for disposal in self.disposals), ZERO)
+
+    @property
+    def realised_cost_basis(self) -> Decimal:
+        """What the sold units cost, across every sale.
+
+        The denominator of a realised return, and the only honest one available
+        here: it is the FIFO cost of units that have actually left, not a market
+        value of units still held.
+        """
+        return sum((disposal.cost_basis for disposal in self.disposals), ZERO)
 
     @property
     def total_distributions(self) -> Decimal:
@@ -286,6 +329,7 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
     ordered = sorted(transactions, key=lambda t: (t.on_date, t.sequence, t.id))
 
     open_lots: list[_OpenLot] = []
+    acquisitions: list[Acquisition] = []
     disposals: list[Disposal] = []
     distributions: list[Distribution] = []
     inconsistencies: list[Inconsistency] = []
@@ -315,6 +359,32 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
             # reinvestment — it is a purchase that happens to be funded by a
             # distribution (BR-20).
             cost = transaction.quantity * transaction.unit_price + transaction.fees
+
+            # And the distribution that funded it, which is the same event and
+            # no longer a row of its own. Two effects from one transaction: the
+            # cash was received and the units were bought, and dropping either
+            # would understate income or understate cost basis.
+            #
+            # Not double counting: distributions total the income a holding paid,
+            # cost basis totals what its units cost. A reinvestment is the one
+            # event that is both, which is exactly why it was two rows before.
+            if transaction.action is Action.REINVESTMENT and transaction.cash_amount > 0:
+                distributions.append(
+                    Distribution(
+                        transaction_id=transaction.id,
+                        on_date=transaction.on_date,
+                        cash_amount=transaction.cash_amount,
+                    )
+                )
+            acquisitions.append(
+                Acquisition(
+                    transaction_id=transaction.id,
+                    on_date=transaction.on_date,
+                    quantity=transaction.quantity,
+                    cost=cost,
+                    from_reinvestment=transaction.action is Action.REINVESTMENT,
+                )
+            )
             open_lots.append(
                 _OpenLot(
                     transaction_id=transaction.id,
@@ -355,16 +425,6 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
                         split_adjusted=True,
                     )
 
-        elif transaction.action is Action.DISTRIBUTION:
-            # Cash against the holding. Changes no lot and no cost basis.
-            distributions.append(
-                Distribution(
-                    transaction_id=transaction.id,
-                    on_date=transaction.on_date,
-                    cash_amount=transaction.cash_amount,
-                )
-            )
-
     lots = tuple(
         Lot(
             transaction_id=lot.transaction_id,
@@ -383,6 +443,7 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
         distributions=tuple(distributions),
         inconsistencies=tuple(inconsistencies),
         last_price=last_price,
+        acquisitions=tuple(acquisitions),
     )
 
 

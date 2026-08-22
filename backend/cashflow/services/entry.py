@@ -93,7 +93,7 @@ def record_transaction(
     note: str = "",
     account_id: int | None = None,
     recurring_template_id: int | None = None,
-    recurring_period: str | None = None,
+    recurring_occurrence: date | None = None,
 ) -> RecordedTransaction:
     if amount <= 0:
         raise BusinessRuleError(
@@ -118,7 +118,7 @@ def record_transaction(
         note=note,
         account_id=account_id,
         recurring_template_id=recurring_template_id,
-        recurring_period=recurring_period,
+        recurring_occurrence=recurring_occurrence,
     )
 
     return RecordedTransaction(

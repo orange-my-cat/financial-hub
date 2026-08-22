@@ -158,9 +158,17 @@ class RateLoadView(APIView):
     avoid a wait that short would be the largest piece of machinery in a
     single-user system, for the smallest reason (ADR-10).
 
-    Idempotent by construction. A re-fetch replaces only rows an earlier fetch
-    wrote and never a rate the user typed (BRD §4.3), so pressing the button
-    twice costs time and nothing else.
+    It **truncates and loads**: every rate stored in the window is cleared and
+    the provider's series is loaded over the empty range, so what is stored for
+    the last year afterwards is exactly what the provider returned. Pressing it
+    twice costs time and nothing else — but a rate typed by hand inside the
+    window does not survive the first press, which is a deliberate departure
+    from BRD §4.3. The clearing is a soft delete (ADR-03), so those rows stay
+    recoverable through the admin, and the response says how many there were.
+
+    The backfill command keeps the old behaviour: `load_daily_closes` defers to
+    hand entry unless asked to truncate, so a decade-wide backfill cannot clear
+    a decade of typed rates by omission.
     """
 
     def post(self, request):  # noqa: ARG002

@@ -22,17 +22,46 @@ import { useSearchParams } from 'react-router-dom'
 import { useDefaultCurrency } from './fx'
 import { REPORTING_CURRENCIES, type ReportingCurrencyCode } from './money'
 
-/** How many months the reports show by default. */
-const DEFAULT_RANGE_MONTHS = 24
+/**
+ * How many months the reports show by default.
+ *
+ * Exported because a screen outside the reporting range plots the same window:
+ * account detail has no range control, and a trend twelve months long there
+ * would make the same movement look twice as steep as it does on the dashboard.
+ */
+export const DEFAULT_RANGE_MONTHS = 24
 
 function monthKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
-function shiftMonths(from: string, months: number): string {
+/**
+ * Month-key arithmetic, in the one place it is defined.
+ *
+ * Exported because a screen reporting a single month sometimes needs the one
+ * before it — Net worth asks the trend for a two-month window to state how the
+ * selected month moved. Every caller shares this so `2026-01` steps back to
+ * `2025-12` rather than to `2026-00` somewhere.
+ */
+export function shiftMonths(from: string, months: number): string {
   const [year, month] = from.split('-').map(Number)
   const date = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1 + months, 1))
   return monthKey(date)
+}
+
+/**
+ * How many months a range covers, both ends included — `2026-08`..`2026-08` is
+ * one month, not none.
+ *
+ * Here rather than in the screen that asks, for the same reason `shiftMonths`
+ * is: a range control has to recognise the window it is already showing, and a
+ * second piece of month arithmetic is a second place for `2026-01` to be a
+ * month out.
+ */
+export function monthSpan(from: string, to: string): number {
+  const [fromYear, fromMonth] = from.split('-').map(Number)
+  const [toYear, toMonth] = to.split('-').map(Number)
+  return ((toYear ?? 0) - (fromYear ?? 0)) * 12 + ((toMonth ?? 0) - (fromMonth ?? 0)) + 1
 }
 
 export interface ViewState {

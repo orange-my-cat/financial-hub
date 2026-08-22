@@ -27,10 +27,14 @@ Two things this deliberately does not do:
     exclusions and its rate provenance all travel in the response beside its total
     (§8.2), so the figure is qualified rather than withheld.
   * **It does not decide what the outstanding tasks panel asks about.** That
-    panel is about now — the current month and the one before it (FR-51) — and it
-    stays anchored there whichever month the figures are for. Otherwise it would
-    fall silent about the close that is actually due, and disagree with the rail
-    badge, which counts the same tasks as at today.
+    panel is about the close that is due — the last month that has *ended* and the
+    one before it (FR-51, `core.services.tasks`) — and it stays anchored to the
+    calendar whichever month the figures are for. The two answers differ in both
+    directions: this service stands further back when the month due to be closed
+    holds no balances at all, and further forward on an early close, where it
+    reports a month the panel is deliberately still silent about. Anchoring the
+    panel here instead would let it fall silent about the close that is actually
+    due, and disagree with the rail badge, which counts the same tasks.
 
 Derived on read from the balances that exist, like everything else here. There is
 no month table and nothing anywhere records that a month was closed (ADR-04), so

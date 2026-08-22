@@ -154,6 +154,50 @@ def test_the_month_before_is_checked_too(portfolio):
     assert tasks["balances_previous"].route == "/month-close"
 
 
+def test_a_gap_in_the_running_month_is_silent_until_the_month_ends(db):
+    """A balance is stated as at a month's last day (BR-24), so the month still
+    running cannot have one — and a task the user cannot act on is exactly what
+    this panel must never raise. Last month is closed here and this month is not,
+    which under a calendar-month scope would raise a task nobody could clear.
+
+    Asserted against the real today, so it keeps meaning something on every day
+    this suite is run.
+    """
+    from core.months import month_of, previous
+
+    current = month_of(date.today())
+    account = Account.objects.create(
+        name="Everyday", account_type=AccountType.CURRENT,
+        liquidity_tier=LiquidityTier.INSTANT, currency="USD",
+        opened_month=previous(current),
+    )
+    Balance.objects.create(account=account, month=previous(current), amount=Decimal("1"))
+
+    assert outstanding_tasks() == []
+
+
+def test_the_close_that_is_due_is_last_months(db):
+    """Two months in scope, both of them ended: the close that is due, and the
+    one before it. The month on the calendar is in neither."""
+    from core.months import month_of, previous, shift
+
+    current = month_of(date.today())
+    account = Account.objects.create(
+        name="Everyday", account_type=AccountType.CURRENT,
+        liquidity_tier=LiquidityTier.INSTANT, currency="USD",
+        opened_month=shift(current, -3),
+    )
+    # An account is required from its first recorded balance onwards (ADR-04), so
+    # this makes every month since then required — and every one of them missing.
+    Balance.objects.create(account=account, month=shift(current, -3), amount=Decimal("1"))
+
+    tasks = {task.kind: task for task in outstanding_tasks()}
+
+    assert previous(current) in tasks["balances"].message
+    assert shift(current, -2) in tasks["balances_previous"].message
+    assert all(current not in task.message for task in tasks.values())
+
+
 def test_a_month_that_required_nothing_stays_silent(portfolio):
     """June predates every first balance, so it is Outside Range, not a fault.
 
@@ -185,10 +229,11 @@ def test_a_stale_rate_is_a_task_but_not_a_breach(portfolio):
 
 
 def test_a_rate_entered_today_raises_no_task_in_the_month_still_running(portfolio):
-    """Outstanding is judged as at today, never at a month-end still to come.
+    """A month named explicitly is judged as at today, never at a month-end to come.
 
-    Judging the running month at its month-end would age every rate by the days
-    left in it — a rate entered this morning reported as a fortnight old, and
+    The panel does not reach the running month on its own any more, but a caller
+    naming it still gets an honest answer. Judging that month at its month-end
+    would age every rate by the days left in it — a rate entered this morning reported as a fortnight old, and
     breaching the threshold on time that has not passed. It would also put this
     panel in contradiction with the FX screen, which asks the same question as
     of today. Asserted as an invariant against today, so it keeps meaning
@@ -218,7 +263,7 @@ def test_an_outstanding_recurring_proposal_raises_a_task(portfolio):
     RecurringTemplate.objects.create(
         name="Rent", amount=Decimal("2200"), currency="AUD", direction=Direction.EXPENSE,
         category=Category.objects.get(name="Rent", parent__isnull=False),
-        frequency=Frequency.MONTHLY, start_month="2026-07",
+        frequency=Frequency.MONTHLY, anchor_date=date(2026, 7, 15),
     )
 
     tasks = {task.kind: task for task in outstanding_tasks("2026-07")}

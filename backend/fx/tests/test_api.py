@@ -433,6 +433,7 @@ def test_loading_from_the_provider_stores_rates_and_reports_what_it_did(
     assert body["provider"] == "massive"
     assert body["written"] == 1
     assert body["kept_manual"] == 0
+    assert body["removed"] == 0
     stored = ExchangeRate.objects.get(currency="AUD")
     assert stored.rate == Decimal("0.70835")
     assert stored.source == "api"
@@ -450,15 +451,25 @@ def test_the_button_loads_a_year_ending_today(signed_in, stub_provider):
     assert (end - start).days + 1 == RECENT_WINDOW_DAYS
 
 
-def test_loading_never_overwrites_a_rate_that_was_typed(signed_in, stub_provider):
-    """BRD §4.3, over HTTP. The count is what the screen shows for it."""
+def test_the_button_truncates_the_window_and_loads_over_it(signed_in, stub_provider):
+    """The BRD §4.3 departure, over HTTP. The count is what the screen shows.
+
+    A typed rate on a date the provider does return is replaced by its close; a
+    typed rate on a date it does not return is cleared and not restored. Both are
+    soft deletes, so the figures remain recoverable through the admin (ADR-03).
+    """
     rate("AUD", "2026-08-14", "0.66")
+    rate("AUD", "2026-08-15", "0.67")
 
     body = signed_in.post("/api/fx/rates/load/").json()["data"]
 
-    assert body["kept_manual"] == 1
-    assert body["written"] == 0
-    assert ExchangeRate.objects.get(currency="AUD").rate == Decimal("0.66")
+    assert body["truncated"] is True
+    assert body["removed"] == 2
+    assert body["kept_manual"] == 0
+    assert body["written"] == 1
+    assert ExchangeRate.objects.get(currency="AUD").rate == Decimal("0.70835")
+    assert not ExchangeRate.objects.filter(rate_date="2026-08-15").exists()
+    assert ExchangeRate.all_objects.filter(deleted_at__isnull=False).count() == 2
 
 
 def test_a_provider_outage_is_an_error_banner_and_saves_nothing(signed_in, monkeypatch):

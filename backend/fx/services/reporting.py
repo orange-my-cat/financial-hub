@@ -7,6 +7,11 @@ inventing points between them (ADR-08).
 Triangulated points are labelled derived. A triangulated AUD↔MYR will not
 exactly match a quoted market rate for that pair — immaterial for personal net
 worth, and surfaced rather than concealed.
+
+Each point carries its movement from the one before it. That belongs here and
+not in the screen for the same reason every other figure does: the browser has
+no exact decimal, so a change subtracted there would be a float difference of
+two rates presented as a rate (ADR-02, ADR-12).
 """
 
 from __future__ import annotations
@@ -29,6 +34,11 @@ from fx.models import ExchangeRate
 #: full precision into a chart that can draw six decimal places at best.
 TREND_PLACES = Decimal("0.000001")
 
+#: A rate's movement, as a proportion. Two places, matching the rate-variance
+#: advisory: a daily FX move is a fraction of a percent, and one place would
+#: round most of them to nothing.
+PERCENT_PLACES = Decimal("0.01")
+
 
 @dataclass(frozen=True)
 class TrendPoint:
@@ -36,6 +46,17 @@ class TrendPoint:
     #: In the market convention of the pair being charted.
     rate: Decimal
     provenance: Provenance
+    #: Movement from the **previous point in this series**, not from the previous
+    #: calendar day. The series is sparse by design — points sit where a rate was
+    #: recorded — so the previous observation is the only predecessor there is,
+    #: and comparing against a day nobody recorded would invent one.
+    #:
+    #: Computed here, and never in the browser: a rate is an exact decimal, and
+    #: `rate[n] - rate[n - 1]` in JavaScript is float arithmetic on a figure the
+    #: user reads (ADR-02, ADR-12). None on the first point of the range, which
+    #: has no predecessor inside it.
+    change: Decimal | None = None
+    change_percent: Decimal | None = None
 
     @property
     def is_derived(self) -> bool:
@@ -66,10 +87,28 @@ class RateTrend:
                     "rate": str(point.rate),
                     "provenance": str(point.provenance),
                     "derived": point.is_derived,
+                    # Strings, like every other figure that crosses this
+                    # boundary. A signed one: "+0.0031" and "-0.0031" are two
+                    # different facts, and a bare magnitude leaves the reader to
+                    # infer which from the rates either side of it.
+                    "change": _signed(point.change),
+                    "change_percent": _signed(point.change_percent),
                 }
                 for point in self.points
             ],
         }
+
+
+def _signed(value: Decimal | None) -> str | None:
+    """A movement as a signed string, or None where there is no predecessor.
+
+    Explicitly signed. Django would render `0.0031` for a rise and `-0.0031` for
+    a fall, and a column of figures where only the falls are marked reads as a
+    column of magnitudes with some errors in it.
+    """
+    if value is None:
+        return None
+    return f"{value:+f}"
 
 
 def _contributing_currencies(from_currency: str, to_currency: str) -> tuple[str, ...]:
@@ -119,11 +158,28 @@ def rate_trend(
             # One leg has no rate at or before this date. Omitted rather than
             # interpolated: a gap in the line is the truth.
             continue
+
+        rate = quote.factor.quantize(TREND_PLACES)
+        # The previous *point*, so a gap in the series is compared across rather
+        # than treated as a movement to zero.
+        previous = points[-1].rate if points else None
+        change = rate - previous if previous is not None else None
+        # Guarded rather than assumed: the check constraint keeps a stored rate
+        # positive, but a triangulated factor is arithmetic, and dividing by it
+        # is worth not doing blind.
+        percent = (
+            (change / previous * 100).quantize(PERCENT_PLACES)
+            if change is not None and previous
+            else None
+        )
+
         points.append(
             TrendPoint(
                 on_date=on_date,
-                rate=quote.factor.quantize(TREND_PLACES),
+                rate=rate,
                 provenance=quote.provenance,
+                change=change,
+                change_percent=percent,
             )
         )
 

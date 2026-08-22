@@ -9,10 +9,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, type Envelope } from './api'
-import type { CurrencyCode } from './money'
+import type { CurrencyCode, Money, ReportingCurrencyCode } from './money'
 
 export type Direction = 'Income' | 'Expense'
-export type Frequency = 'Monthly' | 'Quarterly' | 'Annual'
+export type Frequency = 'Weekly' | 'Fortnightly' | 'Monthly'
 
 export interface CategoryChild {
   readonly id: number
@@ -45,16 +45,58 @@ export interface TransactionRow {
   readonly from_recurring: boolean
 }
 
-export interface Proposal {
-  readonly template_id: number
+export interface RecurringTemplate {
+  readonly id: number
   readonly name: string
-  readonly period: string
   readonly amount: string
   readonly currency: CurrencyCode
   readonly direction: Direction
   readonly category_id: number
   readonly category: string
-  readonly suggested_date: string
+  readonly parent: string
+  readonly frequency: Frequency
+  /** The first occurrence. Every later one is counted from it. */
+  readonly anchor_date: string
+  /** The last date it proposes on. Null while it runs indefinitely. */
+  readonly end_date: string | null
+  readonly is_active: boolean
+}
+
+/**
+ * Three, not two. An occurrence nobody has answered and one deliberately
+ * skipped are different facts about the month, and both stay on the list.
+ */
+export type ProposalStatus = 'Outstanding' | 'Confirmed' | 'Skipped'
+
+export interface Proposal {
+  readonly template_id: number
+  readonly name: string
+  /** The date this occurrence falls on — its identity, and what it would carry. */
+  readonly occurrence: string
+  readonly amount: string
+  readonly currency: CurrencyCode
+  readonly direction: Direction
+  readonly category_id: number
+  readonly category: string
+  readonly status: ProposalStatus
+  /**
+   * What the confirmed transaction actually carries, which is not always what
+   * the template proposed — the amount is adjustable at confirmation and the
+   * date can be moved off the occurrence. Null until confirmed.
+   */
+  readonly recorded_amount: string | null
+  readonly recorded_date: string | null
+}
+
+/**
+ * A figure's movement on the month before it, computed by the server through the
+ * one definition of a change. Both halves null where there is nothing to
+ * compare; the percentage alone null against a month of zero, because a rise
+ * from nothing has no proportion.
+ */
+export interface Movement {
+  readonly change: string | null
+  readonly change_percent: string | null
 }
 
 export interface CategoryTotal {
@@ -65,6 +107,7 @@ export interface CategoryTotal {
   readonly currency: CurrencyCode
   readonly total: string
   readonly count: number
+  readonly change: Movement
 }
 
 export interface CurrencyBlock {
@@ -77,8 +120,54 @@ export interface CurrencyBlock {
     readonly direction: Direction
     readonly total: string
     readonly count: number
+    readonly change: Movement
   }[]
   readonly children: readonly CategoryTotal[]
+}
+
+/**
+ * The month's categories combined into one currency — one figure per category,
+ * however many currencies it was spent in.
+ *
+ * The counterpart to CurrencyBlock and the only translated thing in this
+ * module. Everything else here is exact and per currency; this applies a rate,
+ * so it carries what qualifies a translated total: which currencies were
+ * excluded for want of one, and where the rates it did use came from (§8.2).
+ */
+export interface CategoryFlowRow {
+  readonly category_id: number
+  readonly category: string
+  readonly parent: string
+  readonly direction: Direction
+  readonly total: Money
+  readonly count: number
+}
+
+export interface CategoryFlow {
+  readonly month: string
+  readonly currency: ReportingCurrencyCode
+  /** False where the month is empty, and where every currency was excluded. */
+  readonly reportable: boolean
+  readonly income: Money
+  readonly expense: Money
+  readonly net: Money
+  readonly parents: readonly {
+    readonly parent: string
+    readonly direction: Direction
+    readonly total: Money
+    readonly count: number
+  }[]
+  readonly children: readonly CategoryFlowRow[]
+  readonly exclusions: readonly { currency: CurrencyCode; reason: string }[]
+  readonly rate_provenance: readonly {
+    currency: CurrencyCode
+    pair: string
+    as_at: string
+    provenance: string
+    stale: boolean
+  }[]
+  readonly as_at: string | null
+  readonly any_stale: boolean
 }
 
 export interface CategoryTrend {
@@ -96,8 +185,11 @@ export const cashflowKeys = {
   all: ['cashflow'] as const,
   transactions: (month: string) => ['cashflow', 'transactions', month] as const,
   categories: ['cashflow', 'categories'] as const,
-  proposals: ['cashflow', 'proposals'] as const,
+  proposals: (month: string) => ['cashflow', 'proposals', month] as const,
+  templates: ['cashflow', 'templates'] as const,
   report: (month: string) => ['cashflow', 'report', month] as const,
+  flow: (month: string, currency: string) =>
+    ['cashflow', 'flow', month, currency] as const,
   trend: (from: string, to: string) => ['cashflow', 'trend', from, to] as const,
 }
 
@@ -119,11 +211,33 @@ export function useCategories() {
   })
 }
 
-export function useProposals() {
+/**
+ * Every occurrence falling in one month, answered or not.
+ *
+ * The month is part of the key because it is part of the answer. Older
+ * occurrences still awaiting a decision are counted on the dashboard's tasks
+ * panel, which is where work left undone belongs (OI-09).
+ */
+export function useProposals(month: string) {
   return useQuery({
-    queryKey: cashflowKeys.proposals,
+    queryKey: cashflowKeys.proposals(month),
     queryFn: () =>
-      api.get<{ data: Proposal[] }>('/cashflow/recurring/proposals/').then((r) => r.data),
+      api
+        .get<{ data: Proposal[] }>(`/cashflow/recurring/proposals/?month=${month}`)
+        .then((r) => r.data),
+  })
+}
+
+/**
+ * Every template, ended ones included — the management list, not the proposing
+ * one. An ended template is still worth seeing: it explains the transactions it
+ * left behind.
+ */
+export function useTemplates() {
+  return useQuery({
+    queryKey: cashflowKeys.templates,
+    queryFn: () =>
+      api.get<{ data: RecurringTemplate[] }>('/cashflow/recurring/').then((r) => r.data),
   })
 }
 
@@ -134,6 +248,25 @@ export function useCategoryReport(month: string) {
       api
         .get<{ data: { month: string; currencies: CurrencyBlock[] } }>(
           `/cashflow/category-report/?month=${month}`,
+        )
+        .then((r) => r.data),
+  })
+}
+
+/**
+ * The combined breakdown, in the reporting currency the header is set to.
+ *
+ * The currency is part of the key because it is part of the answer: the same
+ * month translated into two currencies is two different sets of figures, not
+ * one set rendered twice.
+ */
+export function useCategoryFlow(month: string, currency: ReportingCurrencyCode) {
+  return useQuery({
+    queryKey: cashflowKeys.flow(month, currency),
+    queryFn: () =>
+      api
+        .get<{ data: CategoryFlow }>(
+          `/cashflow/category-flow/?month=${month}&currency=${currency}`,
         )
         .then((r) => r.data),
   })
@@ -174,6 +307,33 @@ export function useRecordTransaction() {
   })
 }
 
+/**
+ * Everything is editable at any time, including history (BR-23).
+ *
+ * Only the fields that actually changed are sent. That is not a bandwidth
+ * nicety: re-sending an unchanged category would put it back through the
+ * active-category check, and a transaction sitting on a since-deactivated
+ * category would then be unable to have its note corrected — which is the
+ * opposite of "its history stays intact".
+ */
+export function useUpdateTransaction() {
+  const invalidate = useCashflowInvalidation()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...changes
+    }: {
+      id: number
+      date?: string
+      amount?: string
+      currency?: string
+      category_id?: number
+      note?: string
+    }) => api.patch<Envelope<TransactionRow>>(`/cashflow/transactions/${id}/`, changes),
+    onSuccess: invalidate,
+  })
+}
+
 export function useDeleteTransaction() {
   const invalidate = useCashflowInvalidation()
   return useMutation({
@@ -185,7 +345,7 @@ export function useDeleteTransaction() {
 export function useConfirmProposal() {
   const invalidate = useCashflowInvalidation()
   return useMutation({
-    mutationFn: (input: { template_id: number; period: string; amount?: string }) =>
+    mutationFn: (input: { template_id: number; occurrence: string; amount?: string }) =>
       api.post<Envelope<TransactionRow>>('/cashflow/recurring/confirm/', input),
     onSuccess: invalidate,
   })
@@ -194,8 +354,36 @@ export function useConfirmProposal() {
 export function useDismissProposal() {
   const invalidate = useCashflowInvalidation()
   return useMutation({
-    mutationFn: (input: { template_id: number; period: string }) =>
+    mutationFn: (input: { template_id: number; occurrence: string }) =>
       api.post<void>('/cashflow/recurring/dismiss/', input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useCreateTemplate() {
+  const invalidate = useCashflowInvalidation()
+  return useMutation({
+    mutationFn: (input: {
+      name: string
+      amount: string
+      currency: string
+      category_id: number
+      frequency: Frequency
+      anchor_date: string
+      end_date?: string | null
+    }) => api.post<{ data: { id: number } }>('/cashflow/recurring/', input),
+    onSuccess: invalidate,
+  })
+}
+
+/** Stop future proposals. The template and its history stay (BR-14). */
+export function useEndTemplate() {
+  const invalidate = useCashflowInvalidation()
+  return useMutation({
+    mutationFn: ({ id, end_date }: { id: number; end_date?: string }) =>
+      api.post<{ data: RecurringTemplate }>(`/cashflow/recurring/${id}/end/`, {
+        end_date,
+      }),
     onSuccess: invalidate,
   })
 }

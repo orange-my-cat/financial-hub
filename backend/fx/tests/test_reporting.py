@@ -111,6 +111,94 @@ def test_the_trend_serialises_with_its_derived_flags():
 
 
 # ---------------------------------------------------------------------------
+# Movement — served, because the browser has no exact decimal
+# ---------------------------------------------------------------------------
+
+
+def test_each_point_carries_its_movement_from_the_one_before():
+    rate("AUD", JAN_31, "0.66")
+    rate("AUD", FEB_28, "0.67")
+
+    points = rate_trend("AUD", "USD", START, END).points
+
+    # The first point of the range has no predecessor inside it. None, not zero:
+    # zero would claim the rate held.
+    assert points[0].change is None
+    assert points[0].change_percent is None
+    assert points[1].change == Decimal("0.010000")
+    assert points[1].change_percent == Decimal("1.52")
+
+
+def test_a_fall_is_signed_and_so_is_its_proportion():
+    rate("AUD", JAN_31, "0.70")
+    rate("AUD", FEB_28, "0.63")
+
+    points = rate_trend("AUD", "USD", START, END).points
+
+    assert points[1].change == Decimal("-0.070000")
+    assert points[1].change_percent == Decimal("-10.00")
+
+
+def test_a_rate_that_held_moves_by_zero_rather_than_by_nothing():
+    """Two facts, told apart. A repeated figure is an observation; a first point
+    of a range has nothing to compare against, and the two must not render the
+    same."""
+    rate("AUD", JAN_31, "0.66")
+    rate("AUD", FEB_28, "0.66")
+
+    points = rate_trend("AUD", "USD", START, END).points
+
+    assert points[1].change == Decimal("0.000000")
+    assert points[1].change_percent == Decimal("0.00")
+
+
+def test_movement_is_measured_across_a_gap_in_the_series():
+    """The previous *point*, not the previous calendar day.
+
+    Only month-end rates are required, so the series is sparse by design. A
+    change measured against a day nobody recorded would be a change against a
+    figure that does not exist.
+    """
+    rate("AUD", JAN_31, "0.66")
+    rate("AUD", MAR_31, "0.68")
+
+    points = rate_trend("AUD", "USD", START, END).points
+
+    assert [p.on_date for p in points] == [JAN_31, MAR_31]
+    assert points[1].change == Decimal("0.020000")
+
+
+def test_a_triangulated_series_moves_against_its_own_previous_point():
+    rate("AUD", JAN_31, "0.66")
+    rate("MYR", JAN_31, "4.20")
+    rate("MYR", FEB_28, "4.40")
+
+    points = rate_trend("AUD", "MYR", START, END).points
+
+    # 2.772000 -> 2.904000, both triangulated through USD.
+    assert points[1].change == Decimal("0.132000")
+    assert points[1].change_percent == Decimal("4.76")
+
+
+def test_movement_crosses_the_api_as_signed_strings():
+    """Signed, and strings. A bare "0.010000" in a column where only the falls
+    carry a sign reads as a column of magnitudes with mistakes in it — and a JSON
+    number would be a float by the time the screen printed it (ADR-12)."""
+    rate("AUD", JAN_31, "0.66")
+    rate("AUD", FEB_28, "0.67")
+    rate("AUD", MAR_31, "0.65")
+
+    points = rate_trend("AUD", "USD", START, END).as_dict()["points"]
+
+    assert points[0]["change"] is None
+    assert points[0]["change_percent"] is None
+    assert points[1]["change"] == "+0.010000"
+    assert points[1]["change_percent"] == "+1.52"
+    assert points[2]["change"] == "-0.020000"
+    assert points[2]["change_percent"] == "-2.99"
+
+
+# ---------------------------------------------------------------------------
 # Missing and stale
 # ---------------------------------------------------------------------------
 

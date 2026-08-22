@@ -18,11 +18,12 @@ from datetime import date
 from decimal import Decimal
 
 from core.money import Money, trim
-from core.months import as_at_of
+from core.months import as_at_of, month_end, month_of, previous, sequence
 from core.services.exceptions import BusinessRuleError, NotFoundError
+from core.services.movement import movement
 from core.services.translation import TranslationService
 from investments.models import Holding, InvestmentTransaction
-from investments.replay import Action, ReplayResult, ReplayTransaction, replay
+from investments.replay import Action, Disposal, ReplayResult, ReplayTransaction, replay
 
 CENTS = Decimal("0.01")
 
@@ -73,6 +74,24 @@ def net_of_tax(gain: Decimal, percent: Decimal | None) -> tuple[Decimal, bool]:
     return gain - (gain * percent / 100), True
 
 
+def realised_percent(result: ReplayResult) -> Decimal | None:
+    """Realised gain as a percentage of what the units sold had cost.
+
+    Not a portfolio return, and not derivable into one: the denominator is the
+    FIFO cost of units that have left (BR-17), so nothing here touches a market
+    price or a unit still held. Summing it across holdings would be meaningless
+    anyway — each is stated in its own currency (BR-18).
+
+    None where nothing has been sold, or where the sold units cost nothing at
+    all. A return on nothing is not a return of zero, exactly as a missing rate
+    is not a rate of zero (FR-46).
+    """
+    cost = result.realised_cost_basis
+    if not result.disposals or cost == 0:
+        return None
+    return (result.realised_gain / cost * 100).quantize(CENTS)
+
+
 # ---------------------------------------------------------------------------
 # Payloads
 # ---------------------------------------------------------------------------
@@ -84,6 +103,7 @@ class HoldingPosition:
     result: ReplayResult
 
     def as_dict(self) -> dict:
+        percent = realised_percent(self.result)
         return {
             "id": self.holding.pk,
             "name": self.holding.name,
@@ -99,7 +119,34 @@ class HoldingPosition:
             ),
             "total_quantity": str(self.result.total_quantity),
             "total_cost_basis": str(self.result.total_cost_basis.quantize(CENTS)),
+            # Closed gains only, on this holding, in this holding's currency.
+            # Null rather than zero where nothing has been sold: a holding still
+            # wholly held has realised nothing, which is not the same fact as
+            # having sold at cost.
+            "realised_gain": (
+                str(self.result.realised_gain.quantize(CENTS))
+                if self.result.disposals
+                else None
+            ),
+            "realised_gain_percent": trim(percent) if percent is not None else None,
             "lot_count": len(self.result.lots),
+            # What the register groups on, and what decides whether a holding
+            # can be deleted rather than only left alone: a holding nothing was
+            # ever recorded against has no history to preserve (ADR-14, exactly
+            # as for an account). `lot_count` cannot answer this — it is zero for
+            # an untraded holding and for a sold-out one, and those are not the
+            # same thing.
+            #
+            # `len` over `count()` deliberately. The list path prefetches the
+            # transactions in order to replay them, so on the register — the one
+            # place this is read per holding — it costs nothing. `count()` would
+            # ignore that cache and issue a query per row.
+            #
+            # Not prefetched in `get_holding`, and that is not an oversight: a
+            # prefetch cache taken before `record()` would still be holding the
+            # pre-insert list when the response is built, and the new
+            # transaction would be missing from the position it returns.
+            "transaction_count": len(self.holding.transactions.all()),
             "distributions": str(self.result.total_distributions.quantize(CENTS)),
             # Flagged, never blocking. Figures still display and entry still works.
             "consistent": self.result.is_consistent,
@@ -126,6 +173,189 @@ class HoldingPosition:
                 for lot in self.result.lots
             ],
         }
+
+
+def disposal_row(holding: Holding, disposal: Disposal) -> dict:
+    """One sale, as the API states it.
+
+    The only definition of a sale's figures. The realised gains report and the
+    holding's own transaction register both render from this, so the two cannot
+    disagree about what a sale realised — which is the whole point of having one
+    place where a calculation lives (§5.2.2).
+    """
+    net, applied = net_of_tax(disposal.realised_gain, holding.estimated_tax_percent)
+    return {
+        "transaction_id": disposal.transaction_id,
+        "date": disposal.on_date.isoformat(),
+        "holding": holding.name,
+        "holding_id": holding.pk,
+        "quantity": str(disposal.quantity),
+        "proceeds": str(disposal.proceeds.quantize(CENTS)),
+        "fees": str(disposal.fees.quantize(CENTS)),
+        "net_proceeds": str(disposal.net_proceeds.quantize(CENTS)),
+        "cost_basis": str(disposal.cost_basis.quantize(CENTS)),
+        "realised_gain": str(disposal.realised_gain.quantize(CENTS)),
+        "estimated_tax_percent": (
+            trim(holding.estimated_tax_percent)
+            if holding.estimated_tax_percent is not None
+            else None
+        ),
+        "net_realised_gain": str(net.quantize(CENTS)),
+        # Losses are shown gross; no percentage is applied to them.
+        "tax_applied": applied,
+        "is_loss": disposal.is_loss,
+        # Which lots the sale took its units from, oldest first. The open queue
+        # says what remains; this says where a sale's cost basis came from, and
+        # between them the two account for every unit ever bought.
+        "consumed": [
+            {
+                "lot_transaction_id": taken.lot_transaction_id,
+                "acquired": taken.acquired.isoformat(),
+                "quantity": str(taken.quantity),
+                "cost_basis": str(taken.cost_basis.quantize(CENTS)),
+            }
+            for taken in disposal.consumed
+        ],
+    }
+
+
+def holding_history(rows: Sequence[InvestmentTransaction], *, today: date | None = None) -> list[dict]:
+    """What was held at each month end, and what those units had cost.
+
+    Newest month first, as the account history reads, and continuous: a holding
+    has a cost basis every month from its first transaction to the present,
+    including the zero months after it was sold out. Months before the first
+    transaction are absent rather than zero — the holding did not exist to hold.
+
+    **Not performance, and not convertible into it.** Both figures are facts
+    about transactions: units surviving FIFO, and what those surviving units
+    cost. No market price is read, because none is stored, so no month here
+    carries a value or a return (BR-17, BR-18).
+
+    Computed by replaying the transactions dated on or before each month end,
+    which is the same engine every other figure on the page came through
+    (ADR-06). Walking the months once with a running total would be quicker and
+    would be a second definition of cost basis, free to drift from the first.
+    Nothing is stored either way (ADR-05).
+    """
+    if not rows:
+        return []
+
+    first = month_of(min(row.date for row in rows))
+    # To the present, not to the last transaction: units bought and left alone
+    # are still held, and a line that stopped at the last trade would read as a
+    # holding that ended.
+    last = max(first, month_of(today or date.today()))
+
+    history = [
+        {
+            "month": month,
+            **_position_at(rows, month_end(month)),
+        }
+        for month in sequence(first, last)
+    ]
+    history.reverse()
+    return history
+
+
+def _position_at(rows: Sequence[InvestmentTransaction], on_date: date) -> dict:
+    result = replay(to_replay([row for row in rows if row.date <= on_date]))
+    return {
+        "quantity": str(result.total_quantity),
+        "cost_basis": str(result.total_cost_basis.quantize(CENTS)),
+    }
+
+
+def holding_detail(holding: Holding) -> dict:
+    """A holding, its open lots, and every transaction with what replay made of it.
+
+    The register is what this payload exists for. Each transaction carries the
+    figure the engine derived from it — the cost a purchase added to basis, the
+    proceeds and FIFO cost basis a sale realised, the lots that sale consumed —
+    because the browser cannot work any of it out: money has no arithmetic there
+    (ADR-12).
+
+    Every key an action does not touch is null, and null means *not applicable*
+    rather than zero. The one deliberate exception is a purchase sold down to
+    nothing, whose remaining quantity is a genuine zero.
+
+    A reinvestment populates two of them — `acquired` and `distributed` — because
+    it is one event with two money effects (see `Action`). Every other action
+    populates exactly one, and a split none.
+    """
+    # Read once and iterated twice — by the engine and by the register below.
+    rows = list(holding.transactions.all())
+    result = replay(to_replay(rows))
+
+    acquisitions = {row.transaction_id: row for row in result.acquisitions}
+    disposals = {row.transaction_id: row for row in result.disposals}
+    distributions = {row.transaction_id: row for row in result.distributions}
+    open_lots = {lot.transaction_id: lot for lot in result.lots}
+    flagged = {problem.transaction_id for problem in result.inconsistencies}
+
+    register: list[dict] = []
+    for row in rows:
+        entry = {
+            "id": row.pk,
+            "action": row.action,
+            "date": row.date.isoformat(),
+            "quantity": str(row.quantity),
+            "unit_price": str(row.unit_price),
+            "fees": str(row.fees),
+            "split_ratio": str(row.split_ratio),
+            "cash_amount": str(row.cash_amount),
+            "note": row.note,
+            # What the engine made of it. One of these three per action — two for
+            # a reinvestment, which received cash and bought units — and none for
+            # a split, because a split moves no money.
+            "acquired": None,
+            "realised": None,
+            "distributed": None,
+            # Only a sale can be retroactively invalidated, and it is flagged
+            # here as well as on the holding so the register names the row.
+            "flagged": row.pk in flagged,
+        }
+
+        acquisition = acquisitions.get(row.pk)
+        if acquisition is not None:
+            lot = open_lots.get(row.pk)
+            entry["acquired"] = {
+                "cost": str(acquisition.cost.quantize(CENTS)),
+                "from_reinvestment": acquisition.from_reinvestment,
+                # A lot sold down to nothing is not absent, it is empty — and a
+                # later split restates what remains, not what was bought.
+                "remaining_quantity": str(lot.remaining_quantity) if lot else "0",
+                "remaining_cost": str(lot.remaining_cost.quantize(CENTS)) if lot else "0.00",
+            }
+
+        disposal = disposals.get(row.pk)
+        if disposal is not None:
+            entry["realised"] = disposal_row(holding, disposal)
+
+        distribution = distributions.get(row.pk)
+        if distribution is not None:
+            entry["distributed"] = str(distribution.cash_amount.quantize(CENTS))
+
+        register.append(entry)
+
+    return {
+        **HoldingPosition(holding, result).as_dict(),
+        # Month ends, for the plot beside the headline figure. Same rows, replayed
+        # to each month end rather than to the present.
+        "history": holding_history(rows),
+        "transactions": register,
+        # This holding's sales, newest first — the same rows the realised gains
+        # report groups by currency, restricted to one holding and never summed
+        # with another currency's (BR-18).
+        "realised": {
+            "gross": str(result.realised_gain.quantize(CENTS)),
+            "sales": sorted(
+                (disposal_row(holding, disposal) for disposal in result.disposals),
+                key=lambda sale: sale["date"],
+                reverse=True,
+            ),
+        },
+    }
 
 
 def positions() -> list[HoldingPosition]:
@@ -198,11 +428,33 @@ class HeldSummary:
         }
 
 
+def held_positions(through: date | None = None):
+    """Every holding and its replayed state, optionally as at a past date.
+
+    `through` filters the transactions before they are replayed, exactly as
+    `held_trend` does per month: the position as at that date, not today's
+    position dated backwards. A holding whose first purchase is later than
+    `through` is not yielded at all — it was not held.
+    """
+    if through is None:
+        for position in positions():
+            yield position.holding, position.result
+        return
+
+    holdings = Holding.objects.select_related("account").prefetch_related("transactions")
+    for holding in holdings:
+        rows = [t for t in holding.transactions.all() if t.date <= through]
+        if not rows:
+            continue
+        yield holding, replay(to_replay(rows))
+
+
 def held_summary(
     reporting_currency: str,
     translation: TranslationService | None = None,
     *,
     on_date: date | None = None,
+    through: date | None = None,
 ) -> HeldSummary:
     """Cost basis, estimated value and estimated gain for everything still held.
 
@@ -210,10 +462,16 @@ def held_summary(
     because this is a statement about what is held now rather than about a
     reporting month. The caller supplies it; the arithmetic does not choose
     (§5.2.1).
+
+    `through` rolls the whole summary back to a past date: transactions after it
+    are not replayed and, unless `on_date` overrides it, the rates are read as at
+    that date too. This is what the dashboard's month-on-month change subtracts
+    from, and it is the same basis the holdings plot is drawn on, so the change
+    stated beside a figure agrees with the line above it.
     """
     if translation is None:
         translation = TranslationService.from_settings()
-    as_at = on_date or date.today()
+    as_at = on_date or through or date.today()
 
     cost = Decimal(0)
     priced_cost = Decimal(0)
@@ -228,9 +486,7 @@ def held_summary(
     oldest_rate: date | None = None
     any_stale = False
 
-    for position in positions():
-        holding, result = position.holding, position.result
-
+    for holding, result in held_positions(through):
         # Currently held only. A holding sold down to nothing has a realised gain
         # and a place on the Investments screen, but nothing left to value.
         if result.total_quantity == 0:
@@ -302,6 +558,52 @@ def held_summary(
         as_at=oldest_rate,
         any_stale=any_stale,
     )
+
+
+def held_summary_with_change(
+    reporting_currency: str,
+    translation: TranslationService | None = None,
+    *,
+    month: str,
+    today: date | None = None,
+) -> dict:
+    """The three held figures **as at a month**, each with its movement on the
+    month before it.
+
+    The reported month, not today: on a dashboard reporting July, the position is
+    July's and the change is July on June, so the panel covers the same period as
+    the two above it and ends where the plot beside it ends. Both figures are
+    month-end positions, so the change subtracts from the figure it sits under.
+
+    Nulls carry the meaning `movement` gives them: no change at all where either
+    month's figure does not exist, because an estimate nobody could make is not
+    an estimate of nothing (FR-46).
+    """
+    if translation is None:
+        translation = TranslationService.from_settings()
+
+    now = today or date.today()
+    prior_month = previous(month)
+    current = held_summary(reporting_currency, translation, through=as_at_of(month, today=now))
+    prior = held_summary(reporting_currency, translation, through=as_at_of(prior_month, today=now))
+
+    def amount(money):
+        return money.amount if money is not None else None
+
+    return {
+        **current.as_dict(),
+        "month": month,
+        "previous_month": prior_month,
+        "change": {
+            "cost_basis": movement(current.cost_basis.amount, prior.cost_basis.amount),
+            "estimated_value": movement(
+                amount(current.estimated_value), amount(prior.estimated_value)
+            ),
+            "estimated_gain": movement(
+                amount(current.estimated_gain), amount(prior.estimated_gain)
+            ),
+        },
+    }
 
 
 def held_trend(
@@ -410,6 +712,8 @@ def realised_gains_by_currency(year: int | None = None) -> list[dict]:
             if year is not None and disposal.on_date.year != year:
                 continue
 
+            # The totals accumulate the unrounded figures and round once, so a
+            # long block's total is not the sum of its displayed rows.
             net, applied = net_of_tax(
                 disposal.realised_gain, holding.estimated_tax_percent
             )
@@ -417,29 +721,7 @@ def realised_gains_by_currency(year: int | None = None) -> list[dict]:
             block["net"] += net
             block["tax_applied"] = block["tax_applied"] or applied
 
-            block["sales"].append(
-                {
-                    "transaction_id": disposal.transaction_id,
-                    "date": disposal.on_date.isoformat(),
-                    "holding": holding.name,
-                    "holding_id": holding.pk,
-                    "quantity": str(disposal.quantity),
-                    "proceeds": str(disposal.proceeds.quantize(CENTS)),
-                    "fees": str(disposal.fees.quantize(CENTS)),
-                    "net_proceeds": str(disposal.net_proceeds.quantize(CENTS)),
-                    "cost_basis": str(disposal.cost_basis.quantize(CENTS)),
-                    "realised_gain": str(disposal.realised_gain.quantize(CENTS)),
-                    "estimated_tax_percent": (
-                        trim(holding.estimated_tax_percent)
-                        if holding.estimated_tax_percent is not None
-                        else None
-                    ),
-                    "net_realised_gain": str(net.quantize(CENTS)),
-                    # Losses are shown gross; no percentage is applied to them.
-                    "tax_applied": applied,
-                    "is_loss": disposal.is_loss,
-                }
-            )
+            block["sales"].append(disposal_row(holding, disposal))
 
     return [
         {
@@ -451,6 +733,68 @@ def realised_gains_by_currency(year: int | None = None) -> list[dict]:
         for block in sorted(blocks.values(), key=lambda row: row["currency"])
         if block["sales"]
     ]
+
+
+# ---------------------------------------------------------------------------
+# Creating and editing a holding
+# ---------------------------------------------------------------------------
+
+
+def assert_name_available(account_id: int, name: str, exclude_pk: int | None = None) -> None:
+    """One holding name per account, stated as a refusal.
+
+    The rule itself lives in the database — `investments_one_holding_per_name_per_account`,
+    scoped to live rows — which is what makes it true rather than merely intended
+    (§9.1). This is where it becomes a *message*: without it the constraint
+    surfaces as an IntegrityError and a 500, and a rename that collides is
+    ordinary user error, not a server fault.
+
+    Filtered through the default manager, so a soft-deleted holding does not
+    hold its name hostage — exactly the rows the constraint's condition covers.
+    """
+    clash = Holding.objects.filter(account_id=account_id, name=name)
+    if exclude_pk is not None:
+        clash = clash.exclude(pk=exclude_pk)
+
+    if clash.exists():
+        raise BusinessRuleError(
+            f"This account already has a holding called {name}. The same "
+            "instrument at two brokers is two holdings; the same name twice in "
+            "one account is not.",
+            code="duplicate_holding_name",
+            field="name",
+        )
+
+
+def create_holding(**fields) -> Holding:
+    """A new holding. Refuses a name the account already uses."""
+    assert_name_available(fields["account_id"], fields["name"])
+    return Holding.objects.create(**fields)
+
+
+def update_holding(holding: Holding, changes: dict) -> Holding:
+    """A holding's editable facts: name, symbol, instrument type, tax percentage.
+
+    **Not the account and not the currency**, and their absence is the rule
+    rather than an oversight. A holding is scoped to one account as a one-way
+    door — merging two brokers' queues later would need a decision about which
+    lots came first that the data cannot answer (§13.4) — and the currency is
+    the one every figure for this holding is stated in and never translated from
+    (BR-18). The update serialiser has no field for either, so neither arrives
+    here to be applied.
+
+    Changing the tax percentage restates the net figure on every historic sale,
+    including sales already reported. That is free, because nothing was stored
+    (BR-21, ADR-05).
+    """
+    name = changes.get("name")
+    if name is not None and name != holding.name:
+        assert_name_available(holding.account_id, name, exclude_pk=holding.pk)
+
+    for field, value in changes.items():
+        setattr(holding, field, value)
+    holding.save()
+    return holding
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +841,18 @@ def record(
             "A split needs a ratio — 2 for a 2:1 split, 0.1 for a 1:10 consolidation.",
             code="split_ratio_required",
             field="split_ratio",
+        )
+
+    # One action, two effects (see Action): a reinvestment is the distribution and
+    # the purchase it funded, so neither half is optional. Without the cash the
+    # holding's income is understated; without the units its cost basis is.
+    if parsed is Action.REINVESTMENT and cash_amount <= 0:
+        raise BusinessRuleError(
+            "Enter the cash the distribution paid. A distribution taken as cash "
+            "is not recorded against a holding — it reaches an account, and shows "
+            "up in that account's balance at the next close.",
+            code="cash_amount_required",
+            field="cash_amount",
         )
 
     if parsed in (Action.BUY, Action.SELL, Action.REINVESTMENT) and quantity <= 0:

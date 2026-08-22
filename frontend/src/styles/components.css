@@ -316,8 +316,15 @@
   background: var(--row-hover);
 }
 
+/* Right-alignment belongs to the whole column, heading included, so a heading
+   sits over its own digits. The mono face does not: a column heading is a word,
+   and one heading in Plex Mono beside five in Inter is a header row in two
+   fonts. The face goes on the cells that hold figures. */
 .table .numeric {
   text-align: right;
+}
+
+.table td.numeric {
   font-family: var(--face-data);
   font-variant-numeric: tabular-nums;
 }

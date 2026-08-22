@@ -17,8 +17,12 @@ from core.services.exceptions import BusinessRuleError
 from investments.models import Holding, InvestmentTransaction
 from fx.models import ExchangeRate
 from investments.services.positions import (
+    create_holding,
     held_summary,
+    held_summary_with_change,
     held_trend,
+    holding_detail,
+    holding_history,
     net_of_tax,
     realised_gains_by_currency,
     record,
@@ -288,6 +292,72 @@ def test_realised_gains_label_the_net_figure_as_estimated(signed_in, holding):
     assert sale["tax_applied"] is True
 
 
+def test_the_register_states_realised_gain_and_its_percentage(signed_in, holding):
+    """Gain over what the sold units cost — never over units still held."""
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("100"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("50"), unit_price=Decimal("20"), fees=Decimal("10"))
+
+    row = signed_in.get("/api/investments/holdings/").json()["data"]["holdings"][0]
+
+    # 990 realised on a 500 FIFO cost basis, and the 500 still held is not in it.
+    assert row["realised_gain"] == "490.00"
+    assert row["realised_gain_percent"] == "98"
+
+
+def test_a_holding_that_has_sold_nothing_realised_nothing_rather_than_zero(signed_in, holding):
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("100"), unit_price=Decimal("10"))
+
+    row = signed_in.get("/api/investments/holdings/").json()["data"]["holdings"][0]
+
+    assert row["realised_gain"] is None
+    assert row["realised_gain_percent"] is None
+
+
+def test_a_realised_loss_carries_its_sign_into_the_percentage(signed_in, holding):
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("100"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("100"), unit_price=Decimal("6"))
+
+    row = signed_in.get("/api/investments/holdings/").json()["data"]["holdings"][0]
+
+    assert row["realised_gain"] == "-400.00"
+    assert row["realised_gain_percent"] == "-40"
+
+
+def test_the_month_history_holds_cost_basis_at_each_month_end(holding):
+    """Continuous from the first transaction to the present, newest first, and
+    absent — not zero — for the months before the holding existed."""
+    record(holding, action="Buy", on_date=date(2026, 1, 10), quantity=Decimal("100"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 3, 5), quantity=Decimal("40"), unit_price=Decimal("15"))
+
+    history = holding_history(list(holding.transactions.all()), today=date(2026, 4, 30))
+    by_month = {row["month"]: row for row in history}
+
+    assert [row["month"] for row in history] == ["2026-04", "2026-03", "2026-02", "2026-01"]
+    assert by_month["2026-01"]["cost_basis"] == "1000.00"
+    # February moved nothing: the January lot is still whole.
+    assert by_month["2026-02"]["cost_basis"] == "1000.00"
+    # FIFO took 40 units off a lot that cost 10 each, so 600 of basis is left.
+    assert by_month["2026-03"]["cost_basis"] == "600.00"
+    assert by_month["2026-03"]["quantity"] == "60.0000000000"
+    assert by_month["2026-04"]["cost_basis"] == "600.00"
+
+
+def test_a_holding_sold_out_keeps_its_months_at_zero(holding):
+    """Zero is the honest figure once the units are gone — the holding still
+    exists, and the line has to show it flat rather than stop."""
+    record(holding, action="Buy", on_date=date(2026, 1, 10), quantity=Decimal("100"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 5), quantity=Decimal("100"), unit_price=Decimal("12"))
+
+    history = holding_history(list(holding.transactions.all()), today=date(2026, 3, 31))
+
+    assert history[0] == {"month": "2026-03", "quantity": "0", "cost_basis": "0.00"}
+
+
+def test_a_holding_with_no_transactions_has_no_history(holding):
+    assert holding_history([]) == []
+    assert holding_detail(holding)["history"] == []
+
+
 def test_deleting_a_holding_is_soft(signed_in, holding):
     assert signed_in.delete(f"/api/investments/holdings/{holding.pk}/").status_code == 204
     assert Holding.objects.count() == 0
@@ -301,6 +371,349 @@ def test_a_deleted_transaction_leaves_the_replay(signed_in, holding):
 
     assert replay_holding(holding).total_quantity == Decimal("0")
     assert InvestmentTransaction.all_objects.count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Editing a holding — and the two facts that are one-way doors
+# ---------------------------------------------------------------------------
+
+
+def test_a_holding_can_be_renamed_and_reclassified(signed_in, holding):
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("10"), unit_price=Decimal("10"))
+
+    response = signed_in.patch(
+        f"/api/investments/holdings/{holding.pk}/",
+        data={"name": "Acme Corporation", "symbol": "ACMX", "instrument_type": "ETF"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["name"] == "Acme Corporation"
+    assert body["symbol"] == "ACMX"
+    assert body["instrument_type"] == "ETF"
+    # Renaming restates no figure: the position is what the transactions say.
+    assert body["total_cost_basis"] == "100.00"
+
+
+def test_renaming_a_holding_does_not_move_its_account_or_currency(signed_in, holding, brokerage):
+    """Both are one-way doors (§13.4, BR-18), so the serialiser has no field for
+    either and an attempt is ignored rather than obeyed."""
+    other = Account.objects.create(
+        name="Other Brokerage",
+        account_type=AccountType.INVESTMENT,
+        liquidity_tier=LiquidityTier.LONG,
+        currency="AUD",
+        opened_month="2026-01",
+    )
+
+    signed_in.patch(
+        f"/api/investments/holdings/{holding.pk}/",
+        data={"name": "Renamed", "account_id": other.pk, "currency": "AUD"},
+        content_type="application/json",
+    )
+
+    holding.refresh_from_db()
+    assert holding.name == "Renamed"
+    assert holding.account_id == brokerage.pk
+    assert holding.currency == "USD"
+
+
+def test_two_holdings_in_one_account_cannot_share_a_name(signed_in, holding, brokerage):
+    """The database enforces this (§9.1). What is asserted here is that hitting
+    it is a refusal naming the field, not an IntegrityError and a 500 — a rename
+    that collides is ordinary user error."""
+    other = Holding.objects.create(
+        name="Beta Corp", symbol="BETA", currency="USD", account=brokerage
+    )
+
+    response = signed_in.patch(
+        f"/api/investments/holdings/{other.pk}/",
+        data={"name": holding.name},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "duplicate_holding_name"
+    assert "name" in response.json()["error"]["field_errors"]
+    other.refresh_from_db()
+    assert other.name == "Beta Corp"
+
+
+def test_creating_a_holding_with_a_name_the_account_already_uses_is_refused(signed_in, holding, brokerage):
+    response = signed_in.post(
+        "/api/investments/holdings/",
+        data={
+            "name": holding.name,
+            "currency": "USD",
+            "account_id": brokerage.pk,
+            "instrument_type": "Equity",
+        },
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "duplicate_holding_name"
+
+
+def test_the_same_name_in_a_different_account_is_two_holdings(signed_in, holding):
+    """The rule is per account, and deliberately: the same instrument at two
+    brokers is two holdings with independent FIFO queues (§13.4)."""
+    elsewhere = Account.objects.create(
+        name="Second Brokerage",
+        account_type=AccountType.INVESTMENT,
+        liquidity_tier=LiquidityTier.LONG,
+        currency="USD",
+        opened_month="2026-01",
+    )
+
+    twin = create_holding(
+        name=holding.name, symbol=holding.symbol, currency="USD", account_id=elsewhere.pk
+    )
+
+    assert twin.pk != holding.pk
+    assert twin.name == holding.name
+
+
+def test_a_soft_deleted_holding_does_not_hold_its_name_hostage(signed_in, holding, brokerage):
+    """The constraint is scoped to live rows, and so is the refusal."""
+    name = holding.name
+    holding.delete()
+
+    revived = create_holding(name=name, currency="USD", account_id=brokerage.pk)
+
+    assert revived.name == name
+
+
+def test_renaming_a_holding_to_its_own_name_is_not_a_clash(signed_in, holding):
+    response = signed_in.patch(
+        f"/api/investments/holdings/{holding.pk}/",
+        data={"name": holding.name, "symbol": "ACMX"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["symbol"] == "ACMX"
+
+
+def test_the_tax_percentage_clears_to_null_and_the_net_returns_to_the_gross(signed_in, holding):
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("100"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("100"), unit_price=Decimal("20"))
+
+    signed_in.patch(
+        f"/api/investments/holdings/{holding.pk}/",
+        data={"estimated_tax_percent": None},
+        content_type="application/json",
+    )
+
+    sale = signed_in.get("/api/investments/realised-gains/").json()["data"]["currencies"][0]["sales"][0]
+    assert sale["estimated_tax_percent"] is None
+    assert sale["net_realised_gain"] == sale["realised_gain"]
+    assert sale["tax_applied"] is False
+
+
+# ---------------------------------------------------------------------------
+# The holding's own screen — the transaction register
+# ---------------------------------------------------------------------------
+# The register is what the holding detail exists for: every transaction, and
+# what replay made of it. What is asserted here is that the browser is never
+# asked to work anything out (ADR-12) and that the register and the realised
+# gains report cannot disagree, because both render the same sale through one
+# function.
+
+
+def test_the_register_states_what_a_purchase_cost(holding):
+    """Units x price plus fees, from the engine rather than re-derived."""
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("100"), unit_price=Decimal("10"), fees=Decimal("15"))
+
+    row = holding_detail(holding)["transactions"][0]
+
+    assert row["action"] == "Buy"
+    assert row["acquired"]["cost"] == "1015.00"
+    assert row["acquired"]["remaining_quantity"] == "100.0000000000"
+    assert row["realised"] is None and row["distributed"] is None
+
+
+def test_a_sale_names_the_lots_it_consumed_oldest_first(holding):
+    """The other half of the FIFO queue: where a sale's cost basis came from."""
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("50"), unit_price=Decimal("10"))
+    record(holding, action="Buy", on_date=date(2026, 2, 1), quantity=Decimal("50"), unit_price=Decimal("20"))
+    record(holding, action="Sell", on_date=date(2026, 3, 1), quantity=Decimal("70"), unit_price=Decimal("30"))
+
+    sale = next(
+        row for row in holding_detail(holding)["transactions"] if row["action"] == "Sell"
+    )
+    consumed = sale["realised"]["consumed"]
+
+    assert [taken["acquired"] for taken in consumed] == ["2026-01-01", "2026-02-01"]
+    assert [taken["quantity"] for taken in consumed] == ["50.0000000000", "20.0000000000"]
+    # 500 from the whole January lot, 400 from two fifths of February's.
+    assert [taken["cost_basis"] for taken in consumed] == ["500.00", "400.00"]
+    assert sale["realised"]["cost_basis"] == "900.00"
+
+
+def test_a_purchase_sold_down_to_nothing_says_zero_remaining_not_absent(holding):
+    """A consumed lot is empty, which is a figure. Absent would be a different claim."""
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("50"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("50"), unit_price=Decimal("12"))
+
+    buy = next(
+        row for row in holding_detail(holding)["transactions"] if row["action"] == "Buy"
+    )
+
+    assert buy["acquired"]["remaining_quantity"] == "0"
+    assert buy["acquired"]["remaining_cost"] == "0.00"
+
+
+def test_a_split_moves_no_money_in_the_register(holding):
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("50"), unit_price=Decimal("10"))
+    record(holding, action="Split", on_date=date(2026, 2, 1), split_ratio=Decimal("2"))
+
+    split = next(
+        row for row in holding_detail(holding)["transactions"] if row["action"] == "Split"
+    )
+
+    assert split["acquired"] is None
+    assert split["realised"] is None
+    assert split["distributed"] is None
+    assert split["split_ratio"] == "2.0000000000"
+
+
+def test_a_reinvestment_row_states_both_the_cash_and_the_units(holding):
+    """The one row in this system with two money effects. Every other action
+    populates exactly one of the three, and a split none."""
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("50"), unit_price=Decimal("10"))
+    record(
+        holding,
+        action="Reinvestment",
+        on_date=date(2026, 2, 1),
+        quantity=Decimal("10"),
+        unit_price=Decimal("11"),
+        cash_amount=Decimal("110.00"),
+    )
+
+    row = next(
+        r for r in holding_detail(holding)["transactions"] if r["action"] == "Reinvestment"
+    )
+
+    assert row["distributed"] == "110.00"
+    assert row["acquired"]["cost"] == "110.00"
+    assert row["acquired"]["from_reinvestment"] is True
+    assert row["realised"] is None
+
+
+def test_a_distribution_cannot_be_recorded_as_cash_alone(holding):
+    """It is not a rejected action but an absent one: there is no Distribution
+    left to name, and a reinvestment without its cash is refused."""
+    with pytest.raises(ValueError):
+        record(holding, action="Distribution", on_date=date(2026, 2, 1), cash_amount=Decimal("42.50"))
+
+    with pytest.raises(BusinessRuleError) as refused:
+        record(
+            holding,
+            action="Reinvestment",
+            on_date=date(2026, 2, 1),
+            quantity=Decimal("10"),
+            unit_price=Decimal("11"),
+        )
+
+    assert refused.value.code == "cash_amount_required"
+    assert refused.value.field == "cash_amount"
+
+
+def test_a_reinvestment_over_http_is_refused_without_its_cash(signed_in, holding):
+    response = signed_in.post(
+        f"/api/investments/holdings/{holding.pk}/transactions/",
+        data={
+            "action": "Reinvestment",
+            "date": "2026-02-01",
+            "quantity": "10",
+            "unit_price": "11",
+        },
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "cash_amount_required"
+    assert "cash_amount" in response.json()["error"]["field_errors"]
+
+
+def test_the_api_no_longer_has_a_distribution_action(signed_in, holding):
+    """Refused by the vocabulary itself, before any rule is consulted."""
+    response = signed_in.post(
+        f"/api/investments/holdings/{holding.pk}/transactions/",
+        data={"action": "Distribution", "date": "2026-02-01", "cash_amount": "42.50"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert "action" in response.json()["error"]["field_errors"]
+    assert InvestmentTransaction.objects.count() == 0
+
+
+def test_the_register_and_the_gains_report_agree_about_a_sale(holding):
+    """One definition per calculation. Both render through `disposal_row`."""
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("100"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("100"), unit_price=Decimal("20"), fees=Decimal("10"))
+
+    reported = realised_gains_by_currency()[0]["sales"][0]
+    registered = holding_detail(holding)["realised"]["sales"][0]
+
+    assert registered == reported
+
+
+def test_an_invalidated_sale_is_flagged_on_its_own_row(holding):
+    """ADR-07 on the register: the row says which sale, and the figures stay."""
+    buy = record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("50"), unit_price=Decimal("10"))
+    sale = record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("50"), unit_price=Decimal("12"))
+    buy.delete()
+
+    detail = holding_detail(holding)
+    row = next(r for r in detail["transactions"] if r["id"] == sale.pk)
+
+    assert detail["consistent"] is False
+    assert row["flagged"] is True
+    assert row["realised"]["proceeds"] == "600.00"
+
+
+def test_the_holding_detail_endpoint_returns_the_register(signed_in, holding):
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("100"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("40"), unit_price=Decimal("20"))
+
+    body = signed_in.get(f"/api/investments/holdings/{holding.pk}/").json()["data"]
+
+    # Newest first, as the model orders and the screen lists.
+    assert [row["action"] for row in body["transactions"]] == ["Sell", "Buy"]
+    assert body["realised"]["gross"] == "400.00"
+    assert body["lots"][0]["remaining_quantity"] == "60.0000000000"
+    assert "does not exist in this system" in body["prohibitions"]["unrealised_gain"]
+
+
+def test_the_holding_detail_states_no_market_price_or_unrealised_gain(signed_in, holding):
+    record(holding, action="Buy", on_date=date(2026, 1, 1), quantity=Decimal("10"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("5"), unit_price=Decimal("20"))
+
+    forbidden = {
+        "market_price",
+        "market_value",
+        "unrealised_gain",
+        "current_value",
+        "return_percent",
+        "total_return",
+    }
+
+    body = signed_in.get(f"/api/investments/holdings/{holding.pk}/").json()["data"]
+
+    assert not forbidden & set(body)
+    for row in body["transactions"]:
+        assert not forbidden & set(row)
+
+
+def test_a_holding_with_no_transactions_has_an_empty_register(signed_in, holding):
+    body = signed_in.get(f"/api/investments/holdings/{holding.pk}/").json()["data"]
+
+    assert body["transactions"] == []
+    assert body["realised"] == {"gross": "0.00", "sales": []}
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +814,73 @@ def test_a_held_holding_with_no_price_is_named_rather_than_valued_at_zero(
     assert summary.estimated_gain.amount == (
         summary.estimated_value.amount - summary.priced_cost_basis.amount
     )
+
+
+def test_a_past_position_replays_only_the_transactions_up_to_that_date(
+    two_currency_portfolio,
+):
+    """As at 31 January nothing had been sold and the AUD holding did not exist:
+    150 USD units at their 10.00 cost, marked at that same 10.00.
+    """
+    summary = held_summary("USD", through=date(2026, 1, 31))
+
+    assert summary.holdings == 1
+    assert summary.cost_basis.api() == {"amount": "1500.00", "currency": "USD"}
+    assert summary.estimated_value.api() == {"amount": "1500.00", "currency": "USD"}
+
+
+def test_the_figures_are_the_reported_month_and_not_today(two_currency_portfolio):
+    """Reporting March in May states March's position, not May's.
+
+    The sale on 10 March is in it; nothing after March would be. 100 USD units at
+    10.00 and 200 AUD units at USD 650 — cost basis 1,650, and the change is March
+    on February rather than on the month before now.
+    """
+    changed = held_summary_with_change("USD", month="2026-03", today=date(2026, 5, 20))
+
+    assert changed["month"] == "2026-03"
+    assert changed["previous_month"] == "2026-02"
+    assert changed["cost_basis"] == {"amount": "1650.00", "currency": "USD"}
+
+
+def test_each_held_figure_carries_its_movement_on_the_month_before(
+    two_currency_portfolio,
+):
+    """Nothing moved between March and April, so all three changes are zero — and
+    a zero change is a change, stated rather than omitted."""
+    changed = held_summary_with_change("USD", month="2026-04", today=date(2026, 6, 15))
+
+    assert changed["previous_month"] == "2026-03"
+    assert changed["change"]["cost_basis"]["change"] == "0.00"
+    assert changed["change"]["estimated_value"]["change"] == "0.00"
+    assert changed["change"]["estimated_gain"]["change"] == "0.00"
+
+
+def test_a_month_that_bought_and_a_month_that_sold_move_by_what_they_did(
+    two_currency_portfolio,
+):
+    """February bought the AUD holding — cost basis up by its whole USD 650, from
+    1,500 to 2,150. March sold 50 USD units, taking 500 of the cost back out.
+    """
+    february = held_summary_with_change("USD", month="2026-02", today=date(2026, 6, 15))
+    march = held_summary_with_change("USD", month="2026-03", today=date(2026, 6, 15))
+
+    assert february["change"]["cost_basis"]["change"] == "650.00"
+    assert march["change"]["cost_basis"]["change"] == "-500.00"
+
+
+def test_a_figure_that_did_not_exist_last_month_has_no_change_rather_than_all_of_it(
+    two_currency_portfolio,
+):
+    """FR-46 applied to a change: an estimate nobody could make is not an
+    estimate of nothing, so there is nothing to subtract from."""
+    ExchangeRate.objects.all().delete()
+    Holding.objects.filter(currency="USD").delete()
+
+    changed = held_summary_with_change("USD", month="2026-04", today=date(2026, 6, 15))
+
+    assert changed["estimated_value"] is None
+    assert changed["change"]["estimated_value"] == {"change": None, "change_percent": None}
 
 
 def test_an_empty_system_states_zero_rather_than_nothing(db):

@@ -7,6 +7,7 @@ import { Accounts } from './screens/Accounts'
 import { CashFlow } from './screens/CashFlow'
 import { Dashboard } from './screens/Dashboard'
 import { FxRates } from './screens/FxRates'
+import { HoldingDetail } from './screens/HoldingDetail'
 import { Investments } from './screens/Investments'
 import { Login } from './screens/Login'
 import { MonthClose } from './screens/MonthClose'
@@ -57,6 +58,7 @@ function Routed() {
         <Route path="cash-flow" element={<CashFlow />} />
         {/* Stage 4 — FIFO by replay. No market prices, so no unrealised gain. */}
         <Route path="investments" element={<Investments />} />
+        <Route path="investments/:holdingId" element={<HoldingDetail />} />
         {/* Stage 1 — built first, because net worth cannot be tested without
             translation. */}
         <Route path="fx-rates" element={<FxRates />} />

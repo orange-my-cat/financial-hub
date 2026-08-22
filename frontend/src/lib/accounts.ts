@@ -145,10 +145,32 @@ export interface SlicePayload {
   readonly rows: readonly SliceRow[]
 }
 
+/**
+ * How the latest month moved on the month, quarter and year before it.
+ *
+ * Computed by the server from calendar offsets — the month each one names is on
+ * the payload, so the panel states a movement it can point at. Both halves null
+ * where that month has no balance: not zero, and not the nearest record
+ * standing in for it.
+ */
+export interface OffsetMovement {
+  readonly month: string | null
+  readonly change: string | null
+  readonly change_percent: string | null
+}
+
+export interface HistoryMovement {
+  readonly month_on_month: OffsetMovement
+  readonly quarter_on_quarter: OffsetMovement
+  readonly year_on_year: OffsetMovement
+}
+
 export interface HistoryRow {
   readonly month: string
   readonly amount: string
   readonly change: string | null
+  /** Null against a zero prior month: a rise from nothing has no proportion. */
+  readonly change_percent: string | null
   readonly previous_month: string | null
 }
 
@@ -225,9 +247,9 @@ export function useAccountHistory(id: number) {
     queryKey: accountKeys.history(id),
     queryFn: () =>
       api
-        .get<{ data: { account: Account; history: HistoryRow[] } }>(
-          `/accounts/${id}/history/`,
-        )
+        .get<{
+          data: { account: Account; history: HistoryRow[]; movement: HistoryMovement }
+        }>(`/accounts/${id}/history/`)
         .then((r) => r.data),
   })
 }

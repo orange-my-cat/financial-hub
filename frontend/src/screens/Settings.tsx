@@ -33,6 +33,7 @@ import { useEffect, useState } from 'react'
 
 import { ErrorBanner } from '@/components/Advisories'
 import { exportUrl } from '@/lib/dashboard'
+import { monthEnd } from '@/lib/format'
 import { useCurrencies, useSettings, useUpdateSettings } from '@/lib/fx'
 import { useViewState } from '@/lib/viewState'
 
@@ -50,13 +51,6 @@ interface ExportReport {
   readonly params: (view: { currency: string; from: string; to: string }) => Record<string, string>
   /** What the file will contain, in the user's terms, with the actual values. */
   readonly describe: (view: { currency: string; from: string; to: string }) => string
-}
-
-/** The last calendar day of a `YYYY-MM` month. Day 0 of the next month. */
-function lastDayOf(month: string): string {
-  const [year, index] = month.split('-').map(Number)
-  const end = new Date(Date.UTC(year ?? 1970, index ?? 1, 0))
-  return end.toISOString().slice(0, 10)
 }
 
 const REPORTS: readonly ExportReport[] = [
@@ -89,8 +83,8 @@ const REPORTS: readonly ExportReport[] = [
   {
     id: 'fx',
     label: 'Exchange Rates',
-    params: (v) => ({ start: `${v.from}-01`, end: lastDayOf(v.to) }),
-    describe: (v) => `Every stored rate from ${v.from}-01 to ${lastDayOf(v.to)}.`,
+    params: (v) => ({ start: `${v.from}-01`, end: monthEnd(v.to) }),
+    describe: (v) => `Every stored rate from ${v.from}-01 to ${monthEnd(v.to)}.`,
   },
 ]
 
