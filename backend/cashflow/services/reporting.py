@@ -1,11 +1,17 @@
 """Category reporting — per currency, and never translated.
 
-This is the one reporting service in the system that does **not** go through the
-translation service, and the omission is deliberate. Cash flow amounts stay in
-the currency they were entered in (BR-12 module note, design handoff §6). A
-month's groceries in MYR and a month's rent in AUD are not meaningfully added
-together at a month-end rate; they are two separate facts about two separate
-lives, and combining them would invent a figure the user never observed.
+The category report and the trend below it do **not** go through the translation
+service, and the omission is deliberate. Cash flow amounts stay in the currency
+they were entered in (BR-12 module note, design handoff §6). A month's groceries
+in MYR and a month's rent in AUD are not meaningfully added together at a
+month-end rate; they are two separate facts about two separate lives, and
+combining them would invent a figure the user never observed.
+
+The one exception is a *row's* own figure restated beside itself, which
+:func:`transaction_row` carries and :func:`cashflow.services.summary.transaction_list`
+computes — a column, not a combination, and taken at the rate on the row's own
+date. It is translated there and never here, so this module still holds no rate
+lookup of its own.
 
 The other omission: **no total here is ever added to a balance figure** (BR-12).
 There is no endpoint that returns both, which is what makes that structural
@@ -243,12 +249,21 @@ def category_trend(from_month: str, to_month: str, category_id: int | None = Non
     return {"months": list(months), "series": series}
 
 
-def transaction_row(row: Transaction) -> dict:
+def transaction_row(row: Transaction, restatement: dict | None = None) -> dict:
     """The one shape a transaction takes on the wire.
 
     The month list and the responses to entry and to an edit all serialise
     through here, so a row cannot change shape depending on which call the
     client happened to make.
+
+    `restatement` is this amount in the reporting currency and the rate it was
+    reached by, computed by :func:`cashflow.services.summary.transaction_list` —
+    the only caller that has been told which currency to state it in. It is
+    **None** on the responses to entry and to an edit, which named none, and
+    that is a different fact from the one inside it: a restatement whose
+    `amount` is null is a row that *was* asked about and had no rate on its own
+    date, and the column withholds a figure rather than showing a zero (FR-46).
+    The key is always present, so the shape above stays one shape.
     """
     return {
         "id": row.pk,
@@ -261,6 +276,7 @@ def transaction_row(row: Transaction) -> dict:
         "parent": row.category.parent.name if row.category.parent else "—",
         "note": row.note,
         "from_recurring": row.recurring_template_id is not None,
+        "restatement": restatement,
     }
 
 

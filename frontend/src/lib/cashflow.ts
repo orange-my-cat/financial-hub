@@ -9,6 +9,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, type Envelope } from './api'
+import type { Provenance } from './fx'
 import type { CurrencyCode, Money, ReportingCurrencyCode } from './money'
 
 export type Direction = 'Income' | 'Expense'
@@ -43,6 +44,68 @@ export interface TransactionRow {
   readonly parent: string
   readonly note: string
   readonly from_recurring: boolean
+  /**
+   * This amount in the reporting currency, and the rate it was reached by.
+   *
+   * **Null on the responses to entry and to an edit**, which named no reporting
+   * currency to state it in. That is a different fact from the one inside it: a
+   * restatement whose `amount` is null is a row that *was* asked about and had
+   * no rate on its own date, where the column withholds a figure rather than
+   * showing a zero (FR-46). The entered amount beside it is unaffected either
+   * way.
+   */
+  readonly restatement: Restatement | null
+}
+
+/**
+ * One transaction restated, with what qualifies it.
+ *
+ * The rate is this row's own. Two purchases in one currency a fortnight apart
+ * are translated at two different rates, so the provenance and the staleness
+ * belong against the row and not against the table.
+ */
+export interface Restatement {
+  /** Null where no rate exists on or before this row's date. Never zero. */
+  readonly amount: Money | null
+  /** Null where the row is already in the reporting currency: no rate was used. */
+  readonly rate: {
+    readonly pair: string
+    readonly as_at: string
+    readonly provenance: Provenance
+    readonly stale: boolean
+  } | null
+  readonly exclusion_reason: string | null
+}
+
+/**
+ * A month's transactions, and what qualifies the restated column beside them.
+ *
+ * A list rather than a total, but it carries a translated figure, so it travels
+ * with the same three things every translated figure does: which currencies
+ * were excluded for want of a rate, where the rates it did use came from, and
+ * whether any of them is stale (§8.2).
+ */
+export interface TransactionList {
+  readonly month: string
+  readonly currency: ReportingCurrencyCode
+  readonly rows: readonly TransactionRow[]
+  /** How many rows each currency lost, and why. Not always all of them. */
+  readonly exclusions: readonly {
+    currency: CurrencyCode
+    count: number
+    reason: string
+  }[]
+  /** One row per currency: the oldest rate the month leaned on. */
+  readonly rate_provenance: readonly {
+    currency: CurrencyCode
+    pair: string
+    as_at: string
+    provenance: Provenance
+    stale: boolean
+  }[]
+  /** Present only when a contributing rate is stale. Silence is the signal. */
+  readonly as_at: string | null
+  readonly any_stale: boolean
 }
 
 export interface RecurringTemplate {
@@ -158,7 +221,11 @@ export interface CategoryFlow {
     readonly count: number
   }[]
   readonly children: readonly CategoryFlowRow[]
-  readonly exclusions: readonly { currency: CurrencyCode; reason: string }[]
+  readonly exclusions: readonly {
+    currency: CurrencyCode
+    count: number
+    reason: string
+  }[]
   readonly rate_provenance: readonly {
     currency: CurrencyCode
     pair: string
@@ -183,7 +250,10 @@ export interface CategoryTrend {
 
 export const cashflowKeys = {
   all: ['cashflow'] as const,
-  transactions: (month: string) => ['cashflow', 'transactions', month] as const,
+  // The currency is part of the key because it is part of the answer: the
+  // restated column is a different set of figures in a different currency.
+  transactions: (month: string, currency: string) =>
+    ['cashflow', 'transactions', month, currency] as const,
   categories: ['cashflow', 'categories'] as const,
   proposals: (month: string) => ['cashflow', 'proposals', month] as const,
   templates: ['cashflow', 'templates'] as const,
@@ -193,12 +263,14 @@ export const cashflowKeys = {
   trend: (from: string, to: string) => ['cashflow', 'trend', from, to] as const,
 }
 
-export function useTransactions(month: string) {
+export function useTransactions(month: string, currency: ReportingCurrencyCode) {
   return useQuery({
-    queryKey: cashflowKeys.transactions(month),
+    queryKey: cashflowKeys.transactions(month, currency),
     queryFn: () =>
       api
-        .get<{ data: TransactionRow[] }>(`/cashflow/transactions/?month=${month}`)
+        .get<{ data: TransactionList }>(
+          `/cashflow/transactions/?month=${month}&currency=${currency}`,
+        )
         .then((r) => r.data),
   })
 }

@@ -377,6 +377,70 @@ def test_a_split_affects_only_lots_open_at_its_date_even_when_entered_later():
     assert result.total_quantity == Decimal("300")
 
 
+def test_the_running_unit_total_rises_falls_and_is_restated_by_a_split():
+    """The register's own column: what was held once each row had replayed.
+
+    A split is the case a running total added up in a browser would get wrong —
+    it buys nothing and doubles the holding.
+    """
+    result = replay(
+        [
+            buy(1, date(2026, 1, 1), "100", "10.00"),
+            buy(2, date(2026, 2, 1), "50", "12.00"),
+            ReplayTransaction(
+                id=3,
+                action=Action.SELL,
+                on_date=date(2026, 3, 1),
+                quantity=Decimal("30"),
+                unit_price=Decimal("14.00"),
+            ),
+            ReplayTransaction(
+                id=4,
+                action=Action.SPLIT,
+                on_date=date(2026, 4, 1),
+                split_ratio=Decimal("2"),
+            ),
+            ReplayTransaction(
+                id=5,
+                action=Action.REINVESTMENT,
+                on_date=date(2026, 5, 1),
+                quantity=Decimal("10"),
+                unit_price=Decimal("6.00"),
+                cash_amount=Decimal("60.00"),
+            ),
+        ]
+    )
+
+    assert [row.units_held for row in result.units_held] == [
+        Decimal("100"),  # bought
+        Decimal("150"),  # bought again
+        Decimal("120"),  # sold 30, oldest lot first
+        Decimal("240"),  # 2:1 split — nothing bought
+        Decimal("250"),  # reinvested
+    ]
+    assert result.total_quantity == Decimal("250")
+
+
+def test_the_running_total_of_an_oversale_stops_at_nothing():
+    """Flagged, never blocked (ADR-07), and never negative: the sale took every
+    unit there was and the row says so."""
+    result = replay(
+        [
+            buy(1, date(2026, 1, 1), "10", "10.00"),
+            ReplayTransaction(
+                id=2,
+                action=Action.SELL,
+                on_date=date(2026, 2, 1),
+                quantity=Decimal("40"),
+                unit_price=Decimal("12.00"),
+            ),
+        ]
+    )
+
+    assert result.units_held[-1].units_held == Decimal("0")
+    assert result.inconsistencies
+
+
 def test_a_reinvestment_records_the_cash_and_the_units_it_bought():
     """One event, both effects. There is no cash-only distribution to enter."""
     result = replay(

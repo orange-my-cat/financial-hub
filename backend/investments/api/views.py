@@ -74,6 +74,8 @@ class TransactionSerializer(serializers.Serializer):
     fees = serializers.DecimalField(max_digits=19, decimal_places=4, required=False, default=Decimal(0))
     split_ratio = serializers.DecimalField(max_digits=19, decimal_places=10, required=False, default=Decimal(0))
     cash_amount = serializers.DecimalField(max_digits=19, decimal_places=4, required=False, default=Decimal(0))
+    #: What a purchase paid. Not stored — the units it bought are (see `record`).
+    amount = serializers.DecimalField(max_digits=19, decimal_places=4, required=False, default=Decimal(0))
     note = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
 
 
@@ -138,6 +140,7 @@ class HoldingTransactionView(APIView):
             fees=fields["fees"],
             split_ratio=fields["split_ratio"],
             cash_amount=fields["cash_amount"],
+            amount=fields["amount"],
             note=fields["note"],
         )
 

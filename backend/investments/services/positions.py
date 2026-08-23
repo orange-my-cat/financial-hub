@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from core.money import Money, trim
 from core.months import as_at_of, month_end, month_of, previous, sequence
@@ -72,6 +72,29 @@ def net_of_tax(gain: Decimal, percent: Decimal | None) -> tuple[Decimal, bool]:
     if percent is None or gain <= 0:
         return gain, False
     return gain - (gain * percent / 100), True
+
+
+#: The quantity field's own scale, NUMERIC(19,10).
+UNITS = Decimal("0.0000000001")
+
+
+def units_bought(spend: Decimal, unit_price: Decimal) -> Decimal:
+    """Units, from what was spent and what a unit cost. The only place this
+    division happens.
+
+    Purchases and reinvestments are entered by dollar value, at the Product
+    Owner's instruction, because that is what the paperwork states: a
+    confirmation says what was paid and at what price, and a dividend
+    reinvestment statement says what the distribution was worth. A unit count to
+    ten decimal places is the *result* of the trade — nobody types
+    `0.4588502067`.
+
+    Rounded half-up at the field's own scale, the rule every figure in this
+    system rounds by. The error that can leave in cost basis is the unit price
+    times 5e-11 — a hundred-millionth of a cent on a $75 unit, against a cost
+    basis quantized to cents long before anyone reads it.
+    """
+    return (spend / unit_price).quantize(UNITS, rounding=ROUND_HALF_UP)
 
 
 def realised_percent(result: ReplayResult) -> Decimal | None:
@@ -288,6 +311,10 @@ def holding_detail(holding: Holding) -> dict:
     result = replay(to_replay(rows))
 
     acquisitions = {row.transaction_id: row for row in result.acquisitions}
+    # The running unit total, which every row carries — see `UnitsHeld`. Keyed
+    # here rather than zipped, because the register below reads newest first and
+    # replay ran oldest first.
+    running = {row.transaction_id: row for row in result.units_held}
     disposals = {row.transaction_id: row for row in result.disposals}
     distributions = {row.transaction_id: row for row in result.distributions}
     open_lots = {lot.transaction_id: lot for lot in result.lots}
@@ -305,6 +332,18 @@ def holding_detail(holding: Holding) -> dict:
             "split_ratio": str(row.split_ratio),
             "cash_amount": str(row.cash_amount),
             "note": row.note,
+            # What was held once this row had replayed. Present on every action,
+            # including a split, which changes it without buying anything.
+            #
+            # Quantized to the field's own ten places: a split multiplies every
+            # open lot, and Decimal multiplication widens the scale as it goes,
+            # so a running total past two splits would otherwise arrive with
+            # thirty decimal places of nothing.
+            "units_held": (
+                str(running[row.pk].units_held.quantize(UNITS, rounding=ROUND_HALF_UP))
+                if row.pk in running
+                else "0"
+            ),
             # What the engine made of it. One of these three per action — two for
             # a reinvestment, which received cash and bought units — and none for
             # a split, because a split moves no money.
@@ -819,8 +858,20 @@ def record(
     fees: Decimal = Decimal(0),
     split_ratio: Decimal = Decimal(0),
     cash_amount: Decimal = Decimal(0),
+    amount: Decimal = Decimal(0),
     note: str = "",
 ) -> InvestmentTransaction:
+    """Write one transaction, or refuse it.
+
+    `amount` is what a purchase paid, and it is not stored: it exists to derive
+    the units, which are (see `units_bought`). A reinvestment derives its units
+    from `cash_amount` instead, because that figure is a fact in its own right —
+    the income the holding paid out — and not merely an input to a division.
+
+    A quantity stated outright still wins, which is what keeps the engine's own
+    vocabulary usable from a shell and a test: give it units, or give it the
+    money and the price and it will work the units out.
+    """
     parsed = Action(action)
 
     if parsed is Action.SELL:
@@ -854,6 +905,38 @@ def record(
             code="cash_amount_required",
             field="cash_amount",
         )
+
+    if parsed is Action.BUY and quantity > 0 and amount > 0:
+        raise BusinessRuleError(
+            "Enter what the purchase cost or how many units it bought, not both.",
+            code="amount_and_quantity",
+            field="amount",
+        )
+
+    # Entry is by dollar value for both acquiring actions: what was paid, and
+    # what a unit cost. The units follow from those two and are stored; nothing
+    # else about the row is derived.
+    if parsed in (Action.BUY, Action.REINVESTMENT) and quantity <= 0:
+        spend = amount if parsed is Action.BUY else cash_amount
+        field = "amount" if parsed is Action.BUY else "cash_amount"
+
+        if spend <= 0:
+            raise BusinessRuleError(
+                "Enter what was paid, greater than zero.",
+                code="amount_required",
+                field=field,
+            )
+
+        # Guarded rather than divided by: a price of zero is either a mistyped
+        # row or a gift, and neither is a number of units this can work out.
+        if unit_price <= 0:
+            raise BusinessRuleError(
+                "Enter the price a unit was bought at, greater than zero.",
+                code="unit_price_required",
+                field="unit_price",
+            )
+
+        quantity = units_bought(spend, unit_price)
 
     if parsed in (Action.BUY, Action.SELL, Action.REINVESTMENT) and quantity <= 0:
         raise BusinessRuleError(

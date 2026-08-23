@@ -57,12 +57,12 @@ class MonthSerializer(serializers.Serializer):
     month = serializers.RegexField(MONTH_REGEX)
 
 
-class FlowSerializer(serializers.Serializer):
+class MonthCurrencySerializer(serializers.Serializer):
     """A month, and the currency to state it in.
 
     The reporting currencies only. Gold denominates a balance and is never a
     unit a report is stated in (OI-01), so a month recorded in XAU is
-    translated into the diagram like any other currency and never drawn as one.
+    translated like any other currency and never stated as one.
     """
 
     month = serializers.RegexField(MONTH_REGEX)
@@ -140,8 +140,14 @@ def _payload(row: Transaction) -> dict:
 
 class TransactionListView(APIView):
     def get(self, request):
-        query = _validated(MonthSerializer, request.query_params)
-        return Response({"data": reporting.transactions_for_month(query["month"])})
+        # The currency is the reporting one the header is set to, and it is what
+        # the restated column beside each amount is stated in. Every row keeps
+        # the currency it was entered in either way; naming this one adds a
+        # column, it never rewrites a figure.
+        query = _validated(MonthCurrencySerializer, request.query_params)
+        return Response(
+            {"data": summary.transaction_list(query["month"], query["currency"])}
+        )
 
     def post(self, request):
         fields = _validated(TransactionSerializer, request.data)
@@ -342,7 +348,7 @@ class CategoryFlowView(APIView):
     """
 
     def get(self, request):
-        query = _validated(FlowSerializer, request.query_params)
+        query = _validated(MonthCurrencySerializer, request.query_params)
         return Response(
             {"data": summary.category_flow(query["month"], query["currency"])}
         )

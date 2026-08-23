@@ -9,7 +9,7 @@ import pytest
 
 from cashflow.models import Category, Direction, Frequency, RecurringTemplate, Transaction
 from cashflow.services.recurring import outstanding_proposals, proposals_for_month
-from cashflow.services.summary import category_flow, monthly_summary
+from cashflow.services.summary import category_flow, monthly_summary, transaction_list
 from core.services.tasks import outstanding_tasks
 from fx.models import ExchangeRate
 
@@ -138,9 +138,15 @@ def test_an_edited_row_comes_back_in_the_same_shape_as_the_month_list(signed_in)
         data={"note": "Coles"},
         content_type="application/json",
     ).json()["data"]
-    listed = signed_in.get("/api/cashflow/transactions/?month=2026-07").json()["data"][0]
+    listed = signed_in.get("/api/cashflow/transactions/?month=2026-07").json()["data"]["rows"][0]
 
-    assert edited == listed
+    # One shape, key for key. The restatement is the one field that can differ:
+    # the edit named no reporting currency to state it in, and the list did.
+    assert edited.keys() == listed.keys()
+    assert {key: value for key, value in edited.items() if key != "restatement"} == {
+        key: value for key, value in listed.items() if key != "restatement"
+    }
+    assert edited["restatement"] is None
 
 
 def test_an_edit_that_lands_on_a_twin_advises_and_still_saves(signed_in):
@@ -675,7 +681,13 @@ def rate(currency: str, on: date, value: str) -> None:
 
 @pytest.fixture
 def two_currencies(db):
-    """Groceries bought in two currencies, against one salary."""
+    """Groceries bought in two currencies, against one salary.
+
+    The AUD purchase is dated the 20th, so a rate a test wants applied to it
+    must sit on or before the 20th: cash flow is translated at the rate on the
+    day the money moved, and a rate dated the 31st is not yet a fact on the
+    20th.
+    """
     Transaction.objects.create(
         date=date(2026, 7, 10), amount=Decimal("8000"), currency="USD",
         direction=Direction.INCOME, category_id=child_id("Salary"),
@@ -692,7 +704,7 @@ def two_currencies(db):
 
 def test_one_category_bought_in_two_currencies_is_one_row(signed_in, two_currencies):
     """AUD 1,000 at 0.66 is USD 660, added to the USD 2,000 already spent."""
-    rate("AUD", date(2026, 7, 31), "0.66")
+    rate("AUD", date(2026, 7, 20), "0.66")
 
     body = signed_in.get(
         "/api/cashflow/category-flow/?month=2026-07&currency=USD"
@@ -706,7 +718,7 @@ def test_one_category_bought_in_two_currencies_is_one_row(signed_in, two_currenc
 
 def test_the_flow_and_the_summary_cannot_disagree(two_currencies):
     """One definition of the month's income and expense, cut two ways."""
-    rate("AUD", date(2026, 7, 31), "0.66")
+    rate("AUD", date(2026, 7, 20), "0.66")
 
     flow = category_flow("2026-07", "USD")
     summary = monthly_summary("2026-07", "USD")
@@ -726,7 +738,7 @@ def test_the_flow_and_the_summary_cannot_disagree(two_currencies):
 
 
 def test_parents_are_rolled_up_on_the_server(two_currencies):
-    rate("AUD", date(2026, 7, 31), "0.66")
+    rate("AUD", date(2026, 7, 20), "0.66")
 
     flow = category_flow("2026-07", "USD")
 
@@ -768,7 +780,7 @@ def test_a_month_excluded_entirely_is_not_reportable(db):
 
 
 def test_the_flow_obeys_the_reporting_currency(signed_in, two_currencies):
-    rate("AUD", date(2026, 7, 31), "0.66")
+    rate("AUD", date(2026, 7, 20), "0.66")
 
     body = signed_in.get(
         "/api/cashflow/category-flow/?month=2026-07&currency=AUD"
@@ -782,5 +794,228 @@ def test_the_flow_obeys_the_reporting_currency(signed_in, two_currencies):
 def test_gold_is_not_a_currency_a_report_is_stated_in(signed_in):
     """OI-01. XAU denominates a balance; it is never a unit of account here."""
     response = signed_in.get("/api/cashflow/category-flow/?month=2026-07&currency=XAU")
+
+    assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# The restated column
+#
+# A transaction keeps the currency it was entered in; the column beside it says
+# what that amount was worth on the day it happened. Each row is translated at
+# the rate on its own date, so the tests below are about that rule holding —
+# and about the month's totals being built from the same rows, which is what
+# lets the column be added down.
+# ---------------------------------------------------------------------------
+
+
+def test_every_row_is_restated_in_the_reporting_currency(signed_in, two_currencies):
+    """AUD 1,000 at the 20 July rate of 0.66 is USD 660, beside the AUD it stays."""
+    rate("AUD", date(2026, 7, 20), "0.66")
+
+    body = signed_in.get(
+        "/api/cashflow/transactions/?month=2026-07&currency=USD"
+    ).json()["data"]
+
+    assert body["currency"] == "USD"
+
+    aud = [row for row in body["rows"] if row["currency"] == "AUD"][0]
+    # The entered figure is untouched. The column is an addition, not a rewrite.
+    assert aud["amount"] == "1000.00"
+    assert aud["restatement"]["amount"] == {"amount": "660.00", "currency": "USD"}
+    assert aud["restatement"]["rate"] == {
+        "pair": "AUD/USD",
+        "as_at": "2026-07-20",
+        "provenance": "exact",
+        "stale": False,
+    }
+
+    usd = [row for row in body["rows"] if row["currency"] == "USD"]
+    assert all(row["restatement"]["amount"]["amount"] == row["amount"] for row in usd)
+    # No rate was involved in restating USD as USD, so none is claimed.
+    assert all(row["restatement"]["rate"] is None for row in usd)
+
+
+def test_two_rows_in_one_currency_take_their_own_days_rates(signed_in, db):
+    """The whole point of the rule: one currency, two days, two rates."""
+    for day in (3, 21):
+        Transaction.objects.create(
+            date=date(2026, 7, day), amount=Decimal("100"), currency="AUD",
+            direction=Direction.EXPENSE, category_id=child_id("Groceries"),
+        )
+    rate("AUD", date(2026, 7, 3), "0.60")
+    rate("AUD", date(2026, 7, 21), "0.70")
+
+    body = signed_in.get(
+        "/api/cashflow/transactions/?month=2026-07&currency=USD"
+    ).json()["data"]
+
+    restated = {row["date"]: row["restatement"]["amount"]["amount"] for row in body["rows"]}
+    assert restated == {"2026-07-03": "60.00", "2026-07-21": "70.00"}
+
+
+def test_a_row_between_two_rates_carries_the_earlier_one(signed_in, db):
+    """BR-09. The most recent rate on or before the day, and it says so."""
+    Transaction.objects.create(
+        date=date(2026, 7, 15), amount=Decimal("100"), currency="AUD",
+        direction=Direction.EXPENSE, category_id=child_id("Groceries"),
+    )
+    rate("AUD", date(2026, 7, 1), "0.60")
+    rate("AUD", date(2026, 7, 31), "0.70")
+
+    body = signed_in.get(
+        "/api/cashflow/transactions/?month=2026-07&currency=USD"
+    ).json()["data"]
+
+    restated = body["rows"][0]["restatement"]
+    # The 1st's rate, not the 31st's: the 31st had not happened on the 15th.
+    assert restated["amount"] == {"amount": "60.00", "currency": "USD"}
+    assert restated["rate"]["as_at"] == "2026-07-01"
+    assert restated["rate"]["provenance"] == "carried"
+    # Fourteen days old against a threshold of seven.
+    assert restated["rate"]["stale"] is True
+
+
+def test_the_column_is_stated_in_the_currency_asked_for(signed_in, two_currencies):
+    # Two rates, because reporting in AUD restates the USD rows too and those
+    # are dated the 10th and the 12th — a rate on the 20th is not yet a fact
+    # for them.
+    rate("AUD", date(2026, 7, 1), "0.66")
+    rate("AUD", date(2026, 7, 20), "0.66")
+
+    body = signed_in.get(
+        "/api/cashflow/transactions/?month=2026-07&currency=AUD"
+    ).json()["data"]
+
+    assert body["currency"] == "AUD"
+    assert all(row["restatement"]["amount"]["currency"] == "AUD" for row in body["rows"])
+
+
+def test_the_column_adds_down_to_the_months_expense(two_currencies):
+    """Not near it. Both are roll-ups of the same restated transactions."""
+    rate("AUD", date(2026, 7, 20), "0.66")
+
+    listing = transaction_list("2026-07", "USD")
+    totals = monthly_summary("2026-07", "USD")
+
+    spent = sum(
+        Decimal(row["restatement"]["amount"]["amount"])
+        for row in listing["rows"]
+        if row["direction"] == Direction.EXPENSE
+    )
+    assert spent == Decimal(totals.expense.api()["amount"])
+
+
+def test_the_column_and_the_flow_diagram_agree(two_currencies):
+    """Three cuts of one month, and none of them may disagree with another."""
+    rate("AUD", date(2026, 7, 20), "0.66")
+
+    listing = transaction_list("2026-07", "USD")
+    flow = category_flow("2026-07", "USD")
+
+    spent = sum(
+        Decimal(row["restatement"]["amount"]["amount"])
+        for row in listing["rows"]
+        if row["direction"] == Direction.EXPENSE
+    )
+    assert spent == Decimal(flow["expense"]["amount"])
+
+
+def test_a_row_with_no_rate_keeps_its_place_and_withholds_the_column(two_currencies):
+    """FR-46. Excluded is not zero, and the row does not leave the list."""
+    listing = transaction_list("2026-07", "USD")
+
+    aud = [row for row in listing["rows"] if row["currency"] == "AUD"]
+    assert len(aud) == 1
+    assert aud[0]["amount"] == "1000.00"
+    assert aud[0]["restatement"]["amount"] is None
+    assert "no AUD/USD rate" in aud[0]["restatement"]["exclusion_reason"]
+
+    assert [row["currency"] for row in listing["exclusions"]] == ["AUD"]
+    assert listing["exclusions"][0]["count"] == 1
+
+    # The rows that could be restated still were.
+    assert all(
+        row["restatement"]["amount"] is not None
+        for row in listing["rows"]
+        if row["currency"] == "USD"
+    )
+
+
+def test_one_currency_can_be_part_excluded_and_part_counted(signed_in, db):
+    """At a rate a day the unit of exclusion is the row, not the currency.
+
+    A purchase made before the first AUD rate on record has no rate at any
+    earlier date and is withheld; one made after it is ordinary. Reporting the
+    currency as wholly excluded, or wholly included, would each be untrue.
+    """
+    for day in (3, 21):
+        Transaction.objects.create(
+            date=date(2026, 7, day), amount=Decimal("100"), currency="AUD",
+            direction=Direction.EXPENSE, category_id=child_id("Groceries"),
+        )
+    rate("AUD", date(2026, 7, 10), "0.60")
+
+    listing = transaction_list("2026-07", "USD")
+    totals = monthly_summary("2026-07", "USD")
+
+    by_date = {row["date"]: row["restatement"] for row in listing["rows"]}
+    assert by_date["2026-07-03"]["amount"] is None
+    assert by_date["2026-07-21"]["amount"] == {"amount": "60.00", "currency": "USD"}
+
+    # Counted from the row that could be, and never from the one that could not.
+    assert totals.expense.api() == {"amount": "60.00", "currency": "USD"}
+    assert listing["exclusions"] == [
+        {
+            "currency": "AUD",
+            "count": 1,
+            "reason": "no AUD/USD rate exists on or before 03 Jul 2026",
+        }
+    ]
+
+
+def test_the_listing_carries_its_rate_provenance(signed_in, two_currencies):
+    """8.2. A translated figure never travels without what qualifies it."""
+    rate("AUD", date(2026, 7, 5), "0.66")
+
+    body = signed_in.get(
+        "/api/cashflow/transactions/?month=2026-07&currency=USD"
+    ).json()["data"]
+
+    # One row per currency, stating the oldest rate the month leaned on — the
+    # per-row rate travels on the row itself.
+    carried = [row for row in body["rate_provenance"] if row["currency"] == "AUD"][0]
+    assert carried["provenance"] == "carried"
+    assert carried["as_at"] == "2026-07-05"
+    assert carried["stale"] is True
+    assert body["any_stale"] is True
+    assert body["as_at"] == "2026-07-05"
+
+
+def test_the_listing_is_silent_when_every_rate_is_fresh(signed_in, two_currencies):
+    """Silence is the signal. No as-at strip where nothing is stale."""
+    rate("AUD", date(2026, 7, 20), "0.66")
+
+    body = signed_in.get(
+        "/api/cashflow/transactions/?month=2026-07&currency=USD"
+    ).json()["data"]
+
+    assert body["any_stale"] is False
+    assert body["as_at"] is None
+
+
+def test_the_listing_defaults_to_the_base_currency(signed_in, two_currencies):
+    """A request that names no currency is answered in USD, not refused."""
+    rate("AUD", date(2026, 7, 20), "0.66")
+
+    body = signed_in.get("/api/cashflow/transactions/?month=2026-07").json()["data"]
+
+    assert body["currency"] == "USD"
+    assert all(row["restatement"]["amount"]["currency"] == "USD" for row in body["rows"])
+
+
+def test_gold_is_not_a_currency_the_column_is_stated_in(signed_in):
+    """OI-01, on this endpoint as on every other."""
+    response = signed_in.get("/api/cashflow/transactions/?month=2026-07&currency=XAU")
 
     assert response.status_code == 400

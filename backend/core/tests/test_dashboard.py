@@ -439,9 +439,17 @@ def test_the_tasks_panel_stays_anchored_to_now(signed_in, portfolio):
 
 @pytest.fixture
 def spending(db):
-    """Income and expense in two currencies, one of which needs a rate."""
+    """Income and expense in two currencies, one of which needs a rate.
+
+    The AUD rate sits on the AUD transaction's own date, because cash flow is
+    translated at the rate on the day the money moved. The month-end rate the
+    `portfolio` fixture records is net worth's, and the two are now different
+    questions.
+    """
     income = Category.objects.create(name="Salary", direction=Direction.INCOME)
     expense = Category.objects.create(name="Groceries", direction=Direction.EXPENSE)
+
+    ExchangeRate.objects.create(currency="AUD", rate_date=date(2026, 7, 20), rate=Decimal("0.66"))
 
     Transaction.objects.create(
         date=date(2026, 7, 10), amount=Decimal("8000"), currency="USD",

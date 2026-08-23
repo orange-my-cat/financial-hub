@@ -123,6 +123,30 @@ class Lot:
 
 
 @dataclass(frozen=True)
+class UnitsHeld:
+    """How many units the holding had, once this transaction had replayed.
+
+    A running total, in the register's own order, and derived like everything
+    else here — the engine already knows it after each step, because it is the
+    open lot queue's own sum.
+
+    Deliberately not called a balance. In this system a balance is a figure the
+    user *enters* against an account and nothing derives (BR-01); this is the
+    opposite kind of thing, and borrowing the word would blur the one distinction
+    the four modules are built on.
+
+    Every action moves it or explicitly does not: a buy and a reinvestment add
+    their units, a sale takes its units off the oldest lots first, and a split
+    restates every open lot — so a 2:1 split doubles this without a single unit
+    being bought.
+    """
+
+    transaction_id: int
+    on_date: date
+    units_held: Decimal
+
+
+@dataclass(frozen=True)
 class Consumption:
     """One lot's contribution to one sale."""
 
@@ -258,6 +282,8 @@ class ReplayResult:
     #: that has since been sold down still has an acquisition here, because the
     #: purchase still happened.
     acquisitions: tuple[Acquisition, ...] = field(default_factory=tuple)
+    #: The running unit total after each transaction, in replay order.
+    units_held: tuple[UnitsHeld, ...] = field(default_factory=tuple)
 
     @property
     def is_consistent(self) -> bool:
@@ -333,6 +359,7 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
     disposals: list[Disposal] = []
     distributions: list[Distribution] = []
     inconsistencies: list[Inconsistency] = []
+    running: list[UnitsHeld] = []
     last_price: PriceObservation | None = None
 
     for transaction in ordered:
@@ -425,6 +452,17 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
                         split_adjusted=True,
                     )
 
+        # Taken after every branch, including the split's and including a sale
+        # that could not be filled: the register states what was held once this
+        # row had happened, whatever it turned out to have done.
+        running.append(
+            UnitsHeld(
+                transaction_id=transaction.id,
+                on_date=transaction.on_date,
+                units_held=sum((lot.remaining_quantity for lot in open_lots), ZERO),
+            )
+        )
+
     lots = tuple(
         Lot(
             transaction_id=lot.transaction_id,
@@ -439,6 +477,7 @@ def replay(transactions: list[ReplayTransaction]) -> ReplayResult:
 
     return ReplayResult(
         lots=lots,
+        units_held=tuple(running),
         disposals=tuple(disposals),
         distributions=tuple(distributions),
         inconsistencies=tuple(inconsistencies),

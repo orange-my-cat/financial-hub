@@ -24,6 +24,7 @@ from investments.services.positions import (
     holding_detail,
     holding_history,
     net_of_tax,
+    units_bought,
     realised_gains_by_currency,
     record,
     replay_holding,
@@ -579,6 +580,17 @@ def test_a_split_moves_no_money_in_the_register(holding):
     assert split["split_ratio"] == "2.0000000000"
 
 
+def test_every_register_row_carries_the_units_held_after_it(holding):
+    """The register's running total, newest row first — the order it reads in."""
+    record(holding, action="Buy", on_date=date(2026, 1, 1), amount=Decimal("1000"), unit_price=Decimal("10"))
+    record(holding, action="Sell", on_date=date(2026, 2, 1), quantity=Decimal("40"), unit_price=Decimal("12"))
+    record(holding, action="Split", on_date=date(2026, 3, 1), split_ratio=Decimal("2"))
+
+    held = [row["units_held"] for row in holding_detail(holding)["transactions"]]
+
+    assert held == ["120.0000000000", "60.0000000000", "100.0000000000"]
+
+
 def test_a_reinvestment_row_states_both_the_cash_and_the_units(holding):
     """The one row in this system with two money effects. Every other action
     populates exactly one of the three, and a split none."""
@@ -600,6 +612,96 @@ def test_a_reinvestment_row_states_both_the_cash_and_the_units(holding):
     assert row["acquired"]["cost"] == "110.00"
     assert row["acquired"]["from_reinvestment"] is True
     assert row["realised"] is None
+
+
+def test_a_purchase_is_entered_by_what_it_cost(holding):
+    """Dollar value and price in, units out — the paperwork's own two figures."""
+    row = record(
+        holding,
+        action="Buy",
+        on_date=date(2026, 1, 10),
+        amount=Decimal("1000.00"),
+        unit_price=Decimal("10.00"),
+    )
+
+    assert row.quantity == Decimal("100.0000000000")
+    # And the cost basis comes back to what was paid, which is the whole point.
+    assert replay_holding(holding).total_cost_basis.quantize(Decimal("0.01")) == Decimal("1000.00")
+
+
+def test_units_are_derived_to_ten_places_and_cost_basis_still_lands(holding):
+    """A real reinvestment from the seeded history: $34.40 of a $74.97 unit.
+
+    Ten decimal places is what makes this safe — the rounding error is the price
+    times 5e-11, which disappears long before cost basis is quantized to cents.
+    """
+    assert units_bought(Decimal("34.40"), Decimal("74.97")) == Decimal("0.4588502067")
+
+    record(
+        holding,
+        action="Buy",
+        on_date=date(2026, 1, 10),
+        amount=Decimal("34.40"),
+        unit_price=Decimal("74.97"),
+    )
+
+    basis = replay_holding(holding).total_cost_basis
+    assert basis.quantize(Decimal("0.01")) == Decimal("34.40")
+
+
+def test_a_reinvestment_derives_its_units_from_the_cash_distributed(holding):
+    """One figure, two jobs: the income the holding paid, and what bought the
+    units. Nothing else is entered."""
+    row = record(
+        holding,
+        action="Reinvestment",
+        on_date=date(2026, 2, 1),
+        cash_amount=Decimal("45.00"),
+        unit_price=Decimal("15.00"),
+    )
+
+    assert row.quantity == Decimal("3.0000000000")
+    assert replay_holding(holding).total_distributions == Decimal("45.0000")
+
+
+def test_a_purchase_states_the_cost_or_the_units_but_not_both(holding):
+    with pytest.raises(BusinessRuleError) as refused:
+        record(
+            holding,
+            action="Buy",
+            on_date=date(2026, 1, 10),
+            amount=Decimal("1000.00"),
+            quantity=Decimal("100"),
+            unit_price=Decimal("10.00"),
+        )
+
+    assert refused.value.code == "amount_and_quantity"
+
+
+def test_units_cannot_be_derived_without_a_price(holding):
+    """Guarded, not divided by. A price of zero is a mistyped row or a gift, and
+    neither is a number of units."""
+    with pytest.raises(BusinessRuleError) as refused:
+        record(
+            holding,
+            action="Buy",
+            on_date=date(2026, 1, 10),
+            amount=Decimal("1000.00"),
+        )
+
+    assert refused.value.code == "unit_price_required"
+    assert refused.value.field == "unit_price"
+
+
+def test_a_purchase_over_http_is_entered_by_amount(signed_in, holding):
+    response = signed_in.post(
+        f"/api/investments/holdings/{holding.pk}/transactions/",
+        data={"action": "Buy", "date": "2026-01-10", "amount": "1000", "unit_price": "10"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["position"]["total_quantity"] == "100.0000000000"
 
 
 def test_a_distribution_cannot_be_recorded_as_cash_alone(holding):

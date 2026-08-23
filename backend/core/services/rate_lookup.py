@@ -23,6 +23,7 @@ reach through, and it is the only path by which they may.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -119,6 +120,73 @@ class RateResolver:
 
     # -- the stored side ---------------------------------------------------
 
+    def warm(self, currencies: Iterable[str], dates: Iterable[date]) -> None:
+        """Fill the leg cache for many dates at once, one query per currency.
+
+        A pure optimisation: every leg it caches is the leg :meth:`leg` would
+        have resolved on its own, and nothing here changes what any figure
+        comes out as. It exists because translating at each transaction's own
+        date turns a month into thirty-odd distinct dates per currency, and a
+        twenty-four month trend into eight hundred — which as a query apiece is
+        the one place this system's read-everything-on-demand design (ADR-05)
+        stops being affordable.
+
+        The scan runs the dates forward against the rates in the same order,
+        carrying the most recent rate as it goes, which is precisely the
+        "most recent on or before" rule :meth:`leg` applies one date at a time.
+        """
+        wanted = sorted(set(dates))
+        if not wanted:
+            return
+
+        from fx.models import ExchangeRate
+
+        for currency in set(currencies):
+            if currency == BASE_CURRENCY:
+                # Never has a stored leg; `usd_ratio` answers it without one.
+                continue
+
+            missing = [on_date for on_date in wanted if (currency, on_date) not in self._legs]
+            if not missing:
+                continue
+
+            rows = list(
+                ExchangeRate.objects.filter(
+                    currency=currency, rate_date__lte=missing[-1]
+                )
+                .order_by("rate_date")
+                .values_list("rate_date", "rate")
+            )
+
+            index = 0
+            latest: tuple[date, Decimal] | None = None
+            for on_date in missing:
+                while index < len(rows) and rows[index][0] <= on_date:
+                    latest = rows[index]
+                    index += 1
+                self._legs[(currency, on_date)] = (
+                    self._leg_from(currency, latest[0], latest[1], on_date)
+                    if latest is not None
+                    else None
+                )
+
+    def _leg_from(
+        self, currency: str, as_at: date, quoted_rate: Decimal, on_date: date
+    ) -> RateLeg:
+        """One stored rate read as a leg of a quote asked for on `on_date`."""
+        age = (on_date - as_at).days
+        return RateLeg(
+            currency=currency,
+            pair=pair_label(currency),
+            quoted_rate=quoted_rate,
+            as_at=as_at,
+            provenance=Provenance.EXACT if age == 0 else Provenance.CARRIED,
+            age_days=age,
+            # Breaches, so strictly greater. A rate exactly at the threshold is
+            # not yet stale; the boundary is tested by name.
+            is_stale=age > self.staleness_days,
+        )
+
     def leg(self, currency: str, on_date: date) -> RateLeg | None:
         """The most recent stored rate for `currency` at or before `on_date`.
 
@@ -142,18 +210,7 @@ class RateResolver:
             self._legs[key] = None
             return None
 
-        age = (on_date - row.rate_date).days
-        result = RateLeg(
-            currency=currency,
-            pair=pair_label(currency),
-            quoted_rate=row.rate,
-            as_at=row.rate_date,
-            provenance=Provenance.EXACT if age == 0 else Provenance.CARRIED,
-            age_days=age,
-            # Breaches, so strictly greater. A rate exactly at the threshold is
-            # not yet stale; the boundary is tested by name.
-            is_stale=age > self.staleness_days,
-        )
+        result = self._leg_from(currency, row.rate_date, row.rate, on_date)
         self._legs[key] = result
         return result
 

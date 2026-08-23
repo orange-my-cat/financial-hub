@@ -1238,9 +1238,20 @@
   color: var(--breach);
 }
 
-/* The distribution that funded it came from the holding, not from the user — the
-   one row here that is both income and a purchase. */
-.action--reinvestment {
+/*
+  The distribution that funded it came from the holding, not from the user — the
+  one row here that is both income and a purchase.
+
+  Two hooks, one declaration: the action in the transaction register, and the
+  whole row of a lot that came from one in the open lot queue above it. They are
+  the same fact about the same event, and a reader moving between the two tables
+  has to see the same colour or they will read it as two different things.
+
+  On the row, every figure in it inherits — none of those cells sets a colour of
+  its own. The total row underneath is outside the mapping and keeps its own.
+*/
+.action--reinvestment,
+.lot--reinvested {
   color: var(--carry);
 }
 

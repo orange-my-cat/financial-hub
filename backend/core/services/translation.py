@@ -15,6 +15,7 @@ total. That is FR-46 made structural rather than remembered.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -83,6 +84,16 @@ class TranslationService:
         from core.models import Settings
 
         return cls(staleness_days=Settings.load().rate_staleness_days)
+
+    def warm(self, currencies: Iterable[str], dates: Iterable[date]) -> None:
+        """Pre-resolve many dates in one query per currency.
+
+        A caller translating a list row by row at each row's own date says here
+        which currencies and dates it is about to ask for. Nothing else changes:
+        the figures, their provenance and their staleness are what they would
+        have been asked for one at a time.
+        """
+        self.resolver.warm(currencies, dates)
 
     def translate(self, amount: Money, to_currency: str, on_date: date) -> Translation:
         quote = self.resolver.quote(amount.currency, to_currency, on_date)

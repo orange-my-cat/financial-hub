@@ -64,30 +64,29 @@ export function LotQueue({ position }: { readonly position: Position }) {
         </tr>
       </thead>
       <tbody>
+        {/* A lot from a reinvestment is named by the colour of the whole row,
+            which is the colour Reinvestment wears in the register on the same
+            page — the `r` superscript that used to say it is gone at the Product
+            Owner's instruction. The title survives it: colour alone would leave
+            the fact unreadable without hue, and this is the one mark on the page
+            with no word beside it. */}
         {position.lots.map((lot) => (
-          <tr key={lot.transaction_id}>
-            <td className="mono">
-              {formatDate(lot.acquired)}
-              {lot.from_reinvestment && (
-                <sup className="mark mark--carried" title="From a reinvestment">
-                  r
-                </sup>
-              )}
-            </td>
+          <tr
+            key={lot.transaction_id}
+            className={lot.from_reinvestment ? 'lot--reinvested' : undefined}
+            title={lot.from_reinvestment ? 'From a reinvestment' : undefined}
+          >
+            <td className="mono">{formatDate(lot.acquired)}</td>
             <td className="numeric">{formatDecimal(lot.remaining_quantity, 4)}</td>
             <td className="numeric">{formatDecimal(lot.unit_cost, 4)}</td>
             <td className="numeric">{formatDecimal(lot.remaining_cost)}</td>
           </tr>
         ))}
-        <tr className="table__total">
-          <td>Total</td>
-          <td className="numeric">{formatDecimal(position.total_quantity, 4)}</td>
-          <td />
-          <td className="numeric">
-            {formatDecimal(position.total_cost_basis)}
-            <span className="money__code">{position.currency}</span>
-          </td>
-        </tr>
+        {/* No total row. Both of its figures are stated elsewhere on the page —
+            units held and cost basis in the figure column beside the plot, and
+            the running unit total in the transaction register below — so a third
+            copy here was a figure to reconcile rather than to read. Removed at
+            the Product Owner's instruction. */}
       </tbody>
     </table>
   )
@@ -100,6 +99,7 @@ export function RecordTransaction({ holding }: { readonly holding: Position }) {
   const [form, setForm] = useState({
     action: 'Buy' as InvestmentAction,
     date: today(),
+    amount: '',
     quantity: '',
     unit_price: '',
     fees: '',
@@ -107,11 +107,25 @@ export function RecordTransaction({ holding }: { readonly holding: Position }) {
     cash_amount: '',
   })
 
-  const needsQuantity = ['Buy', 'Sell', 'Reinvestment'].includes(form.action)
+  /*
+   * Acquiring is entered by dollar value; disposing is entered by units.
+   *
+   * That asymmetry is the paperwork's, not this form's. A confirmation says what
+   * was paid and at what price, and a DRP statement says what the distribution
+   * was worth — the fractional unit count is the result of the trade and nobody
+   * types `0.4588502067`. A sale is the other way round: units are what is
+   * chosen and the proceeds follow.
+   *
+   * The server derives the units from the money and the price, once (ADR-12 —
+   * the browser has no arithmetic on money, and a division done here would be
+   * a second definition of what a purchase bought).
+   */
+  const needsAmount = form.action === 'Buy'
+  const needsQuantity = form.action === 'Sell'
+  const needsPrice = ['Buy', 'Sell', 'Reinvestment'].includes(form.action)
   const needsRatio = form.action === 'Split'
-  // A reinvestment asks for both halves, because it *is* both: the units are
-  // what it bought and the cash is what bought them, and the server rejects the
-  // entry if either is missing.
+  // The one figure a reinvestment is entered by: the income the holding paid,
+  // which is also what bought the units.
   const needsCash = form.action === 'Reinvestment'
 
   function submit(event: FormEvent) {
@@ -122,13 +136,17 @@ export function RecordTransaction({ holding }: { readonly holding: Position }) {
         holdingId: holding.id,
         action: form.action,
         date: form.date,
+        amount: form.amount || '0',
         quantity: form.quantity || '0',
         unit_price: form.unit_price || '0',
         fees: form.fees || '0',
         split_ratio: form.split_ratio || '0',
         cash_amount: form.cash_amount || '0',
       },
-      { onSuccess: () => setForm({ ...form, quantity: '', unit_price: '', fees: '' }) },
+      {
+        onSuccess: () =>
+          setForm({ ...form, amount: '', quantity: '', unit_price: '', fees: '', cash_amount: '' }),
+      },
     )
   }
 
@@ -173,20 +191,56 @@ export function RecordTransaction({ holding }: { readonly holding: Position }) {
           />
         </div>
 
+        {needsAmount && (
+          <div className="field">
+            {/* Not "Amount paid": fees sit in their own field beside this one
+                and are added to cost basis on top of it (BR-16), so the total
+                paid is this plus those. */}
+            <label className="field__label" htmlFor="inv-amount">
+              Amount
+            </label>
+            <input
+              id="inv-amount"
+              className="input mono numeric-input"
+              inputMode="decimal"
+              value={form.amount}
+              onChange={(event) => setForm({ ...form, amount: event.target.value })}
+            />
+          </div>
+        )}
+
+        {needsCash && (
+          <div className="field">
+            <label className="field__label" htmlFor="inv-cash">
+              Cash distributed
+            </label>
+            <input
+              id="inv-cash"
+              className="input mono numeric-input"
+              inputMode="decimal"
+              value={form.cash_amount}
+              onChange={(event) => setForm({ ...form, cash_amount: event.target.value })}
+            />
+          </div>
+        )}
+
         {needsQuantity && (
+          <div className="field">
+            <label className="field__label" htmlFor="inv-quantity">
+              Units sold
+            </label>
+            <input
+              id="inv-quantity"
+              className="input mono numeric-input"
+              inputMode="decimal"
+              value={form.quantity}
+              onChange={(event) => setForm({ ...form, quantity: event.target.value })}
+            />
+          </div>
+        )}
+
+        {needsPrice && (
           <>
-            <div className="field">
-              <label className="field__label" htmlFor="inv-quantity">
-                Quantity
-              </label>
-              <input
-                id="inv-quantity"
-                className="input mono numeric-input"
-                inputMode="decimal"
-                value={form.quantity}
-                onChange={(event) => setForm({ ...form, quantity: event.target.value })}
-              />
-            </div>
             <div className="field">
               <label className="field__label" htmlFor="inv-price">
                 Unit price
@@ -226,21 +280,6 @@ export function RecordTransaction({ holding }: { readonly holding: Position }) {
               placeholder="2"
               value={form.split_ratio}
               onChange={(event) => setForm({ ...form, split_ratio: event.target.value })}
-            />
-          </div>
-        )}
-
-        {needsCash && (
-          <div className="field">
-            <label className="field__label" htmlFor="inv-cash">
-              Cash distributed
-            </label>
-            <input
-              id="inv-cash"
-              className="input mono numeric-input"
-              inputMode="decimal"
-              value={form.cash_amount}
-              onChange={(event) => setForm({ ...form, cash_amount: event.target.value })}
             />
           </div>
         )}

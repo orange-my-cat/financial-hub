@@ -25,6 +25,40 @@ export function ProvenanceMark({ provenance }: { readonly provenance: Provenance
   )
 }
 
+/**
+ * What a translated figure left out, and why (FR-46, design handoff §4).
+ *
+ * Never a zero and never a silence: money withheld for want of a rate is named,
+ * counted and explained, and the figures it would have joined are stated
+ * without it.
+ *
+ * The count is not decoration. Cash flow translates one transaction at a time,
+ * at the rate on its own date, so "excludes MYR" can mean a single row of a
+ * month or every row of it — and those are different enough facts that a reader
+ * has to be told which.
+ */
+export function ExclusionNotice({
+  exclusions,
+}: {
+  readonly exclusions: readonly {
+    readonly currency: string
+    readonly count: number
+    readonly reason: string
+  }[]
+}) {
+  if (exclusions.length === 0) return null
+
+  return (
+    <p className="exclusion-notice">
+      Excludes{' '}
+      {exclusions
+        .map((row) => `${row.count} ${row.currency} transaction${row.count === 1 ? '' : 's'}`)
+        .join(', ')}{' '}
+      — {exclusions.map((row) => row.reason).join('; ')}
+    </p>
+  )
+}
+
 export type GlyphState = 'Complete' | 'Incomplete' | 'Missing' | 'Outside Range'
 
 /**

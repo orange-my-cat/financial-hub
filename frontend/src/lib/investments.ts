@@ -124,6 +124,15 @@ export interface HoldingTransaction {
   readonly split_ratio: string
   readonly cash_amount: string
   readonly note: string
+  /**
+   * Units held once this transaction had replayed — the register's running total.
+   *
+   * Not a balance, deliberately: a balance in this system is entered against an
+   * account and derived from nothing (BR-01). This is the opposite, and it is
+   * derived server-side because a split restates every open lot, so a total
+   * accumulated row by row in the browser would be wrong the moment one appears.
+   */
+  readonly units_held: string
   readonly acquired: Acquired | null
   readonly realised: Sale | null
   readonly distributed: string | null
@@ -295,6 +304,8 @@ export function useRecordInvestment() {
       holdingId: number
       action: InvestmentAction
       date: string
+      /** What a purchase paid. The server derives the units from it (ADR-12). */
+      amount?: string
       quantity?: string
       unit_price?: string
       fees?: string

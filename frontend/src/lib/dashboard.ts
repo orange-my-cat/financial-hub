@@ -80,9 +80,13 @@ export interface DashboardPayload {
   readonly tasks: readonly Task[]
   /**
    * The month's flow in the reporting currency — one figure per line, not a
-   * breakdown. A currency with no rate at the month's as-at date — its
-   * month-end, or today while it is still running — is withheld from all four
-   * figures and named in `exclusions`, never counted as zero (FR-46).
+   * breakdown.
+   *
+   * Every figure is a sum of transactions translated one at a time, at the rate
+   * on each one's own date — unlike net worth above, which is an as-at figure
+   * and takes the month-end rate. A transaction with no rate on or before its
+   * own date is withheld from all four figures and counted in `exclusions`,
+   * never counted as zero (FR-46).
    */
   readonly cashflow: {
     readonly month: string
@@ -93,7 +97,13 @@ export interface DashboardPayload {
     readonly net: Money | null
     /** Net as a percentage of income. Null where income is zero. */
     readonly savings_rate: string | null
-    readonly exclusions: readonly { currency: CurrencyCode; reason: string }[]
+    /** How many rows each currency lost, and why. Not always all of them. */
+    readonly exclusions: readonly {
+      currency: CurrencyCode
+      count: number
+      reason: string
+    }[]
+    /** One row per currency: the oldest rate the month leaned on. */
     readonly rate_provenance: readonly {
       currency: CurrencyCode
       pair: string

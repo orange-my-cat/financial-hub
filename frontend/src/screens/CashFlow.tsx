@@ -26,6 +26,7 @@ import {
 } from 'recharts'
 
 import { AdvisoryList, ErrorBanner } from '@/components/Advisories'
+import { ExclusionNotice } from '@/components/Provenance'
 import { type Advisory } from '@/lib/api'
 import {
   type CategoryFlow as CategoryFlowReport,
@@ -64,7 +65,13 @@ import {
   SANKEY_NODE_WIDTH,
   SANKEY_ROW,
 } from '@/lib/charts'
-import { formatDate, formatDecimal, formatMonthLong, monthEnd } from '@/lib/format'
+import {
+  formatAmount,
+  formatDate,
+  formatDecimal,
+  formatMonthLong,
+  monthEnd,
+} from '@/lib/format'
 import { useDefaultCurrency } from '@/lib/fx'
 import { CURRENCIES, type Money, type ReportingCurrencyCode } from '@/lib/money'
 import { useViewState } from '@/lib/viewState'
@@ -274,11 +281,58 @@ function RowMessages({
 
   return (
     <tr className="table__message-row">
-      <td colSpan={6}>
+      <td colSpan={7}>
         <ErrorBanner error={error} />
         <AdvisoryList advisories={advisories} />
       </td>
     </tr>
+  )
+}
+
+/**
+ * The row's amount restated in the reporting currency.
+ *
+ * A column beside the entered figure and never in place of it: the transaction
+ * happened in the currency it was recorded in, and nothing here rewrites that.
+ * Each row is restated at the rate on **its own date** — a payment made on the
+ * 3rd was worth what it was worth on the 3rd — and because the month's totals
+ * are sums of these same figures, the column adds down to the net the dashboard
+ * states.
+ *
+ * Where no rate exists on or before the row's date the cell **withholds a
+ * number and says so in words** (FR-46). A zero here would be a claim that the
+ * money was worth nothing, and the row keeps its own-currency figure and its
+ * place in the list either way.
+ *
+ * A rate older than the staleness threshold takes the stale treatment, which is
+ * a per-row fact here rather than a per-table one: two purchases a fortnight
+ * apart lean on two different rates, and only one of them may be old.
+ */
+function RestatedCell({ row }: { readonly row: TransactionRow }) {
+  const restated = row.restatement
+
+  if (!restated || restated.amount === null) {
+    return (
+      <td className="numeric">
+        <span className="excluded" title={restated?.exclusion_reason ?? undefined}>
+          excluded — no rate
+        </span>
+      </td>
+    )
+  }
+
+  return (
+    <td className="numeric">
+      <span
+        className={`money ${row.direction === 'Income' ? 'money--rise' : ''} ${
+          restated.rate?.stale ? 'rate--stale' : ''
+        }`.trim()}
+      >
+        {row.direction === 'Income' ? '+' : '−'}
+        {formatAmount(restated.amount)}
+        <span className="money__code">{restated.amount.currency}</span>
+      </span>
+    </td>
   )
 }
 
@@ -351,6 +405,7 @@ function TransactionRowView({
               <span className="money__code">{row.currency}</span>
             </span>
           </td>
+          <RestatedCell row={row} />
           <td>
             <div className="cashflow__actions">
               <button
@@ -469,6 +524,10 @@ function TransactionRowView({
             </select>
           </div>
         </td>
+        {/* Derived from an amount currently being retyped, so there is nothing
+            true to put here until the edit is saved. The old figure would be a
+            restatement of a figure no longer on the row. */}
+        <td className="numeric secondary">—</td>
         <td>
           <div className="cashflow__actions">
             <button
@@ -493,9 +552,16 @@ function TransactionRowView({
 
 // ---------------------------------------------------------------------------
 
-function Transactions({ month }: { readonly month: string }) {
+function Transactions({
+  month,
+  currency,
+}: {
+  readonly month: string
+  /** What the column beside each amount is stated in. Never what it is stored in. */
+  readonly currency: ReportingCurrencyCode
+}) {
   const categories = useCategories()
-  const transactions = useTransactions(month)
+  const transactions = useTransactions(month, currency)
   const proposals = useProposals(month)
   const record = useRecordTransaction()
   const confirm = useConfirmProposal()
@@ -537,6 +603,8 @@ function Transactions({ month }: { readonly month: string }) {
       ),
     [categories.data],
   )
+
+  const rows = transactions.data?.rows ?? []
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -753,7 +821,13 @@ function Transactions({ month }: { readonly month: string }) {
 
       <section className="panel cashflow__list">
         <h2 className="panel__heading">Transactions for {formatMonthLong(month)}</h2>
-        {(transactions.data ?? []).length === 0 ? (
+        {/* Said once, because a column of restated figures that did not say
+            which day's rate it used would be a column nobody could check. */}
+        <p className="screen__subhead">
+          Each amount is restated in {currency} at the rate on its own date, so the
+          column adds to the month's net.
+        </p>
+        {rows.length === 0 ? (
           <p className="fx__note">Nothing recorded for this month.</p>
         ) : (
           <table className="table">
@@ -764,16 +838,46 @@ function Transactions({ month }: { readonly month: string }) {
                 <th>Subcategory</th>
                 <th>Note</th>
                 <th className="numeric">Amount</th>
+                {/* Named by the currency rather than labelled "Reporting": the
+                    column states figures in one currency and saying which is
+                    more use than saying which setting chose it. */}
+                <th className="numeric">In {currency}</th>
                 <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {(transactions.data ?? []).map((row) => (
+              {rows.map((row) => (
                 <TransactionRowView key={row.id} row={row} options={children} />
               ))}
             </tbody>
           </table>
         )}
+
+        {/* Only when a contributing rate is stale, as on the dashboard and on
+            the flow above. Silence is the signal. */}
+        {transactions.data?.any_stale && transactions.data.as_at && (
+          <details className="asat">
+            <summary className="asat__summary">
+              Rates as at {formatDate(transactions.data.as_at)}
+            </summary>
+            <table className="table asat__detail">
+              <tbody>
+                {transactions.data.rate_provenance.map((note) => (
+                  <tr key={note.pair}>
+                    <td className="mono">{note.pair}</td>
+                    <td className="secondary">{formatDate(note.as_at)}</td>
+                    <td className="secondary">{note.provenance}</td>
+                    <td>{note.stale ? <span className="carry">stale</span> : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        )}
+
+        {/* The rows are all still above; it is the column that withholds a
+            figure for them, and the reason is stated rather than implied. */}
+        <ExclusionNotice exclusions={transactions.data?.exclusions ?? []} />
       </section>
     </div>
   )
@@ -1142,14 +1246,9 @@ function CategoryFlow({
         </details>
       )}
 
-      {/* A currency with no rate is withheld from the whole diagram — it is
-          never drawn as zero, and the omission is stated (FR-46). */}
-      {report.exclusions.length > 0 && (
-        <p className="exclusion-notice">
-          Excludes {report.exclusions.map((row) => row.currency).join(', ')} —{' '}
-          {report.exclusions.map((row) => row.reason).join('; ')}
-        </p>
-      )}
+      {/* A transaction with no rate on its own date is withheld from the
+          diagram — never drawn as zero, and always said (FR-46). */}
+      <ExclusionNotice exclusions={report.exclusions} />
     </section>
   )
 }
@@ -1734,7 +1833,7 @@ export function CashFlow() {
         ))}
       </div>
 
-      {tab === 'transactions' && <Transactions month={month} />}
+      {tab === 'transactions' && <Transactions month={month} currency={currency} />}
       {tab === 'report' && <Report month={month} currency={currency} />}
       {tab === 'recurring' && <Recurring month={month} />}
       {tab === 'categories' && <Categories />}

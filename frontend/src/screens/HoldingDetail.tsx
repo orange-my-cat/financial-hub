@@ -190,7 +190,7 @@ function Register({
           <th className="numeric">Unit Price</th>
           <th className="numeric">Fees</th>
           <th className="numeric">Amount</th>
-          <th className="numeric">Left</th>
+          <th className="numeric">Units Held</th>
           <th aria-label="Actions" />
         </tr>
       </thead>
@@ -234,11 +234,18 @@ function Register({
                 {priced ? formatDecimal(row.fees) : '—'}
               </td>
               <td className="numeric">{amount ? formatDecimal(amount) : '—'}</td>
-              {/* What is left of the lot this purchase opened — a genuine zero
-                  once it has been sold down, not an absence. Sales, splits and
-                  distributions open no lot and have nothing to report. */}
+              {/* A running total, not a per-lot remainder: what the holding
+                  came to once this row had replayed. Every action moves it or
+                  explicitly does not — a buy and a reinvestment add, a sale
+                  takes from the oldest lots first, and a split restates all of
+                  them, doubling this on a 2:1 without a unit being bought.
+
+                  Derived by the engine, never accumulated here. What each lot
+                  has left of itself is the Open Lots table above; this column
+                  answers the other question, which is what was held at the time.
+                  */}
               <td className="numeric secondary">
-                {row.acquired ? formatDecimal(row.acquired.remaining_quantity, 4) : '—'}
+                {formatDecimal(row.units_held, 4)}
               </td>
               {/* The Note column was removed from this table at the Product
                   Owner's instruction. Entry still takes a note and the API
@@ -295,7 +302,7 @@ function Disposals({ sales }: { readonly sales: readonly Sale[] }) {
   const [open, setOpen] = useState<readonly number[]>([])
 
   if (sales.length === 0) {
-    return <p className="fx__note">No sales recorded, so nothing has been realised.</p>
+    return <p className="fx__note">No sales recorded.</p>
   }
 
   return (

@@ -77,6 +77,7 @@ import {
   RISE,
   compactTick,
 } from '@/lib/charts'
+import { ExclusionNotice } from '@/components/Provenance'
 import { useDashboard, type DashboardPayload, type FigureChange } from '@/lib/dashboard'
 import { formatDate, formatDecimal, formatMonth, formatMonthShort } from '@/lib/format'
 import { useViewState } from '@/lib/viewState'
@@ -599,14 +600,10 @@ export function Dashboard() {
                 </details>
               )}
 
-              {/* A currency with no rate is withheld from all four figures — it
-                  is never counted as zero, and the omission is stated (FR-46). */}
-              {flow.exclusions.length > 0 && (
-                <p className="exclusion-notice">
-                  Excludes {flow.exclusions.map((row) => row.currency).join(', ')} —{' '}
-                  {flow.exclusions.map((row) => row.reason).join('; ')}
-                </p>
-              )}
+              {/* A transaction with no rate on its own date is withheld from
+                  all four figures — never counted as zero, and always said
+                  (FR-46). */}
+              <ExclusionNotice exclusions={flow.exclusions} />
             </div>
 
             {/*
