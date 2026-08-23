@@ -593,9 +593,12 @@ function RateStatusList({ asOf }: { readonly asOf: string }) {
  * fetch feeding both, so the two cannot disagree.
  *
  * The provenance column was removed at the Product Owner's instruction, and
- * replaced by the two movement columns. Provenance is unchanged and still on
- * every row — it travels with the figure as its mark, `c` for carried and `t`
- * for triangulated, and the hover box on the plot states it in words.
+ * replaced by the two movement columns. Provenance still travels with the
+ * figure as its mark, `c` for carried; the `t` for triangulated was dropped
+ * from this column at the Product Owner's instruction. Nothing is hidden by
+ * that — triangulation is a property of the pair and not of the day, so the `t`
+ * sat on every row of a derived pair at once, and the hover box on the plot
+ * still states provenance in words.
  *
  * Delete is offered only where the row shown *is* a stored row: a directly
  * quoted pair, on a date it was recorded. A triangulated figure is not a row
@@ -661,7 +664,13 @@ function PairTable({
                 <tr key={point.date}>
                   <td className="mono">{formatDate(point.date)}</td>
                   <td className="numeric">
-                    <Rate value={point.rate} provenance={point.provenance} />
+                    {/* Carried is marked, triangulated is not: a carried figure
+                        varies row to row, where a triangulated one is the whole
+                        pair. Passing `exact` is what suppresses the mark. */}
+                    <Rate
+                      value={point.rate}
+                      provenance={point.provenance === 'carried' ? 'carried' : 'exact'}
+                    />
                   </td>
                   {/* Both movements come from the server, signed, and are
                       printed as they arrive. An em dash where there is no

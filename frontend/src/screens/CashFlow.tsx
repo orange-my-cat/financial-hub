@@ -821,12 +821,6 @@ function Transactions({
 
       <section className="panel cashflow__list">
         <h2 className="panel__heading">Transactions for {formatMonthLong(month)}</h2>
-        {/* Said once, because a column of restated figures that did not say
-            which day's rate it used would be a column nobody could check. */}
-        <p className="screen__subhead">
-          Each amount is restated in {currency} at the rate on its own date, so the
-          column adds to the month's net.
-        </p>
         {rows.length === 0 ? (
           <p className="fx__note">Nothing recorded for this month.</p>
         ) : (
