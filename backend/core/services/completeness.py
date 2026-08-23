@@ -148,9 +148,13 @@ def month_completeness(
     """The state of one month.
 
     `balances_recorded_for` is the account ids with a balance for this month;
-    `rates_recorded_for` is the currencies with a rate **on the month-end date**.
-    A carried-forward rate keeps reports working but does not make the month
-    complete — nobody entered it.
+    `rates_recorded_for` is the currencies whose rate requirement is met.
+
+    **Which currencies those are is the caller's judgement, not this function's.**
+    It needs the stored rates and the user's staleness threshold to decide, and
+    both live behind the accounts module's service — see
+    `NetWorthService._rates_satisfying`, which is where the rule and its argument
+    are written down. Kept out here so this stays a pure count over plain values.
     """
     require_month(month)
 

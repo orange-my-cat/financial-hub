@@ -229,7 +229,16 @@ export function MonthClose() {
           than a leftover. A missing rate does not zero an account, it excludes
           it from the translated total (FR-46) — so a load that silently did not
           run produces a total that looks complete and is not. This screen is
-          where that would be noticed. */}
+          where that would be noticed.
+
+          What it notices is bounded by the staleness threshold, not by the day.
+          A month that has ended counts a rate carried from within that threshold
+          as satisfied, because a month-end falling on a weekend has no close to
+          enter and was otherwise un-closable — see
+          `NetWorthService._rates_satisfying`. So a lapsed load shows here once it
+          exceeds the threshold rather than immediately. The month in progress
+          still requires a rate on the day, which is the case a same-day tripwire
+          was really for. */}
       <section className="panel">
         <h2 className="panel__heading">Balances for {formatMonth(view.month)}</h2>
 

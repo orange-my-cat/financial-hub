@@ -451,8 +451,12 @@ def test_a_month_is_complete_when_every_balance_and_rate_is_present():
     assert str(completeness.state) == "Complete"
 
 
-def test_a_carried_rate_does_not_make_a_month_complete():
-    """Nobody entered it. Reports still work; the month is still Incomplete."""
+def test_a_stale_carried_rate_does_not_make_a_month_complete():
+    """Beyond the staleness threshold, a carry is not fit to close a month on.
+
+    31 days back, against a threshold of 7. Reports still translate on it and
+    say so; the month stays Incomplete and names the currency.
+    """
     aud = make_account(name="CommBank", currency="AUD")
     Balance.objects.create(account=aud, month="2026-07", amount=Decimal("1"))
     ExchangeRate.objects.create(
@@ -463,3 +467,92 @@ def test_a_carried_rate_does_not_make_a_month_complete():
 
     assert str(completeness.state) == "Incomplete"
     assert completeness.outstanding_currencies == ("AUD",)
+
+
+def test_a_fresh_carried_rate_completes_a_month_that_has_ended():
+    """The weekend month-end case, which has no close to enter.
+
+    31 May 2026 was a Sunday. The market was shut and the provider published
+    nothing, so under a rule requiring the as-at date itself the month could
+    never be closed however diligent the user. Friday's rate is two days old
+    against a threshold of seven, and closes it.
+    """
+    aud = make_account(name="CommBank", currency="AUD", opened="2026-05")
+    Balance.objects.create(account=aud, month="2026-05", amount=Decimal("1"))
+    ExchangeRate.objects.create(
+        currency="AUD", rate_date=date(2026, 5, 29), rate=Decimal("0.66")
+    )
+
+    completeness = NetWorthService(staleness_days=7).completeness_for(
+        "2026-05", today=date(2026, 8, 23)
+    )
+
+    assert str(completeness.state) == "Complete"
+    assert completeness.outstanding_currencies == ()
+
+
+def test_a_fresh_carry_is_not_written_into_the_rate_table():
+    """Complete is reached without fabricating a rate, so provenance survives.
+
+    The point of deciding this in completeness rather than materialising the
+    carry into `fx`: a row stored on the as-at date would read as `exact` and
+    the report would stop disclosing what it was translated on.
+    """
+    aud = make_account(name="CommBank", currency="AUD", opened="2026-05")
+    Balance.objects.create(account=aud, month="2026-05", amount=Decimal("1"))
+    ExchangeRate.objects.create(
+        currency="AUD", rate_date=date(2026, 5, 29), rate=Decimal("0.66")
+    )
+
+    service = NetWorthService(staleness_days=7)
+    assert str(service.completeness_for("2026-05", today=date(2026, 8, 23)).state) == "Complete"
+
+    assert not ExchangeRate.objects.filter(rate_date=date(2026, 5, 31)).exists()
+    leg = service.resolver.leg("AUD", date(2026, 5, 31))
+    assert str(leg.provenance) == "carried"
+    assert leg.as_at == date(2026, 5, 29)
+
+
+def test_a_rate_exactly_at_the_staleness_threshold_still_completes():
+    """The boundary belongs to `is_stale`, which breaches strictly greater."""
+    aud = make_account(name="CommBank", currency="AUD", opened="2026-05")
+    Balance.objects.create(account=aud, month="2026-05", amount=Decimal("1"))
+    ExchangeRate.objects.create(
+        currency="AUD", rate_date=date(2026, 5, 24), rate=Decimal("0.66")
+    )
+
+    completeness = NetWorthService(staleness_days=7).completeness_for(
+        "2026-05", today=date(2026, 8, 23)
+    )
+
+    assert str(completeness.state) == "Complete"
+
+
+def test_the_month_in_progress_still_requires_its_as_at_rate():
+    """A running month must not read Complete on a rate from days ago.
+
+    Its as-at date is today and moves daily, so the figures it would be closing
+    on are not the ones it will finally close on.
+    """
+    aud = make_account(name="CommBank", currency="AUD", opened="2026-08")
+    Balance.objects.create(account=aud, month="2026-08", amount=Decimal("1"))
+    ExchangeRate.objects.create(
+        currency="AUD", rate_date=date(2026, 8, 21), rate=Decimal("0.66")
+    )
+
+    service = NetWorthService(staleness_days=7)
+    today = date(2026, 8, 23)
+
+    running = service.completeness_for("2026-08", today=today)
+    assert str(running.state) == "Incomplete"
+    assert running.outstanding_currencies == ("AUD",)
+
+    # The balances are in; only the as-at rate is not. That distinction is what
+    # `all_balances_recorded` exists to state while a month runs.
+    assert running.all_balances_recorded
+
+    # Entered on the day it is asked about, it completes.
+    ExchangeRate.objects.create(
+        currency="AUD", rate_date=today, rate=Decimal("0.66")
+    )
+    assert str(service.completeness_for("2026-08", today=today).state) == "Complete"

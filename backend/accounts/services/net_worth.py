@@ -41,11 +41,12 @@ from datetime import date
 from decimal import Decimal
 
 from core.money import Money
-from core.months import as_at_of
+from core.months import as_at_of, month_of
 from core.services.completeness import (
     AccountHistory,
     MonthCompleteness,
     month_completeness,
+    required_currencies,
 )
 from core.services.rate_lookup import RateQuote, RateResolver
 from core.services.translation import TranslationService
@@ -324,24 +325,6 @@ class NetWorthService:
             Balance.objects.filter(month=month).values_list("account_id", flat=True)
         )
 
-        # A rate counts only when it was entered on the month's as-at date
-        # itself. A carried rate keeps reports working but does not make the
-        # month complete — nobody entered it (ADR-08).
-        #
-        # As-at rather than month-end because Month Close now records against
-        # the as-at date, and the readout sits directly above the rows it
-        # describes: a screen that says "0 of 1 rates" beside a row marked saved
-        # is worse than either statement alone. For every month that has ended
-        # the two dates are the same, so this changes nothing but the month in
-        # progress.
-        from fx.models import ExchangeRate
-
-        recorded_rates = set(
-            ExchangeRate.objects.filter(rate_date=as_at_of(month, today=today)).values_list(
-                "currency", flat=True
-            )
-        )
-
         # Dormant accounts are excluded from the requirement (BR-03): their last
         # known balance carries forward, so nothing is outstanding for them.
         dormant = set(
@@ -353,8 +336,70 @@ class NetWorthService:
             month,
             histories,
             balances_recorded_for=recorded_balances,
-            rates_recorded_for=recorded_rates,
+            rates_recorded_for=self._rates_satisfying(month, histories, today=today),
         )
+
+    def _rates_satisfying(
+        self, month: str, accounts: list[AccountHistory], *, today: date | None = None
+    ) -> set[str]:
+        """The currencies whose rate requirement this month has met.
+
+        **A month that has ended is satisfied by a rate the system already
+        considers fit to translate with, even one carried from an earlier date.**
+        This is a change of rule, and the rule it replaces was defensible: a
+        carried rate keeps reports working but nobody entered it, so it did not
+        make the month Complete (ADR-08).
+
+        What that missed is that a month-end falling on a Sunday has no close to
+        enter. 31 May 2026 is one, 31 October 2026 is the next; the market was
+        shut, the provider published nothing, and under the old rule those months
+        were permanently Incomplete through no omission of the user's. The old
+        rule conflated "nobody supplied a rate" with "the as-at date was not a
+        trading day", and only the first is a fault.
+
+        The threshold is the user's own staleness setting, reused rather than
+        reinvented: the system already decides at that boundary whether a rate is
+        fit to state a figure on, and a month has no business claiming Complete
+        on a rate that is not. Reusing it also means the rule needs no market
+        calendar — it never asks *why* the as-at date has no rate, so a weekend,
+        a public holiday and a half-day all behave alike, which a day-of-week
+        test could not manage.
+
+        Nothing is fabricated to achieve this. No row is written on the as-at
+        date, so the lookup still reports the quote as `carried` and dates it to
+        the day it came from: the month reads Complete and the report still
+        discloses what it was translated on. That is the whole reason this is a
+        rule here rather than a carried rate materialised into `fx` — a stored
+        row on the as-at date would read as `exact`, and buying Complete by
+        going quiet about provenance is the one trade this system will not make.
+
+        **The month in progress keeps the strict rule.** Its as-at date is today
+        and moves daily (`as_at_of`), so accepting a rate from within the
+        threshold would let a month read Complete with a week still to run, on
+        figures that will not be the ones it finally closes on. A running month
+        is not a month with a gap in it; `MonthCompleteness.all_balances_recorded`
+        is what answers "are the balances in" while it runs.
+        """
+        as_at = as_at_of(month, today=today)
+        required = required_currencies(accounts, month)
+
+        if month_of(today or date.today()) == month:
+            from fx.models import ExchangeRate
+
+            return set(
+                ExchangeRate.objects.filter(
+                    rate_date=as_at, currency__in=required
+                ).values_list("currency", flat=True)
+            )
+
+        # `is_stale` rather than a comparison written out again: the boundary
+        # belongs to the resolver, which holds the user's configured threshold.
+        return {
+            currency
+            for currency in required
+            if (leg := self.resolver.leg(currency, as_at)) is not None
+            and not leg.is_stale
+        }
 
     # -- ranges ------------------------------------------------------------
 
