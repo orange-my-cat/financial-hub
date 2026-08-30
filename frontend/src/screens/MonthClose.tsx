@@ -30,7 +30,12 @@ import { useEffect, useRef, useState, type FocusEvent } from 'react'
 import { ErrorBanner } from '@/components/Advisories'
 import { StateGlyph } from '@/components/Provenance'
 import { ApiError } from '@/lib/api'
-import { useMonthClose, useSaveBalance, type MonthCloseRow } from '@/lib/accounts'
+import {
+  useClearBalance,
+  useMonthClose,
+  useSaveBalance,
+  type MonthCloseRow,
+} from '@/lib/accounts'
 import {
   formatDecimal,
   formatMonth,
@@ -42,7 +47,10 @@ import {
 import { useViewState } from '@/lib/viewState'
 import { icons } from '@/shell/icons'
 
-type RowState = 'idle' | 'saving' | 'saved' | 'error'
+// `cleared` is not `idle`: between discarding a figure and the refetch that
+// confirms it, the row still carries the old `saved` from the server, and idle
+// would keep showing the tick for a figure that is already gone.
+type RowState = 'idle' | 'saving' | 'saved' | 'cleared' | 'error'
 
 // ---------------------------------------------------------------------------
 
@@ -100,14 +108,19 @@ function BalanceRow({
   const entered = row.current === null ? '' : roundDecimal(row.current)
 
   const [value, setValue] = useState(entered)
-  const [state, setState] = useState<RowState>(row.saved ? 'idle' : 'idle')
+  const [state, setState] = useState<RowState>('idle')
   const [error, setError] = useState<string | null>(null)
   const save = useSaveBalance()
+  const clear = useClearBalance()
   const lastCommitted = useRef(entered)
 
+  // Only when the stored figure itself changes — a refetch that returns the
+  // same string leaves the row alone, so a tick survives the invalidation its
+  // own save triggered.
   useEffect(() => {
     setValue(entered)
     lastCommitted.current = entered
+    setState('idle')
   }, [entered])
 
   function commit(event: FocusEvent<HTMLInputElement>) {
@@ -138,7 +151,36 @@ function BalanceRow({
     )
   }
 
+  // Discards the stored figure rather than writing a zero: the row goes back to
+  // never having been entered, which is what Missing means. No confirmation —
+  // the number is one keystroke to retype, and a dialogue on every row would
+  // cost more than the mistake.
+  function discard() {
+    setState('saving')
+    setError(null)
+    clear.mutate(
+      { accountId: row.account_id, month },
+      {
+        onSuccess: () => {
+          lastCommitted.current = ''
+          setValue('')
+          setState('cleared')
+        },
+        onError: (caught) => {
+          setState('error')
+          setError(caught instanceof ApiError ? caught.message : 'Not cleared.')
+        },
+      },
+    )
+  }
+
   const isSaved = state === 'saved' || (state === 'idle' && row.saved)
+  // What there is to discard is what the server holds, not what is in the box:
+  // an untouched row and a half-typed one both have nothing to clear. The bin
+  // keeps its space on those rows and goes invisible rather than absent, so
+  // twenty boxes stay in one line — and twenty dead bins do not sit above a
+  // month that has not been entered yet.
+  const hasStored = row.saved && state !== 'cleared'
 
   return (
     <tr>
@@ -155,16 +197,41 @@ function BalanceRow({
         {row.prior !== null ? formatDecimal(row.prior) : <span className="ink-30">—</span>}
       </td>
       <td className="cell-balance">
-        <input
-          className={`input input--grid mono numeric-input${isSaved ? ' input--saved' : ''}${
-            state === 'error' ? ' input--error' : ''
-          }`}
-          inputMode="decimal"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          onBlur={commit}
-          aria-label={`${row.name} balance`}
-        />
+        {/* The bin draws to the left of the box but comes after it in the
+            DOM, and the stylesheet reorders the two. Tab therefore reaches the
+            box first and the bin second, which is the order they are used in;
+            putting the bin first in source would make every account's balance
+            two keystrokes away instead of one, in a pass built around Tab
+            landing on the next number.
+
+            No `tabIndex={-1}`: a control reachable only by pointer is a
+            control some people do not have. It is skipped on the rows where it
+            is disabled — which is every row with nothing yet to discard — so
+            a first pass through an empty month never meets it. */}
+        <div className="cell-balance__field">
+          <input
+            className={`input input--grid mono numeric-input${isSaved ? ' input--saved' : ''}${
+              state === 'error' ? ' input--error' : ''
+            }`}
+            inputMode="decimal"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            onBlur={commit}
+            aria-label={`${row.name} balance`}
+          />
+          <button
+            type="button"
+            className={`btn btn--icon cell-balance__clear${
+              hasStored ? '' : ' cell-balance__clear--absent'
+            }`}
+            onClick={discard}
+            disabled={!hasStored || state === 'saving'}
+            aria-label={`Clear ${row.name} balance`}
+            title="Clear the saved balance for this month"
+          >
+            {icons.clear}
+          </button>
+        </div>
         {error && <span className="field__error">{error}</span>}
       </td>
       {/* Left-aligned, unlike the state columns elsewhere: the tick belongs to
@@ -254,17 +321,19 @@ export function MonthClose() {
                 word "Liquidity" while the columns beside it, each holding a
                 word or a figure, take an unequal share of what is left.
 
-                The name takes 30% and the tick 36px, which is all a glyph
-                needs; the seven columns that carry a value divide the rest
-                evenly. */}
+                The name takes 26% and the tick 36px, which is all a glyph
+                needs. Balance takes 14% rather than the even 10%: it holds the
+                bin as well as the box, and a fixed layout will not lend it the
+                width from anywhere. The four it is borrowed from carry a word
+                or a figure each and had room to spare. */}
             <colgroup>
-              <col style={{ width: '30%' }} />
+              <col style={{ width: '26%' }} />
               <col style={{ width: '10%' }} />
               <col style={{ width: '10%' }} />
               <col style={{ width: '10%' }} />
               <col style={{ width: '10%' }} />
               <col style={{ width: '10%' }} />
-              <col style={{ width: '10%' }} />
+              <col style={{ width: '14%' }} />
               <col style={{ width: '36px' }} />
               <col style={{ width: '10%' }} />
             </colgroup>

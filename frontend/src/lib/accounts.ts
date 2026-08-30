@@ -348,4 +348,21 @@ export function useSaveBalance() {
   })
 }
 
+/**
+ * Discards the balance recorded for one account and month.
+ *
+ * The row returns to Missing rather than to zero — a month nobody recorded is
+ * not a month worth nothing — so the account drops out of that month's
+ * completeness count and out of the translated total, and the deletion is soft
+ * like every other (ADR-03).
+ */
+export function useClearBalance() {
+  const invalidate = useAccountInvalidation()
+  return useMutation({
+    mutationFn: (input: { accountId: number; month: string }) =>
+      api.delete<void>(`/accounts/${input.accountId}/balances/${input.month}/`),
+    onSuccess: invalidate,
+  })
+}
+
 export type { Advisory }

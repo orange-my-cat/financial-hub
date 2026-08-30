@@ -29,6 +29,7 @@ import {
   LayoutGrid,
   LogOut,
   SlidersHorizontal,
+  Trash2,
   TrendingUp,
 } from 'lucide-react'
 import type { ReactElement } from 'react'
@@ -56,6 +57,7 @@ export type IconName =
   | 'show'
   | 'hide'
   | 'saved'
+  | 'clear'
   | 'swap'
 
 export const icons: Record<IconName, ReactElement> = {
@@ -77,6 +79,11 @@ export const icons: Record<IconName, ReactElement> = {
   // The bare tick in a Month Close row, in place of the word "saved". Sized
   // inline: it sits in a table of 11.5px figures, not in the chrome.
   saved: <Check {...inline} />,
+  // Discards a saved balance in a Month Close row. A bin rather than a cross or
+  // an undo arrow: what it removes is a stored figure, and the row returns to
+  // never having been entered — which is not zero, and is not the previous
+  // value either.
+  clear: <Trash2 {...inline} />,
   // Reverses which side of a pair a rate is read from, beside the two currency
   // selects on FX Rates. Deliberately *not* `ArrowLeftRight`, which is Cash
   // flow's glyph for money out and money in: two arrows stacked read as an

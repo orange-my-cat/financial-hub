@@ -380,9 +380,10 @@
 }
 
 /* Column widths are the table's own `colgroup`, per the .table--fixed rule —
-   30% to the account name, 36px to the saved tick, and an even share of what is
-   left to each column carrying a value. Nothing here may set a cell width, or
-   there would be two answers to how wide a column is. */
+   26% to the account name, 36px to the saved tick, 14% to the balance, which
+   carries a control as well as a box, and an even share of what is left to
+   each remaining column. Nothing here may set a cell width, or there would be
+   two answers to how wide a column is. */
 
 /* The input is capped at 160px, so a wider column would leave it floating away
    from its own header. Pushing the cell's contents right puts the box under the
@@ -394,6 +395,47 @@
 
 .cell-balance .field__error {
   justify-content: flex-end;
+}
+
+/* Bin then box, both packed to the right so the digits keep their column. The
+   input gives up its `width: 100%` here — a flex item at full container width
+   would push the bin out of the cell — and takes the space the bin leaves,
+   still capped at 160px. */
+.cell-balance__field {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.cell-balance__field .numeric-input {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Below the ink of the figures beside it, and only as loud as the row on
+   hover: an action that discards is offered, not advertised.
+
+   `order` puts it left of the box it belongs to while leaving it after that
+   box in the DOM, which is where the tab order wants it — the box is what a
+   close pass is typing into, and the bin is the afterthought. */
+.cell-balance__clear {
+  order: -1;
+  flex: 0 0 auto;
+  border-color: transparent;
+  color: var(--ink-30);
+}
+
+.cell-balance__clear:hover:not(:disabled) {
+  border-color: var(--breach);
+  color: var(--breach);
+}
+
+/* Space kept, mark withdrawn. `visibility` rather than `display`, so the boxes
+   in every row still start at the same x. */
+.cell-balance__clear--absent {
+  visibility: hidden;
 }
 
 /* ------------------------------------------------------------------------ */
