@@ -171,6 +171,17 @@ export interface CategoryTotal {
   readonly total: string
   readonly count: number
   readonly change: Movement
+  /**
+   * The transactions this total is the sum of, newest first — the third level
+   * of the report, revealed under the subcategory that totals them.
+   *
+   * `restatement` is null on every one of them, and that is the report being
+   * consistent rather than a figure going missing: this endpoint names no
+   * reporting currency and translates nothing, so a row here is stated in the
+   * currency of the block it sits in and in no other. The restated column
+   * belongs to the ledger, which was asked.
+   */
+  readonly transactions: readonly TransactionRow[]
 }
 
 export interface CurrencyBlock {

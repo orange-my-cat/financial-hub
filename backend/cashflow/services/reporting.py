@@ -45,6 +45,13 @@ class CategoryTotal:
     #: reason :func:`category_trend` gives. A month with no *balances*, by
     #: contrast, has no figure at all.
     prior: Decimal = Decimal(0)
+    #: The transactions this total is the sum of, newest first — the workings
+    #: behind the figure, not a second figure. Gathered from the same filter
+    #: that produced `total` and `count`, so the list cannot disagree with the
+    #: count beside it. Untranslated, like everything else in this module: each
+    #: row is already in this block's currency, which is what makes them
+    #: addable at all.
+    transactions: list[dict] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {
@@ -58,6 +65,7 @@ class CategoryTotal:
             # Through the one definition of a change, so this column and the
             # dashboard's cannot disagree.
             "change": movement(self.total, self.prior),
+            "transactions": self.transactions,
         }
 
 
@@ -139,6 +147,40 @@ def _category_rows(month: str):
     )
 
 
+def _transactions_by_category(month: str) -> dict[tuple[str, int], list[dict]]:
+    """One month's transactions, grouped the way the report's child rows are.
+
+    The same filter as :func:`_category_rows`, gathered rather than summed, so
+    a category's list and the count beside it are two readings of one queryset
+    and cannot drift apart. Keyed by currency **and** category, because that
+    pair is what identifies a child row: the same category spent in two
+    currencies is two rows in two blocks, and its transactions divide the same
+    way.
+
+    Newest first, matching :func:`transactions_for_month`, so a transaction
+    read here and the same transaction read on the ledger sit in the same
+    relative place.
+    """
+    grouped: dict[tuple[str, int], list[dict]] = {}
+
+    rows = (
+        Transaction.objects.filter(
+            date__gte=month_start(month), date__lte=month_end(month)
+        )
+        .select_related("category", "category__parent")
+        .order_by("-date", "-id")
+    )
+    for row in rows:
+        # Through the one shape a transaction takes on the wire, with no
+        # restatement: this module names no reporting currency and looks up no
+        # rate, and a row here is already in its block's own currency.
+        grouped.setdefault((row.currency, row.category_id), []).append(
+            transaction_row(row)
+        )
+
+    return grouped
+
+
 def _prior_totals(month: str) -> tuple[dict, dict]:
     """Last month's totals, keyed for lookup: by category, and by parent.
 
@@ -170,6 +212,7 @@ def category_report(month: str) -> list[dict]:
     module.
     """
     prior_children, prior_parents = _prior_totals(previous(month))
+    by_category = _transactions_by_category(month)
 
     blocks: dict[str, CurrencyBlock] = {}
     for row in _category_rows(month):
@@ -197,6 +240,9 @@ def category_report(month: str) -> list[dict]:
                 count=row["count"],
                 prior=prior_children.get(
                     (row["currency"], row["category_id"]), Decimal(0)
+                ),
+                transactions=by_category.get(
+                    (row["currency"], row["category_id"]), []
                 ),
             )
         )

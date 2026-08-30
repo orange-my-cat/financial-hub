@@ -1295,8 +1295,22 @@ function MovementCell({
  */
 function CategoryRollup({ block }: { readonly block: CurrencyBlock }) {
   const [open, setOpen] = useState<readonly string[]>([])
+  // A second list rather than a nesting of the first: a subcategory is opened
+  // and closed independently of its parent, and closing a parent hides its
+  // subcategories without deciding anything about them. Reopening it finds
+  // them as they were left.
+  const [openChildren, setOpenChildren] = useState<readonly string[]>([])
 
   const keyOf = (direction: Direction, parent: string) => `${direction}:${parent}`
+
+  const toggle =
+    (set: typeof setOpen) =>
+    (key: string) =>
+      set((current) =>
+        current.includes(key)
+          ? current.filter((entry) => entry !== key)
+          : [...current, key],
+      )
 
   /**
    * What came in, then what went out, each largest first.
@@ -1368,14 +1382,8 @@ function CategoryRollup({ block }: { readonly block: CurrencyBlock }) {
                   is a name when the figures beside it are part of the same
                   thought. */}
               <tr
-                className="disclosure-row"
-                onClick={() =>
-                  setOpen((current) =>
-                    current.includes(key)
-                      ? current.filter((entry) => entry !== key)
-                      : [...current, key],
-                  )
-                }
+                className={`disclosure-row${expanded ? ' disclosure-row--open' : ''}`}
+                onClick={() => toggle(setOpen)(key)}
               >
                 <td>
                   {/* Carries the state and takes the focus, but not a handler of
@@ -1395,17 +1403,73 @@ function CategoryRollup({ block }: { readonly block: CurrencyBlock }) {
               </tr>
 
               {expanded &&
-                (children.get(key) ?? []).map((row) => (
-                  <tr key={row.category_id}>
-                    <td className="disclosure__child">{row.category}</td>
-                    {/* A child's direction is its parent's. Restating it on every
-                        row would be four columns of the same word. */}
-                    <td />
-                    <td className="numeric secondary">{row.count}</td>
-                    <td className="numeric">{formatDecimal(row.total)}</td>
-                    <MovementCell movement={row.change} direction={row.direction} />
-                  </tr>
-                ))}
+                (children.get(key) ?? []).map((row) => {
+                  const childKey = `${key}:${row.category_id}`
+                  const childOpen = openChildren.includes(childKey)
+
+                  return (
+                    <Fragment key={row.category_id}>
+                      {/* The same row-is-the-target rule as the parent above:
+                          the arrow says what will happen, the whole row is what
+                          gets hit. */}
+                      <tr
+                        className="disclosure-row"
+                        onClick={() => toggle(setOpenChildren)(childKey)}
+                      >
+                        <td className="disclosure__child">
+                          <button
+                            type="button"
+                            className="disclosure"
+                            aria-expanded={childOpen}
+                          >
+                            <span className="disclosure__arrow" aria-hidden="true">
+                              ▸
+                            </span>
+                            {row.category}
+                          </button>
+                        </td>
+                        {/* A child's direction is its parent's. Restating it on every
+                            row would be four columns of the same word. */}
+                        <td />
+                        <td className="numeric secondary">{row.count}</td>
+                        <td className="numeric">{formatDecimal(row.total)}</td>
+                        <MovementCell movement={row.change} direction={row.direction} />
+                      </tr>
+
+                      {/* The third level: the transactions the figure above is
+                          the sum of. Workings, not entries — unruled and tight,
+                          the treatment a consumed lot gets under its sale, so
+                          they cannot be misread as more subcategories.
+
+                          Each amount sits in the Total column, directly under
+                          the figure it contributes to. That column is the whole
+                          reason to open the row, and nothing is added here to
+                          reach it: the server sent the total, the server sent
+                          these, and the browser prints both (ADR-02). */}
+                      {childOpen &&
+                        row.transactions.map((txn) => (
+                          <tr className="disclosure-workings" key={txn.id}>
+                            <td className="secondary disclosure__grandchild">
+                              <span className="mono">{formatDate(txn.date)}</span>
+                              {txn.note && (
+                                <span className="disclosure__note">{txn.note}</span>
+                              )}
+                            </td>
+                            <td />
+                            <td />
+                            <td className="numeric secondary">
+                              {formatDecimal(txn.amount)}
+                            </td>
+                            {/* A transaction has no month before it to have
+                                moved from. The column stays empty rather than
+                                showing a dash, which would read as a change
+                                that could not be computed. */}
+                            <td />
+                          </tr>
+                        ))}
+                    </Fragment>
+                  )
+                })}
             </Fragment>
           )
         })}

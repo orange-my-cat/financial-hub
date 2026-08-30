@@ -52,6 +52,11 @@
   --divider: rgba(233, 233, 237, 0.1);
   --row-rule: rgba(233, 233, 237, 0.08);
   --row-hover: rgba(233, 233, 237, 0.04);
+  /* A parent row that is open, holding its place while the eye is down among
+     its children. Half the hover, deliberately: it has to survive being read
+     past twenty times without ever becoming the thing being read, and hovering
+     an open row must still register as a change on top of it. */
+  --row-open: rgba(233, 233, 237, 0.02);
   --input-border: rgba(233, 233, 237, 0.16);
   --input-border-hover: rgba(233, 233, 237, 0.45);
 

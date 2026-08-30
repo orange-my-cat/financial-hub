@@ -645,6 +645,106 @@ def test_children_roll_up_to_their_parents():
     assert food["count"] == 2
 
 
+def test_a_row_carries_the_transactions_it_totals_newest_first():
+    """The report's third level: the workings behind a subcategory's figure."""
+    for day, amount in ((5, "40"), (21, "60"), (12, "30")):
+        record_transaction(
+            on_date=date(2026, 7, day),
+            amount=Decimal(amount),
+            currency="USD",
+            category_id=child("Groceries").pk,
+            note=f"day {day}",
+        )
+
+    row = reporting.category_report("2026-07")[0]["children"][0]
+
+    assert row["total"] == "130.00"
+    assert [t["date"] for t in row["transactions"]] == [
+        "2026-07-21",
+        "2026-07-12",
+        "2026-07-05",
+    ]
+    assert [t["amount"] for t in row["transactions"]] == ["60.00", "30.00", "40.00"]
+    assert [t["note"] for t in row["transactions"]] == ["day 21", "day 12", "day 5"]
+
+
+@pytest.mark.invariant
+def test_a_rows_transactions_are_the_ones_its_count_counted():
+    """The list and the count beside it are two readings of one queryset.
+
+    They are gathered from the same filter precisely so this cannot drift: a
+    figure whose workings do not add up to it is worse than no workings.
+    """
+    for name, days in (("Groceries", (2, 9, 30)), ("Eating Out", (14,))):
+        for day in days:
+            record_transaction(
+                on_date=date(2026, 7, day),
+                amount=Decimal("10"),
+                currency="USD",
+                category_id=child(name).pk,
+            )
+    # A neighbouring month, to prove the filter is the month's and not the
+    # category's whole history.
+    record_transaction(
+        on_date=date(2026, 6, 5),
+        amount=Decimal("10"),
+        currency="USD",
+        category_id=child("Groceries").pk,
+    )
+
+    block = reporting.category_report("2026-07")[0]
+
+    assert block["children"]
+    for row in block["children"]:
+        assert row["count"] == len(row["transactions"])
+        assert all(t["category_id"] == row["category_id"] for t in row["transactions"])
+        assert all(t["date"].startswith("2026-07") for t in row["transactions"])
+
+
+def test_transactions_divide_by_currency_the_way_their_rows_do():
+    """A category spent in two currencies is two rows, and two lists."""
+    record_transaction(
+        on_date=date(2026, 7, 5),
+        amount=Decimal("100"),
+        currency="AUD",
+        category_id=child("Groceries").pk,
+    )
+    for day in (6, 7):
+        record_transaction(
+            on_date=date(2026, 7, day),
+            amount=Decimal("400"),
+            currency="MYR",
+            category_id=child("Groceries").pk,
+        )
+
+    blocks = {block["currency"]: block for block in reporting.category_report("2026-07")}
+
+    aud = blocks["AUD"]["children"][0]["transactions"]
+    myr = blocks["MYR"]["children"][0]["transactions"]
+
+    assert [t["currency"] for t in aud] == ["AUD"]
+    assert [t["currency"] for t in myr] == ["MYR", "MYR"]
+
+
+@pytest.mark.invariant
+def test_a_transaction_in_the_report_is_never_restated():
+    """This module names no reporting currency and looks up no rate (BR-12).
+
+    A figure here is in the currency it was entered in and in no other. The
+    restated column belongs to the ledger, which was asked for one.
+    """
+    record_transaction(
+        on_date=date(2026, 7, 5),
+        amount=Decimal("400"),
+        currency="MYR",
+        category_id=child("Groceries").pk,
+    )
+
+    row = reporting.category_report("2026-07")[0]["children"][0]
+
+    assert [t["restatement"] for t in row["transactions"]] == [None]
+
+
 def test_a_row_states_its_movement_on_the_month_before():
     for month, amount in ((6, "200"), (7, "300")):
         record_transaction(

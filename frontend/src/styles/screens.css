@@ -492,6 +492,45 @@
   cursor: pointer;
 }
 
+/* An open parent, tinted so faintly it is closer to a shadow than a colour.
+
+   The children below it are indented and the arrow above them is turned, which
+   already says the group is open; this says *which* group, at the point where
+   the eye has travelled far enough down a long month to have lost the heading.
+   It carries no meaning of its own — nothing here is selected, chosen or in
+   error — so it must stay below the threshold where a tint starts to look like
+   a state. Left at one class, so `.table tbody tr:hover` still outranks it and
+   pointing at an open row goes on doing something visible. */
+.disclosure-row--open {
+  background: var(--row-open);
+}
+
+/* The whole of an open parent row — name, type, count, total and change.
+
+   Weight is the part of this that actually carries across the page; the tint
+   above is a whisper and stops working the moment a row is scrolled past a
+   heading. Set on the cells rather than on the name alone, so the row reads as
+   one open band the eye can follow from the category out to its figures, which
+   is the reading a parent row is there to support in the first place.
+
+   Set on `td` so everything inside inherits it, the disclosure button included
+   — its `font: inherit` carries the weight down from the cell. Nothing else in
+   a disclosure row declares a weight of its own, so nothing is overridden.
+
+   800 is a real Inter face, added to the request in index.html alongside the
+   700 that IBM Plex Mono needed. Both had to be loaded for this rule to mean
+   anything: ask for a weight the font does not carry and the browser does not
+   refuse, it synthesises — smearing the nearest face sideways, which at 13px
+   on a dark ground reads as mud rather than as weight.
+
+   The row is set in two faces and they do not have the same ceiling. The words
+   are Inter and take 800 exactly; the figures are Plex Mono, which stops at
+   700, so they resolve there. That is the row at its heaviest, and it is not
+   one number. */
+.disclosure-row--open td {
+  font-weight: 800;
+}
+
 .disclosure {
   display: inline-flex;
   align-items: center;
@@ -523,9 +562,46 @@
 }
 
 /* Indented to start where the parent's name does, so a child reads as belonging
-   to the row above rather than as another parent. */
-.disclosure__child {
+   to the row above rather than as another parent.
+
+   Qualified by `.table td` rather than left as a bare class, and that is the
+   whole rule working rather than a preference. `.table td` sets the shorthand
+   `padding`, so it sets `padding-left` too — at one class and one element to
+   this rule's one class, which wins on specificity whatever the file order is.
+   A bare `.disclosure__child` was silently doing nothing, and every level of
+   every disclosure in the application sat flush against the one above it. */
+.table td.disclosure__child {
   padding-left: calc(var(--cell-pad) + 21px);
+}
+
+/* The third level, where a subcategory opens onto the transactions it totals.
+   Twice the child's indent, which is the same measurement applied twice rather
+   than a second one chosen: 21px is the arrow and its gap, so a child's arrow
+   lands under its parent's name, and a transaction's date lands under its
+   subcategory's name. Each level starts where the name above it started. */
+.table td.disclosure__grandchild {
+  padding-left: calc(var(--cell-pad) + 42px);
+}
+
+/* A transaction, revealed under the subcategory that totals it.
+
+   Unruled and tight, the treatment a consumed lot gets under its sale
+   (`.invest__consumed`): these rows are the workings of the row above, not
+   entries of their own, and a full rule under each one would make a category of
+   nine transactions read as nine more categories. The rule returns on the next
+   subcategory, which is where the table actually moves on. */
+.disclosure-workings td {
+  border-bottom: none;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/* The note after the date, in the one cell they share. Separated by space
+   rather than by a glyph: a bullet would have to be hidden on the many
+   transactions that carry no note, and an empty cell is quieter than a
+   dangling separator. */
+.disclosure__note {
+  margin-left: 10px;
 }
 
 .link-button--breach {
