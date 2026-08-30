@@ -17,8 +17,10 @@
  */
 
 import {
+  ArrowDown,
   ArrowLeftRight,
   ArrowRightLeft,
+  ArrowUp,
   CalendarCheck,
   ChartColumn,
   Check,
@@ -59,6 +61,8 @@ export type IconName =
   | 'saved'
   | 'clear'
   | 'swap'
+  | 'sortAscending'
+  | 'sortDescending'
 
 export const icons: Record<IconName, ReactElement> = {
   dashboard: <LayoutGrid {...base} />,
@@ -93,4 +97,15 @@ export const icons: Record<IconName, ReactElement> = {
   // application, and this is not one — it swaps a direction of quotation, and
   // the accessible name on the button says so.
   swap: <ArrowRightLeft {...inline} />,
+  // Which way a sorted column runs, in its heading. A plain arrow rather than a
+  // chevron pair: the pair shows both directions at once and leaves the reader
+  // to work out which half is lit, where one arrow simply points down the
+  // order. Ascending points up — smallest at the top, the arrow travelling the
+  // way the figures grow.
+  //
+  // Decorative here in the strict sense: the heading's `aria-sort` already
+  // states the direction, so the glyph is hidden from the reading and the
+  // meaning survives without it.
+  sortAscending: <ArrowUp {...inline} />,
+  sortDescending: <ArrowDown {...inline} />,
 }

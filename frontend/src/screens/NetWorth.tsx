@@ -5,6 +5,13 @@
  * the lower table only; the chart and the headline are unchanged, and there is
  * **no drill-down** anywhere.
  *
+ * The slice table sorts on its three real columns — the group, the amount and
+ * the share of gross assets — and its column widths are pinned, so a toggle
+ * changes what the rows say and never where the columns are. Sorting is a
+ * rearrangement of rows the server already sent, in the browser: no figure is
+ * recomputed, and the amounts are ordered as exact decimals rather than parsed
+ * to floats to be compared (ADR-12).
+ *
  * The screen reads two different questions at once, and the two view controls
  * divide cleanly between them. The **date range** governs the trend plot and
  * the month-on-month table below it — how net worth moved. The **spine**
@@ -65,7 +72,9 @@ import {
   formatPercent,
   movementClass,
 } from '@/lib/format'
+import { compareDecimals } from '@/lib/money'
 import { shiftMonths, useViewState } from '@/lib/viewState'
+import { icons } from '@/shell/icons'
 
 const DIMENSIONS = [
   { key: 'type', label: 'Account Type' },
@@ -73,6 +82,100 @@ const DIMENSIONS = [
   { key: 'currency', label: 'Currency' },
   { key: 'account', label: 'Account' },
 ] as const
+
+type SortColumn = 'group' | 'amount' | 'percent'
+type SortDirection = 'asc' | 'desc'
+
+interface Sort {
+  readonly column: SortColumn
+  readonly direction: SortDirection
+}
+
+/**
+ * Which way a column runs when it is first clicked.
+ *
+ * Descending on the two figures, because a reader clicking Amount is looking
+ * for the largest thing in the table and not the smallest. Ascending on Group,
+ * which is the order the table already arrived in — the first click on it is a
+ * way back rather than a rearrangement.
+ */
+const FIRST_DIRECTION: Record<SortColumn, SortDirection> = {
+  group: 'asc',
+  amount: 'desc',
+  percent: 'desc',
+}
+
+/** A comparison read the way the column is running. */
+function direct(ranking: number, direction: SortDirection): number {
+  return direction === 'asc' ? ranking : -ranking
+}
+
+/**
+ * The slice table's columns, pinned.
+ *
+ * Under automatic layout each slicing sizes its own columns to its own
+ * content, so toggling from Currency to Account Type — three-letter labels to
+ * "Investment/Brokerage" — walks the Amount column across the panel and the
+ * reader re-finds the figures every time they change the question. The whole
+ * interaction model of this screen is toggling that grouping, which makes the
+ * jump land on the one control the screen is built around. Pinned as they are
+ * on Accounts, Investments and Cash flow.
+ *
+ * The label takes the width because it is the only column with no fixed
+ * vocabulary and no bound on its length: an account name is free text, where
+ * every other column here holds a figure of known width or one of two words.
+ */
+function SliceColumns() {
+  return (
+    <colgroup>
+      <col style={{ width: '32%' }} />
+      <col style={{ width: '18%' }} />
+      <col style={{ width: '26%' }} />
+      <col style={{ width: '24%' }} />
+    </colgroup>
+  )
+}
+
+/**
+ * A column heading that sorts, and states which way it is running.
+ *
+ * `aria-sort` is on the cell rather than the button because that is the
+ * element a screen reader announces as the column heading, and it carries the
+ * direction in words — so the arrow beside the label is free to be decoration
+ * and is hidden from the reading.
+ */
+function SortHeader({
+  column,
+  label,
+  sort,
+  onSort,
+  className,
+}: {
+  readonly column: SortColumn
+  readonly label: string
+  readonly sort: Sort
+  readonly onSort: (column: SortColumn) => void
+  readonly className?: string
+}) {
+  const active = sort.column === column
+  // Unsorted, the arrow shows the direction a click would give, not a state the
+  // column is in — which is why it only surfaces on hover.
+  const direction = active ? sort.direction : FIRST_DIRECTION[column]
+
+  return (
+    <th
+      className={`sortable${className ? ` ${className}` : ''}`}
+      aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button type="button" className="sort" onClick={() => onSort(column)}>
+        {label}
+        <span className="sort__arrow">
+          {direction === 'asc' ? icons.sortAscending : icons.sortDescending}
+        </span>
+      </button>
+    </th>
+  )
+}
 
 function Amount({
   value,
@@ -159,6 +262,13 @@ export function NetWorth() {
   // and a run of months side by side.
   const { currency, from, to, month } = useViewState()
   const [dimension, setDimension] = useState<string>('type')
+  /**
+   * How the slice table is ordered — kept across a change of slicing, because
+   * "largest first" is a question about the table and not about which grouping
+   * is under it, and a reader comparing the top of one slicing against the top
+   * of another would otherwise have to re-sort at every toggle.
+   */
+  const [sort, setSort] = useState<Sort>({ column: 'group', direction: 'asc' })
   /** Which month the pointer is over — the plot draws its own band, as the
       dashboard's three do, so the highlight sits behind the line. */
   const [hover, setHover] = useState<string | null>(null)
@@ -183,6 +293,64 @@ export function NetWorth() {
    * in the browser (ADR-12), so subtracting two totals here is not an option.
    */
   const movement = useNetWorthTrend(shiftMonths(month, -1), month, currency)
+
+  /**
+   * The slice rows in the reader's order.
+   *
+   * Sorted here rather than asked of the server: the rows are a dozen at most,
+   * they are already in hand, and a round trip to reverse a column the reader
+   * is looking at would put a spinner in the way of a rearrangement.
+   *
+   * Ordering only — no figure is computed, combined or re-derived, and the
+   * amounts are compared as the exact decimals the server sent (ADR-12).
+   * `Number(a) - Number(b)` would be the ordinary way to do this and it is a
+   * float comparison of money, which is the one thing this application does
+   * not do.
+   *
+   * Group is the order the payload arrived in, which is the dimension's own:
+   * the vocabulary sequence for Account Type and Liquidity Tier, alphabetical
+   * for Currency and Account. That matters more than it looks — sorting the
+   * tiers by their labels would order them Instant, Locked, Long, Short and
+   * destroy the one thing the tier names mean, which is how soon the money can
+   * be reached.
+   */
+  const rows = useMemo(() => {
+    const delivered = slice.data?.data.rows ?? []
+    const indexed = delivered.map((row, index) => ({ row, index }))
+
+    indexed.sort((a, b) => {
+      if (sort.column === 'percent') {
+        const left = a.row.percent_of_gross
+        const right = b.row.percent_of_gross
+        // A row with no proportion is not a row with a small one — nothing is
+        // owned to measure it against. It keeps the foot of the table whichever
+        // way the column runs, rather than being ranked as if it were zero.
+        if (left === null || right === null) {
+          if (left === right) return a.index - b.index
+          return left === null ? 1 : -1
+        }
+        return direct(compareDecimals(left, right), sort.direction) || a.index - b.index
+      }
+
+      if (sort.column === 'amount') {
+        return (
+          direct(compareDecimals(a.row.amount, b.row.amount), sort.direction) ||
+          a.index - b.index
+        )
+      }
+
+      return direct(a.index - b.index, sort.direction)
+    })
+
+    return indexed.map((entry) => entry.row)
+  }, [slice.data, sort])
+
+  const resort = (column: SortColumn) =>
+    setSort((current) =>
+      current.column === column
+        ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { column, direction: FIRST_DIRECTION[column] },
+    )
 
   const chart = useMemo(
     () =>
@@ -377,17 +545,34 @@ export function NetWorth() {
             <p className="fx__note">Nothing recorded for {data.month}.</p>
           )}
           {data.total && slice.data && (
-            <table className="table">
+            <table className="table table--fixed">
+              <SliceColumns />
               <thead>
                 <tr>
-                  <th>Group</th>
+                  <SortHeader column="group" label="Group" sort={sort} onSort={resort} />
+                  {/* Unheaded, and unsortable with it: the column carries a
+                      row's side of the balance sheet and its exclusions, both
+                      of which are attributes of the group named beside them
+                      rather than a column a reader arranges the table by. */}
                   <th />
-                  <th className="numeric">Amount</th>
-                  <th className="numeric">% of Gross Assets</th>
+                  <SortHeader
+                    column="amount"
+                    label="Amount"
+                    sort={sort}
+                    onSort={resort}
+                    className="numeric"
+                  />
+                  <SortHeader
+                    column="percent"
+                    label="% of Gross Assets"
+                    sort={sort}
+                    onSort={resort}
+                    className="numeric"
+                  />
                 </tr>
               </thead>
               <tbody>
-                {slice.data.data.rows.map((row) => (
+                {rows.map((row) => (
                   <tr key={row.key}>
                     <td>{row.label}</td>
                     <td className="secondary">

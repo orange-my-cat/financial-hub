@@ -102,3 +102,53 @@ export function isNegative(value: Money): boolean {
 export function isZero(value: Money): boolean {
   return /^-?0(\.0+)?$/.test(value.amount)
 }
+
+/**
+ * Order two exact decimal strings — money, percentages, anything the server
+ * sent as a decimal.
+ *
+ * Ordering is not arithmetic, and this file's refusal of the second does not
+ * extend to the first: a comparison produces no new figure, only a position,
+ * so there is nothing here for a float to round wrong. What would round it
+ * wrong is the obvious alternative — `Number(a) - Number(b)` — which parses
+ * both figures to floats to decide which is larger, and stops being reliable
+ * at exactly the magnitudes this application is built to survive.
+ *
+ * Compared as digits instead: sign first, then the integer part by length and
+ * then lexically, then the fraction padded to a common width. Every step is
+ * exact at any size, and `-0.00` and `0` are the same figure.
+ */
+export function compareDecimals(a: string, b: string): number {
+  const ZERO = /^-?0*(\.0*)?$/
+  if (ZERO.test(a) && ZERO.test(b)) return 0
+
+  const negativeA = a.startsWith('-')
+  const negativeB = b.startsWith('-')
+  if (negativeA !== negativeB) return negativeA ? -1 : 1
+
+  const magnitude = compareMagnitudes(
+    negativeA ? a.slice(1) : a,
+    negativeB ? b.slice(1) : b,
+  )
+  // Below zero the order inverts: −900 is the larger magnitude and the smaller
+  // figure.
+  return negativeA ? -magnitude : magnitude
+}
+
+function compareMagnitudes(a: string, b: string): number {
+  const [integerA = '0', fractionA = ''] = a.split('.')
+  const [integerB = '0', fractionB = ''] = b.split('.')
+
+  // Leading zeros stripped so length stands for magnitude, which is what makes
+  // the lexical comparison below sound.
+  const wholeA = integerA.replace(/^0+(?=\d)/, '')
+  const wholeB = integerB.replace(/^0+(?=\d)/, '')
+  if (wholeA.length !== wholeB.length) return wholeA.length < wholeB.length ? -1 : 1
+  if (wholeA !== wholeB) return wholeA < wholeB ? -1 : 1
+
+  const width = Math.max(fractionA.length, fractionB.length)
+  const paddedA = fractionA.padEnd(width, '0')
+  const paddedB = fractionB.padEnd(width, '0')
+  if (paddedA === paddedB) return 0
+  return paddedA < paddedB ? -1 : 1
+}

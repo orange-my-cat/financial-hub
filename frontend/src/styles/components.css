@@ -340,6 +340,74 @@
   font-size: var(--size-secondary);
 }
 
+/* A column heading that sorts.
+
+   The control takes the header row's own type, colour and tracking by
+   inheritance rather than restating them, so a sortable column reads as a
+   column heading first and a button second — the header row does not come
+   apart into two typographies because some of its columns can be clicked.
+   Padding moves off the cell and onto the button so the whole heading is the
+   target, not the word inside it.
+
+   Accent is the interactive colour and a sort control is the only interactive
+   thing in a header row, so the sorted column takes it. The arrow beside it is
+   a shape, and it carries the direction on its own where hue is not seen. */
+.table th.sortable {
+  padding: 0;
+}
+
+.table .sort {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: var(--cell-pad);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* Right-aligned like the digits beneath it, arrow outermost. */
+.table th.numeric .sort {
+  justify-content: flex-end;
+}
+
+.table .sort:hover {
+  color: var(--ink-85);
+}
+
+.table th[aria-sort='ascending'] .sort,
+.table th[aria-sort='descending'] .sort {
+  color: var(--accent-light);
+}
+
+/* The arrow occupies its space in every sortable heading, sorted or not.
+   Rendered only when the column is sorted, the headings would step sideways
+   each time the sort moved between them — a table that shifts its own columns
+   under the pointer that is choosing them. Held at a whisper on hover, where
+   it shows which way a click would run the column before the click happens. */
+.table .sort__arrow {
+  display: inline-flex;
+  opacity: 0;
+}
+
+.table .sort:hover .sort__arrow {
+  opacity: 0.45;
+}
+
+/* `.sort` is in the selector to outweigh the hover rule above, not for
+   reach — without it a sorted column dims its own arrow under the pointer
+   that is about to reverse it. */
+.table th[aria-sort='ascending'] .sort .sort__arrow,
+.table th[aria-sort='descending'] .sort .sort__arrow {
+  opacity: 1;
+}
+
 /* ------------------------------------------------------------------------ */
 /* Panels                                                                    */
 /* ------------------------------------------------------------------------ */
