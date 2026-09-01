@@ -12,6 +12,18 @@
  *     atomicity would buy nothing (ADR-15, §9.6).
  *   * **Tab advances to the next account.** Which is just DOM order, and is the
  *     reason the inputs are a flat sequence rather than nested in per-row forms.
+ *   * **A dormant row arrives finished, and there is nothing here about it.**
+ *     A dormant account's balance does not change, so every month of its that
+ *     has no figure is written with the last one server-side
+ *     (`accounts.services.dormant`). The row that arrives is an ordinary saved
+ *     row: same ink, same wash, same tick, no mark, no second field, no branch
+ *     in this file. The close pass tabs past it.
+ *
+ *     A deliberate departure from FR-10, which asks for a carried balance to be
+ *     marked as such. It was marked, with the `c` a carried rate wears, and the
+ *     mark was removed on instruction: a row that is finished should read as
+ *     finished. The one thing the screen still does differently is withhold the
+ *     discard bin — see `hasStored`.
  *
  * The month being closed is chosen on the spine, which is always shown here.
  * Neither view control applies, and both render inert: the reporting currency
@@ -180,7 +192,13 @@ function BalanceRow({
   // keeps its space on those rows and goes invisible rather than absent, so
   // twenty boxes stay in one line — and twenty dead bins do not sit above a
   // month that has not been entered yet.
-  const hasStored = row.saved && state !== 'cleared'
+  //
+  // Never on a dormant row. What sits in that box is a property of dormancy —
+  // the account is not being touched, so the month holds what the month before
+  // it held — and the server writes it back on the next read. A bin that undoes
+  // itself is worse than no bin. To stop carrying a figure, set the account back
+  // to Open on the Accounts screen, or close it.
+  const hasStored = row.saved && state !== 'cleared' && row.status !== 'Dormant'
 
   return (
     <tr>

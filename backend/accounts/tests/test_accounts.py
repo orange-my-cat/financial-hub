@@ -20,7 +20,9 @@ from accounts.models import (
     LiquidityTier,
 )
 from accounts.services import lifecycle
+from accounts.services.dormant import roll_dormant_balances
 from accounts.services.net_worth import NetWorthService
+from core.months import month_of, sequence
 from core.services.advisories import AdvisoryKind
 from core.services.exceptions import BusinessRuleError, ConflictError
 from fx.models import ExchangeRate
@@ -180,7 +182,31 @@ def test_a_malformed_month_is_refused_by_the_database():
 # ---------------------------------------------------------------------------
 
 
-def test_a_dormant_account_carries_its_last_balance_forward_and_flags_it():
+def test_setting_an_account_dormant_stores_its_balance_for_every_month_since():
+    """The carry-forward is a stored fact, not only a reading rule.
+
+    It was in-memory only: net worth found the last figure and used it, and the
+    months in between held nothing. A dormant account is one nobody touches, so
+    each of those months holds the same figure — and now says so in the
+    database (`accounts.services.dormant`).
+    """
+    account = make_account()
+    Balance.objects.create(account=account, month="2026-05", amount=Decimal("1000"))
+
+    lifecycle.set_dormant(account)
+
+    stored = dict(account.balances.values_list("month", "amount"))
+    for month in sequence("2026-05", month_of(date.today())):
+        assert stored[month] == Decimal("1000"), month
+
+    # Nothing ahead of today: "the balance has not changed" is a statement about
+    # the past, and writing it forward would be a forecast.
+    assert max(stored) == month_of(date.today())
+
+
+def test_a_dormant_balance_is_an_ordinary_balance_once_stored():
+    """So net worth reads it as entered rather than as carried — there is
+    nothing left to carry for a month that has the figure itself."""
     account = make_account()
     Balance.objects.create(account=account, month="2026-05", amount=Decimal("1000"))
     lifecycle.set_dormant(account)
@@ -189,8 +215,73 @@ def test_a_dormant_account_carries_its_last_balance_forward_and_flags_it():
 
     assert result.total.amount == Decimal("1000")
     contribution = result.contributions[0]
+    assert contribution.is_carried is False
+    assert contribution.source_month == "2026-07"
+
+
+def test_a_dormant_account_still_carries_forward_where_no_row_was_stored():
+    """The reading rule is still the one that makes net worth right (BR-03).
+
+    Rows are stored for the months up to today, and nothing is stored beyond
+    them — a month ahead of the roll, or one read before a roll has reached it,
+    has no row at all. Net worth carries the last known figure into it exactly as
+    it did before any of this, which is why the rule stays.
+    """
+    account = make_account()
+    Balance.objects.create(account=account, month="2026-05", amount=Decimal("1000"))
+    lifecycle.set_dormant(account)
+    account.balances.filter(month="2026-07").delete()
+
+    result = NetWorthService(staleness_days=7).for_month("2026-07", "USD")
+
+    assert result.total.amount == Decimal("1000")
+    contribution = result.contributions[0]
     assert contribution.is_carried is True
-    assert contribution.source_month == "2026-05"
+    assert contribution.source_month == "2026-06"
+
+
+def test_rolling_a_dormant_account_twice_writes_nothing_the_second_time():
+    """Idempotent, which is what makes it safe on a read path."""
+    account = make_account()
+    Balance.objects.create(account=account, month="2026-05", amount=Decimal("1000"))
+    lifecycle.set_dormant(account)
+    before = account.balances.count()
+
+    assert roll_dormant_balances(month_of(date.today())) == ()
+    assert account.balances.count() == before
+
+
+def test_the_roll_never_writes_a_month_that_has_not_arrived():
+    account = make_account()
+    Balance.objects.create(account=account, month="2026-05", amount=Decimal("1000"))
+    lifecycle.set_dormant(account)
+
+    written = roll_dormant_balances("2027-06", today=date(2026, 7, 15))
+
+    assert [row.month for row in written] == []
+    assert account.balances.filter(month__gt=month_of(date.today())).count() == 0
+
+
+def test_the_roll_writes_nothing_before_the_first_recorded_figure():
+    """An account is required only from the later of its opening and its first
+    recorded balance (ADR-04), and there is nothing to carry into a month that
+    precedes every figure there is."""
+    account = make_account(opened="2026-01")
+    Balance.objects.create(account=account, month="2026-05", amount=Decimal("1000"))
+    lifecycle.set_dormant(account)
+
+    assert roll_dormant_balances("2026-03", today=date(2026, 3, 20)) == ()
+    assert account.balances.filter(month__lt="2026-05").count() == 0
+
+
+def test_the_roll_leaves_an_open_account_alone():
+    """An Open account's missing month is outstanding work, and a figure written
+    into it would hide that (BR-04)."""
+    account = make_account()
+    Balance.objects.create(account=account, month="2026-05", amount=Decimal("1000"))
+
+    assert roll_dormant_balances(month_of(date.today())) == ()
+    assert account.balances.count() == 1
 
 
 def test_an_open_account_does_not_carry_forward():

@@ -53,6 +53,30 @@ from core.services.translation import TranslationService
 from accounts.models import Account, AccountStatus, Balance
 
 
+def carried_balance(account: Account, month: str) -> Balance | None:
+    """The balance a Dormant account carries into `month`, if any.
+
+    The one definition of dormant carry-forward (BR-03, BR-04, FR-10): the last
+    figure recorded before the month, for a Dormant account only. An Open
+    account carries nothing — a missing balance there makes the month Incomplete
+    and the account is simply absent from the total.
+
+    A named rule rather than a line inside the loop below, because it is the
+    rule `accounts.services.dormant` materialises: that service writes the
+    figure this one would have read, and the two must not drift apart. Two
+    implementations of "last known balance" would be two answers to what a
+    dormant account is worth.
+
+    It still matters after materialising. A month ahead of today is never
+    written, and a month is read before it is rolled — so this is what keeps net
+    worth right in between.
+    """
+    if account.status != AccountStatus.DORMANT:
+        return None
+
+    return account.balances.filter(month__lt=month).order_by("-month").first()
+
+
 @dataclass(frozen=True)
 class Contribution:
     """One account's part in one month's net worth."""
@@ -224,12 +248,8 @@ class NetWorthService:
         if exact is not None:
             return exact, False
 
-        if account.status == AccountStatus.DORMANT:
-            carried = account.balances.filter(month__lt=month).order_by("-month").first()
-            if carried is not None:
-                return carried, True
-
-        return None, False
+        carried = carried_balance(account, month)
+        return (carried, True) if carried is not None else (None, False)
 
     # -- the definition ----------------------------------------------------
 

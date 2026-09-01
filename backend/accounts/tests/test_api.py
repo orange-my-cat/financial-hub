@@ -391,6 +391,102 @@ def test_month_close_puts_the_prior_balance_beside_each_input(signed_in, portfol
     assert rows["Everyday"]["saved"] is True
 
 
+def test_month_close_gives_a_dormant_row_the_same_balance_as_a_typed_one(
+    signed_in, portfolio
+):
+    """A dormant account's month holds its last figure, stored, and the row is
+    indistinguishable from one somebody typed (BR-03).
+
+    Which is the whole point: nothing is outstanding for that account, so the row
+    carries no mark, no null and no special case for the screen to render.
+    """
+    from accounts.services import lifecycle
+
+    lifecycle.set_dormant(portfolio["aud"])
+
+    body = signed_in.get("/api/month-close/?month=2026-08").json()["data"]
+    rows = {row["name"]: row for row in body["rows"]}
+    dormant = rows["CommBank Saver"]
+
+    assert dormant["current"] == "50000.0000"
+    assert dormant["saved"] is True
+    # Nothing else on the row says where the figure came from, because nothing
+    # about the figure is different.
+    assert "carried" not in dormant
+
+    # And it is a row, not a presentation: the figure is in the table.
+    assert Balance.objects.filter(account=portfolio["aud"], month="2026-08").exists()
+
+    # An Open account is untouched — a missing balance there is outstanding work,
+    # and a figure written into it would hide that (BR-04).
+    assert rows["Everyday"]["current"] is None
+    assert rows["Everyday"]["saved"] is False
+    assert not Balance.objects.filter(account=portfolio["usd"], month="2026-08").exists()
+
+
+def test_month_close_does_not_overwrite_a_dormant_figure_that_was_typed(
+    signed_in, portfolio
+):
+    """The first answer stands. A month that already holds a figure is never
+    touched by the roll, whether that figure was typed or rolled."""
+    from accounts.services import lifecycle
+
+    lifecycle.set_dormant(portfolio["aud"])
+    Balance.objects.filter(account=portfolio["aud"], month="2026-08").update(
+        amount=Decimal("51000")
+    )
+
+    body = signed_in.get("/api/month-close/?month=2026-08").json()["data"]
+    dormant = {row["name"]: row for row in body["rows"]}["CommBank Saver"]
+
+    assert dormant["current"] == "51000.0000"
+
+
+def test_month_close_refills_a_dormant_month_that_was_discarded(signed_in, portfolio):
+    """For an account nobody touches, "this month has no balance" is not a state
+    that means anything — so the figure comes back.
+
+    Discarding one is therefore not offered on a dormant row at all; the screen
+    hides the bin rather than showing a control that undoes itself.
+    """
+    from accounts.services import lifecycle
+
+    lifecycle.set_dormant(portfolio["aud"])
+    Balance.objects.filter(account=portfolio["aud"], month="2026-08").delete()
+
+    body = signed_in.get("/api/month-close/?month=2026-08").json()["data"]
+    dormant = {row["name"]: row for row in body["rows"]}["CommBank Saver"]
+
+    assert dormant["current"] == "50000.0000"
+    assert dormant["saved"] is True
+
+
+def test_the_roll_fills_a_gap_from_the_figure_before_it(signed_in, portfolio):
+    """A month in the middle is filled from the figure that precedes it, not from
+    the newest one — the same walk net worth makes on read, so the stored rows
+    say what the reports already said.
+
+    June sits between a May figure and a July one, and takes May's.
+    """
+    from accounts.services import lifecycle
+
+    Balance.objects.create(
+        account=portfolio["aud"], month="2026-05", amount=Decimal("49000")
+    )
+    lifecycle.set_dormant(portfolio["aud"])
+
+    body = signed_in.get("/api/month-close/?month=2026-06").json()["data"]
+    dormant = {row["name"]: row for row in body["rows"]}["CommBank Saver"]
+
+    assert dormant["current"] == "49000.0000"
+    assert dormant["saved"] is True
+    # July's own figure is untouched by the fill either side of it.
+    assert (
+        Balance.objects.get(account=portfolio["aud"], month="2026-07").amount
+        == Decimal("50000")
+    )
+
+
 def test_month_close_carries_balances_and_no_rates(signed_in, portfolio):
     """Rates were section one of this screen and are loaded from the provider
     now, so the query does not build them and the payload does not carry them.

@@ -12,6 +12,14 @@ Rates are loaded from the provider now (`manage.py load_rates`), so the payload
 is balances alone and the whole re-basing apparatus that served those rows is
 gone with it.
 
+Dormant rows come with a figure already in them, and it is a stored one. A
+dormant account's balance does not change month to month, so every month of its
+that has none gets it written (`accounts.services.dormant`) and the row that
+comes back is an ordinary saved row — no second field, no special case, nothing
+for the screen to render differently. A month that has not arrived is the one
+exception, and it is empty rather than special: nothing is ever written ahead of
+today.
+
 The reporting currency therefore no longer changes anything this query returns.
 It is still accepted, because the completeness figure below is computed against
 it and because dropping a parameter from a live endpoint's signature buys
@@ -28,6 +36,7 @@ from core.months import as_at_of, previous
 from core.services.completeness import MonthCompleteness
 from core.services.movement import movement
 from accounts.models import Account, AccountStatus, Balance
+from accounts.services.dormant import roll_dormant_balances
 from accounts.services.net_worth import NetWorthService
 
 
@@ -103,6 +112,17 @@ def month_close(
     # month-end that has not arrived — see core.months.as_at_of.
     as_at = as_at_of(month)
     prior_month = previous(month)
+
+    # A dormant account's figure for this month, written if it is not already
+    # there (`accounts.services.dormant`). Done here because this query is the
+    # moment a month is first looked at, and a month whose dormant rows appear
+    # only once somebody types into it is the state this was meant to remove.
+    #
+    # A read that writes, which is not free of objection. It is idempotent, it is
+    # bounded by today, and it writes a copy of an entered fact rather than a
+    # computed one — and the alternative is a screen that POSTs on mount, which
+    # moves the write without making it smaller.
+    roll_dormant_balances(month)
 
     # -- accounts ---------------------------------------------------------
     # Dormant accounts appear so their status is visible and they can be

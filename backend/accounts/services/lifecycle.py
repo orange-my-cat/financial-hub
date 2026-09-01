@@ -20,13 +20,15 @@ balances has no legitimate use that closing it does not serve better.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 from django.db import transaction
 
-from core.months import require_month
+from core.months import month_of, require_month
 from core.services.advisories import Advisory, AdvisoryKind
 from core.services.exceptions import BusinessRuleError, ConflictError
 from accounts.models import Account, AccountStatus, Balance, is_liability
+from accounts.services.dormant import roll_dormant_balances
 
 
 @dataclass(frozen=True)
@@ -105,8 +107,13 @@ def set_dormant(account: Account) -> LifecycleResult:
     """Stop requiring a balance each month; carry the last one forward.
 
     Dormant accounts are excluded from the completeness requirement and are
-    still included in net worth at their carried-forward balance, flagged stale
-    (BR-03, BR-04).
+    still included in net worth at their carried-forward balance (BR-03, BR-04).
+
+    Carrying forward is a stored fact now, not only a reading rule: every month
+    from the last recorded figure up to the current one is written with it here,
+    so the status takes effect in the database at the moment it is set rather
+    than the next time somebody opens Month Close
+    (`accounts.services.dormant`).
     """
     if account.status == AccountStatus.CLOSED:
         raise BusinessRuleError(
@@ -123,6 +130,7 @@ def set_dormant(account: Account) -> LifecycleResult:
 
     account.status = AccountStatus.DORMANT
     account.save(update_fields=["status", "updated_at"])
+    roll_dormant_balances(month_of(date.today()))
     return LifecycleResult(account=account)
 
 
