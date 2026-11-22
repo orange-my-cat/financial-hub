@@ -210,10 +210,11 @@ class RecurringTemplate(SoftDeleteModel):
     )
     frequency = models.CharField(max_length=12, choices=Frequency.choices)
 
-    #: The first occurrence, and the only thing that fixes the rhythm: every
-    #: later occurrence is counted from here. It carries the weekday a weekly or
-    #: fortnightly arrangement falls on and the day of the month a monthly one
-    #: does, which is why it is one date rather than a start plus a day.
+    #: The first occurrence of the current rhythm, and the only thing that fixes
+    #: it: every later occurrence is counted from here. It carries the weekday a
+    #: weekly or fortnightly arrangement falls on and the day of the month a
+    #: monthly one does, which is why it is one date rather than a start plus a
+    #: day. Earlier rhythms, if the anchor has moved, are `RecurringRhythm` rows.
     anchor_date = models.DateField()
     #: Ending a recurring item stops proposals after this date and leaves history
     #: intact. Null while it runs indefinitely. Deliberately allowed to precede
@@ -234,14 +235,43 @@ class RecurringTemplate(SoftDeleteModel):
     def __str__(self) -> str:
         return f"{self.name} ({self.frequency})"
 
-    @property
-    def step_days(self) -> int | None:
-        """Days between occurrences, or None for a monthly step.
 
-        A month is not a number of days, so monthly stepping is calendar
-        arithmetic and lives in the service with the clamping it needs.
-        """
-        return {Frequency.WEEKLY: 7, Frequency.FORTNIGHTLY: 14}.get(self.frequency)
+class RecurringRhythm(SoftDeleteModel):
+    """A rhythm a template ran on before its current one, and the day it stopped.
+
+    The template's own anchor, frequency and end date are the rhythm it runs on
+    now. Moving the anchor, or restarting an ended template on a new anchor and
+    cadence, closes the current rhythm into one of these rows and starts the
+    next one on the template, so the change applies forward only. Occurrences
+    already confirmed or skipped were matched to dates the old rhythm produced;
+    re-deriving them from the new anchor would leave those decisions pointing at
+    dates that no longer fall due, and propose the same months a second time.
+
+    A closed rhythm always has an end, and never ends before it starts: a rhythm
+    that produced no occurrence at all is not history worth a row.
+    """
+
+    template = models.ForeignKey(
+        RecurringTemplate, on_delete=models.CASCADE, related_name="rhythms"
+    )
+    anchor_date = models.DateField()
+    frequency = models.CharField(max_length=12, choices=Frequency.choices)
+    end_date = models.DateField()
+
+    class Meta:
+        ordering = ["anchor_date"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("anchor_date")),
+                name="cashflow_rhythm_ends_after_it_starts",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.template.name} {self.frequency} "
+            f"{self.anchor_date:%Y-%m-%d}–{self.end_date:%Y-%m-%d}"
+        )
 
 
 class RecurringDismissal(SoftDeleteModel):

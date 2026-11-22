@@ -99,6 +99,20 @@ class TemplateSerializer(serializers.Serializer):
     end_date = serializers.DateField(required=False, allow_null=True)
 
 
+class TemplateUpdateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=19, decimal_places=4, min_value=Decimal("0.0001"), required=False
+    )
+    category_id = serializers.IntegerField(required=False)
+    #: Moves forward only — the old rhythm keeps every date before it.
+    anchor_date = serializers.DateField(required=False)
+
+
+class RestartTemplateSerializer(serializers.Serializer):
+    anchor_date = serializers.DateField()
+    frequency = serializers.ChoiceField(choices=Frequency.choices)
+
+
 class EndTemplateSerializer(serializers.Serializer):
     #: Optional. Omitted, the template stops proposing from now on.
     end_date = serializers.DateField(required=False, allow_null=True)
@@ -246,7 +260,9 @@ def _template_payload(row: RecurringTemplate) -> dict:
         "frequency": row.frequency,
         "anchor_date": row.anchor_date.isoformat(),
         "end_date": row.end_date.isoformat() if row.end_date else None,
-        "is_active": row.is_active,
+        # Read from the end date, not the stored flag, which goes stale once a
+        # future end date passes.
+        "is_active": not recurring.has_ended(row),
     }
 
 
@@ -268,6 +284,24 @@ class RecurringTemplateView(APIView):
             end_date=fields.get("end_date"),
         )
         return Response({"data": {"id": template.pk}}, status=http.HTTP_201_CREATED)
+
+
+class RecurringDetailView(APIView):
+    """Amend amount, category or anchor. Confirmed transactions never change."""
+
+    def patch(self, request, pk: int):
+        fields = _validated(TemplateUpdateSerializer, request.data)
+        template = recurring.update_template(recurring.get_template(pk), **fields)
+        return Response({"data": _template_payload(template)})
+
+
+class RecurringRestartView(APIView):
+    """Start an ended template again on a new anchor and cadence."""
+
+    def post(self, request, pk: int):
+        fields = _validated(RestartTemplateSerializer, request.data)
+        template = recurring.restart_template(recurring.get_template(pk), **fields)
+        return Response({"data": _template_payload(template)})
 
 
 class RecurringEndView(APIView):

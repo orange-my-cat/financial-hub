@@ -471,6 +471,43 @@ export function useEndTemplate() {
   })
 }
 
+/**
+ * Amend what a running template proposes. Confirmed transactions never change;
+ * a moved anchor applies forward only, and the server refuses one that would
+ * replace an occurrence already decided.
+ */
+export function useUpdateTemplate() {
+  const invalidate = useCashflowInvalidation()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...changes
+    }: {
+      id: number
+      amount?: string
+      category_id?: number
+      anchor_date?: string
+    }) => api.patch<{ data: RecurringTemplate }>(`/cashflow/recurring/${id}/`, changes),
+    onSuccess: invalidate,
+  })
+}
+
+/** Start an ended template again, on a new anchor and cadence. The gap stays silent. */
+export function useRestartTemplate() {
+  const invalidate = useCashflowInvalidation()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...input
+    }: {
+      id: number
+      anchor_date: string
+      frequency: Frequency
+    }) => api.post<{ data: RecurringTemplate }>(`/cashflow/recurring/${id}/restart/`, input),
+    onSuccess: invalidate,
+  })
+}
+
 export function useUpdateCategory() {
   const invalidate = useCashflowInvalidation()
   return useMutation({

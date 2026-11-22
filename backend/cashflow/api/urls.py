@@ -11,7 +11,9 @@ from cashflow.api.views import (
     ProposalConfirmView,
     ProposalDismissView,
     ProposalListView,
+    RecurringDetailView,
     RecurringEndView,
+    RecurringRestartView,
     RecurringTemplateView,
     TransactionDetailView,
     TransactionListView,
@@ -25,7 +27,11 @@ urlpatterns = [
     path("categories/", CategoryListView.as_view(), name="categories"),
     path("categories/<int:pk>/", CategoryDetailView.as_view(), name="category"),
     path("recurring/", RecurringTemplateView.as_view(), name="recurring"),
+    path("recurring/<int:pk>/", RecurringDetailView.as_view(), name="recurring-detail"),
     path("recurring/<int:pk>/end/", RecurringEndView.as_view(), name="recurring-end"),
+    path(
+        "recurring/<int:pk>/restart/", RecurringRestartView.as_view(), name="recurring-restart"
+    ),
     path("recurring/proposals/", ProposalListView.as_view(), name="proposals"),
     path("recurring/confirm/", ProposalConfirmView.as_view(), name="proposal-confirm"),
     path("recurring/dismiss/", ProposalDismissView.as_view(), name="proposal-dismiss"),

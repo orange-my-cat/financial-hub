@@ -23,6 +23,7 @@ from cashflow.models import (
     Direction,
     Frequency,
     RecurringDismissal,
+    RecurringRhythm,
     RecurringTemplate,
     Transaction,
 )
@@ -556,6 +557,225 @@ def test_ending_on_a_future_date_leaves_it_running_until_then(rent_template):
     assert [
         p.occurrence.isoformat() for p in recurring.outstanding_proposals(through="2026-12")
     ] == ["2026-05-05", "2026-06-05", "2026-07-05", "2026-08-05", "2026-09-05"]
+
+
+def test_a_future_end_date_has_ended_once_it_passes(rent_template):
+    """The stored flag is written once; whether it has ended is read from the date."""
+    recurring.end_template(rent_template, date(2026, 9, 30), today=date(2026, 8, 20))
+
+    assert recurring.has_ended(rent_template, today=date(2026, 9, 29)) is False
+    assert recurring.has_ended(rent_template, today=date(2026, 9, 30)) is True
+    assert recurring.has_ended(rent_template, today=date(2026, 10, 1)) is True
+
+
+def test_a_template_with_no_end_date_has_not_ended(rent_template):
+    assert recurring.has_ended(rent_template, today=date(2099, 1, 1)) is False
+
+
+def _statuses(through: str) -> list[tuple[str, str]]:
+    return [
+        (p.occurrence.isoformat(), str(p.status))
+        for p in recurring._derive(through)  # noqa: SLF001 — every status, not one slice
+    ]
+
+
+def test_editing_amount_and_category_reaches_undecided_occurrences_only(rent_template):
+    """A confirmed occurrence is its own transaction. The rest were never posted."""
+    recurring.confirm(rent_template.pk, date(2026, 5, 5))
+
+    recurring.update_template(
+        rent_template, amount=Decimal("2400.00"), category_id=child("Groceries").pk
+    )
+
+    rent_template.refresh_from_db()
+    assert rent_template.amount == Decimal("2400.00")
+    assert rent_template.category == child("Groceries")
+
+    confirmed = Transaction.objects.get()
+    assert confirmed.amount == Decimal("2200.00")
+    assert confirmed.category == child("Rent")
+
+    june = recurring.outstanding_proposals(through="2026-06")[0]
+    assert june.amount == Decimal("2400.00")
+    assert june.category_name == "Groceries"
+
+
+def test_refiling_onto_an_income_category_makes_it_income(rent_template):
+    recurring.update_template(rent_template, category_id=child("Salary").pk)
+
+    rent_template.refresh_from_db()
+    assert rent_template.direction == Direction.INCOME
+
+
+def test_a_template_cannot_be_refiled_onto_a_parent(rent_template):
+    parent = Category.objects.filter(parent__isnull=True).first()
+
+    with pytest.raises(BusinessRuleError, match="parent category"):
+        recurring.update_template(rent_template, category_id=parent.pk)
+
+
+def test_moving_the_anchor_applies_forward_only(rent_template):
+    """Rent moved from the 5th to the 10th in August. May to July stay on the 5th."""
+    recurring.confirm(rent_template.pk, date(2026, 5, 5))
+    recurring.dismiss(rent_template.pk, date(2026, 6, 5))
+
+    recurring.update_template(rent_template, anchor_date=date(2026, 8, 10), today=date(2026, 7, 20))
+
+    assert _statuses("2026-09") == [
+        ("2026-05-05", "Confirmed"),
+        ("2026-06-05", "Skipped"),
+        ("2026-07-05", "Outstanding"),
+        ("2026-08-10", "Outstanding"),
+        ("2026-09-10", "Outstanding"),
+    ]
+
+
+def test_moving_the_anchor_weekly_replaces_that_weeks_occurrence(db):
+    """Thursday pay moving to Friday 14 Aug: that week is paid once, on the Friday."""
+    salary = _salary(Frequency.WEEKLY, date(2026, 7, 30))
+
+    recurring.update_template(salary, anchor_date=date(2026, 8, 14), today=date(2026, 8, 1))
+
+    assert [d.isoformat() for d in recurring.occurrences(salary, "2026-08")] == [
+        "2026-07-30",
+        "2026-08-06",
+        "2026-08-14",
+        "2026-08-21",
+        "2026-08-28",
+    ]
+
+
+def test_the_anchor_cannot_replace_a_decided_occurrence(rent_template):
+    """5 Aug is confirmed; an anchor of 10 Aug would replace it and orphan it."""
+    recurring.confirm(rent_template.pk, date(2026, 8, 5))
+
+    with pytest.raises(BusinessRuleError, match="05 Aug 2026"):
+        recurring.update_template(
+            rent_template, anchor_date=date(2026, 8, 10), today=date(2026, 8, 6)
+        )
+
+    # A full period later is fine: August stays on the 5th.
+    recurring.update_template(rent_template, anchor_date=date(2026, 9, 10), today=date(2026, 8, 6))
+    assert [d.isoformat() for d in recurring.occurrences(rent_template, "2026-09")][-2:] == [
+        "2026-08-05",
+        "2026-09-10",
+    ]
+
+
+def test_moving_the_anchor_earlier_before_anything_falls_keeps_no_history(rent_template):
+    """Correcting a typo on a template not yet used is a straight replacement."""
+    recurring.update_template(rent_template, anchor_date=date(2026, 4, 1), today=date(2026, 3, 20))
+
+    assert not rent_template.rhythms.exists()
+    assert [d.isoformat() for d in recurring.occurrences(rent_template, "2026-05")] == [
+        "2026-04-01",
+        "2026-05-01",
+    ]
+
+
+def test_the_anchor_cannot_move_behind_a_decision(rent_template):
+    """The 5 Jul decision was matched to the old rhythm's date; it would be orphaned."""
+    recurring.confirm(rent_template.pk, date(2026, 7, 5))
+
+    with pytest.raises(BusinessRuleError, match="05 Jul 2026"):
+        recurring.update_template(
+            rent_template, anchor_date=date(2026, 7, 1), today=date(2026, 7, 20)
+        )
+
+    rent_template.refresh_from_db()
+    assert rent_template.anchor_date == date(2026, 5, 5)
+    assert not rent_template.rhythms.exists()
+
+
+def test_the_anchor_cannot_move_into_an_earlier_rhythm(rent_template):
+    recurring.update_template(rent_template, anchor_date=date(2026, 8, 10), today=date(2026, 7, 20))
+
+    with pytest.raises(BusinessRuleError, match="earlier rhythm"):
+        recurring.update_template(
+            rent_template, anchor_date=date(2026, 7, 1), today=date(2026, 7, 20)
+        )
+
+
+def test_an_ended_template_moves_its_anchor_by_restarting(rent_template):
+    recurring.end_template(rent_template, date(2026, 6, 30), today=date(2026, 8, 20))
+
+    with pytest.raises(BusinessRuleError, match="Restart"):
+        recurring.update_template(
+            rent_template, anchor_date=date(2026, 9, 1), today=date(2026, 8, 20)
+        )
+
+
+def test_restarting_resumes_on_a_new_anchor_and_cadence_with_a_silent_gap(rent_template):
+    """Ended in June, back weekly from 3 Sep. July and August were not running."""
+    recurring.confirm(rent_template.pk, date(2026, 5, 5))
+    recurring.end_template(rent_template, date(2026, 6, 30), today=date(2026, 8, 20))
+
+    recurring.restart_template(
+        rent_template,
+        anchor_date=date(2026, 9, 3),
+        frequency=Frequency.WEEKLY,
+        today=date(2026, 8, 20),
+    )
+
+    rent_template.refresh_from_db()
+    assert rent_template.end_date is None
+    assert rent_template.is_active is True
+    assert rent_template.frequency == Frequency.WEEKLY
+    assert recurring.has_ended(rent_template, today=date(2026, 8, 20)) is False
+    assert _statuses("2026-09") == [
+        ("2026-05-05", "Confirmed"),
+        ("2026-06-05", "Outstanding"),
+        ("2026-09-03", "Outstanding"),
+        ("2026-09-10", "Outstanding"),
+        ("2026-09-17", "Outstanding"),
+        ("2026-09-24", "Outstanding"),
+    ]
+
+
+def test_restarting_must_start_after_it_ended(rent_template):
+    recurring.end_template(rent_template, date(2026, 6, 30), today=date(2026, 8, 20))
+
+    with pytest.raises(BusinessRuleError, match="must come after"):
+        recurring.restart_template(
+            rent_template,
+            anchor_date=date(2026, 6, 30),
+            frequency=Frequency.MONTHLY,
+            today=date(2026, 8, 20),
+        )
+
+
+def test_a_running_template_cannot_be_restarted(rent_template):
+    with pytest.raises(BusinessRuleError, match="still running"):
+        recurring.restart_template(
+            rent_template,
+            anchor_date=date(2026, 9, 1),
+            frequency=Frequency.MONTHLY,
+            today=date(2026, 8, 20),
+        )
+
+
+def test_restarting_one_cancelled_before_it_started_keeps_no_history(rent_template):
+    """Its rhythm never produced an occurrence, so there is nothing to close."""
+    recurring.end_template(rent_template, date(2026, 4, 30), today=date(2026, 8, 20))
+
+    recurring.restart_template(
+        rent_template,
+        anchor_date=date(2026, 9, 1),
+        frequency=Frequency.MONTHLY,
+        today=date(2026, 8, 20),
+    )
+
+    assert not rent_template.rhythms.exists()
+
+
+def test_a_closed_rhythm_cannot_end_before_it_starts(rent_template):
+    with pytest.raises(IntegrityError), db_transaction.atomic():
+        RecurringRhythm.objects.create(
+            template=rent_template,
+            anchor_date=date(2026, 5, 5),
+            frequency=Frequency.MONTHLY,
+            end_date=date(2026, 5, 4),
+        )
 
 
 def test_cancelling_before_the_first_occurrence_proposes_nothing(rent_template):

@@ -16,7 +16,14 @@
  *     groceries in MYR and a month's rent in AUD are two separate facts.
  */
 
-import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import {
   ResponsiveContainer,
   Sankey,
@@ -50,9 +57,11 @@ import {
   useEndTemplate,
   useProposals,
   useRecordTransaction,
+  useRestartTemplate,
   useTemplates,
   useTransactions,
   useUpdateCategory,
+  useUpdateTemplate,
   useUpdateTransaction,
 } from '@/lib/cashflow'
 import {
@@ -75,6 +84,7 @@ import {
 import { useDefaultCurrency } from '@/lib/fx'
 import { CURRENCIES, type Money, type ReportingCurrencyCode } from '@/lib/money'
 import { useViewState } from '@/lib/viewState'
+import { icons } from '@/shell/icons'
 
 type Tab = 'transactions' | 'report' | 'recurring' | 'categories'
 
@@ -273,15 +283,18 @@ function changedFields(row: TransactionRow, draft: Draft) {
 function RowMessages({
   advisories,
   error,
+  span = 7,
 }: {
   readonly advisories: readonly Advisory[]
   readonly error: unknown
+  /** The table's column count, so the message runs the full width of the row. */
+  readonly span?: number
 }) {
   if (advisories.length === 0 && error == null) return null
 
   return (
     <tr className="table__message-row">
-      <td colSpan={7}>
+      <td colSpan={span}>
         <ErrorBanner error={error} />
         <AdvisoryList advisories={advisories} />
       </td>
@@ -1615,23 +1628,40 @@ function Categories() {
  *
  * Deciding a proposal happens on Transactions, beside the ledger it lands in.
  * This tab
- * is the other half: where the templates themselves are created and ended. A
- * template is proposed, never posted (BR-14), so nothing here writes a
- * transaction.
+ * is the other half: where the templates themselves are created, amended,
+ * ended and restarted. A template is proposed, never posted (BR-14), so nothing
+ * here writes a transaction.
  *
- * Ending is the only edit offered. A template's fields are not amendable — an
- * amount that has genuinely changed is a different arrangement, and ending the
- * old one leaves its confirmed history intact while the new one starts from the
- * month it actually applies to. One-off variance needs none of that: the amount
- * is adjustable at confirmation.
+ * Amount, category and anchor are amendable, at the Product Owner's
+ * instruction. This departs from the earlier rule that ending was the only
+ * edit, which held that a changed amount is a different arrangement. What that
+ * rule protected is kept by the server instead: confirmed transactions never
+ * change, and a moved anchor applies forward only, so every decision already
+ * made still lines up with the date it was made for.
  */
 function Recurring({ month }: { readonly month: string }) {
   const templates = useTemplates()
+  const categories = useCategories()
   const create = useCreateTemplate()
   const end = useEndTemplate()
 
+  // Every child, active or not: a template already filed against a category
+  // deactivated since still needs that category in its own edit list.
+  const options = useMemo<readonly CategoryOption[]>(
+    () =>
+      (categories.data ?? []).flatMap((parent) =>
+        parent.children.map((child) => ({
+          ...child,
+          parentId: parent.id,
+          parentName: parent.name,
+        })),
+      ),
+    [categories.data],
+  )
+
   const defaultCurrency = useDefaultCurrency()
   const todayKey = today()
+  const [showEnded, setShowEnded] = useState(false)
 
   const [form, setForm] = useState({
     name: '',
@@ -1690,6 +1720,16 @@ function Recurring({ month }: { readonly month: string }) {
   }
 
   const rows = templates.data ?? []
+
+  /**
+   * Ended templates hide behind a disclosure rather than vanishing, for the
+   * same reason closed accounts and sold-out holdings do: an ended template
+   * still has confirmed history in the ledger, and the screen has to admit
+   * where it went. `is_active` is read from the end date by the server, so a
+   * template ended on a date still to come stays running until that date.
+   */
+  const running = rows.filter((row) => row.is_active)
+  const ended = rows.filter((row) => !row.is_active)
 
   return (
     <div className="cashflow__entry">
@@ -1796,74 +1836,429 @@ function Recurring({ month }: { readonly month: string }) {
       </section>
 
       <section className="panel cashflow__list">
-        <h2 className="panel__heading">Recurring Items</h2>
+        <h2 className="panel__heading">Active Recurring Items</h2>
         <ErrorBanner error={end.error} />
 
-        {rows.length === 0 ? (
-          <p className="fx__note">Nothing recurring yet.</p>
+        {running.length === 0 ? (
+          <p className="fx__note">
+            {rows.length === 0 ? 'Nothing recurring yet.' : 'Nothing recurring is still running.'}
+          </p>
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Category</th>
-                <th>Subcategory</th>
-                <th>Frequency</th>
-                <th>Anchor</th>
-                <th>Ends</th>
-                <th className="numeric">Amount</th>
-                <th aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.name}</td>
-                  <td className="secondary">{row.parent}</td>
-                  <td>{row.category}</td>
-                  <td className="secondary">{row.frequency}</td>
-                  <td className="mono">{formatDate(row.anchor_date)}</td>
-                  {/* An ended template says so here rather than in a status
-                      column of its own: the date it stopped is the useful fact,
-                      and there is nothing to state while it is still running. */}
-                  <td className="mono secondary">
-                    {row.end_date ? formatDate(row.end_date) : '—'}
-                  </td>
-                  <td className="numeric">
-                    <span
-                      className={row.direction === 'Income' ? 'money money--rise' : 'money'}
-                    >
-                      {row.direction === 'Income' ? '+' : '−'}
-                      {formatDecimal(row.amount)}
-                      <span className="money__code">{row.currency}</span>
-                    </span>
-                  </td>
-                  <td>
-                    {/* Hard against the right edge, like the register's own
-                        actions column: the last thing on the row is the thing
-                        that acts on it. */}
-                    <div className="cashflow__actions">
-                      {row.is_active ? (
-                        <button
-                          type="button"
-                          className="link-button link-button--breach"
-                          onClick={() => endTemplate(row)}
-                          disabled={end.isPending}
-                        >
-                          End
-                        </button>
-                      ) : (
-                        <span className="secondary">ended</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <TemplateTable
+            rows={running}
+            options={options}
+            onEnd={endTemplate}
+            ending={end.isPending}
+          />
         )}
       </section>
+
+      {showEnded && (
+        <section className="panel cashflow__list">
+          <h2 className="panel__heading">Ended Recurring Items</h2>
+          <TemplateTable rows={ended} options={options} />
+        </section>
+      )}
+
+      {/* Silent when nothing has ended — an empty disclosure invites a click
+          that reveals nothing. */}
+      {ended.length > 0 && (
+        <p className="accounts__disclosure">
+          <button
+            type="button"
+            className="link-button accounts__disclosure-button"
+            onClick={() => setShowEnded(!showEnded)}
+          >
+            {icons[showEnded ? 'hide' : 'show']}
+            {showEnded ? 'Hide Ended Recurring Items' : 'Show Ended Recurring Items'}
+          </button>
+        </p>
+      )}
     </div>
+  )
+}
+
+/**
+ * Two tables stacked down the page only read as one register if their columns
+ * line up, and separate tables under auto layout each size to their own
+ * content. `.table--fixed` plus this colgroup pins the geometry, as it does on
+ * Accounts and Investments.
+ */
+function TemplateColumns() {
+  return (
+    <colgroup>
+      {/* The name takes the width: it is the only free-text column. Actions
+          is wide enough for its widest pair, Save and Cancel. */}
+      <col style={{ width: '18%' }} />
+      <col style={{ width: '12%' }} />
+      <col style={{ width: '15%' }} />
+      <col style={{ width: '11%' }} />
+      <col style={{ width: '13%' }} />
+      <col style={{ width: '10%' }} />
+      <col style={{ width: '12%' }} />
+      <col style={{ width: '9%' }} />
+    </colgroup>
+  )
+}
+
+const TEMPLATE_COLUMNS = 8
+
+/**
+ * One table for running and ended templates alike, so the columns of the ended
+ * table sit under those of the running one. Running rows are edited and ended;
+ * ended rows are restarted. `onEnd` is what tells the two apart.
+ */
+function TemplateTable({
+  rows,
+  options,
+  onEnd,
+  ending = false,
+}: {
+  readonly rows: readonly RecurringTemplate[]
+  readonly options: readonly CategoryOption[]
+  readonly onEnd?: (row: RecurringTemplate) => void
+  readonly ending?: boolean
+}) {
+  return (
+    <table className="table table--fixed">
+      <TemplateColumns />
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Subcategory</th>
+          <th>Frequency</th>
+          <th>Anchor</th>
+          <th>Ends</th>
+          <th className="numeric">Amount</th>
+          <th aria-label="Actions" />
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <TemplateRowView
+            key={row.id}
+            row={row}
+            options={options}
+            onEnd={onEnd}
+            ending={ending}
+          />
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** What the edit row holds. Only what changed is sent. */
+interface TemplateDraft {
+  amount: string
+  category_id: string
+  anchor_date: string
+}
+
+/** What the restart row holds: the rhythm the template resumes on. */
+interface RestartDraft {
+  anchor_date: string
+  frequency: Frequency
+}
+
+/** The day after a date key, in UTC as every date key here is. */
+function dayAfter(key: string): string {
+  const next = new Date(`${key}T00:00:00Z`)
+  next.setUTCDate(next.getUTCDate() + 1)
+  return next.toISOString().slice(0, 10)
+}
+
+/**
+ * One template, amendable in place while it runs and restartable once ended.
+ *
+ * Like a transaction row, the edit commits on Save rather than field by field,
+ * and Enter and Escape save and abandon. The anchor change is forward only and
+ * the server says so when it refuses one: an anchor that would replace an
+ * occurrence already confirmed or skipped is refused, and nothing is saved.
+ *
+ * A restart asks for the rhythm afresh — a new anchor and a cadence — rather
+ * than reopening the old one, because nothing ran in between and nothing is
+ * proposed for the gap. The anchor is seeded to today, or the day after the end
+ * if that is later, since the server requires it to come after the end.
+ */
+function TemplateRowView({
+  row,
+  options,
+  onEnd,
+  ending,
+}: {
+  readonly row: RecurringTemplate
+  readonly options: readonly CategoryOption[]
+  readonly onEnd: ((row: RecurringTemplate) => void) | undefined
+  readonly ending: boolean
+}) {
+  const update = useUpdateTemplate()
+  const restart = useRestartTemplate()
+  const [draft, setDraft] = useState<TemplateDraft | null>(null)
+  const [restartDraft, setRestartDraft] = useState<RestartDraft | null>(null)
+
+  const error = update.error ?? restart.error
+
+  function save() {
+    if (draft === null) return
+    if (!draft.amount.trim() || !draft.category_id || !draft.anchor_date) return
+
+    const changes: { amount?: string; category_id?: number; anchor_date?: string } = {}
+    if (draft.amount.trim() !== row.amount) changes.amount = draft.amount.trim()
+    if (Number(draft.category_id) !== row.category_id)
+      changes.category_id = Number(draft.category_id)
+    if (draft.anchor_date !== row.anchor_date) changes.anchor_date = draft.anchor_date
+
+    if (Object.keys(changes).length === 0) {
+      setDraft(null)
+      return
+    }
+    update.mutate({ id: row.id, ...changes }, { onSuccess: () => setDraft(null) })
+  }
+
+  function saveRestart() {
+    if (restartDraft === null || !restartDraft.anchor_date) return
+    restart.mutate(
+      { id: row.id, ...restartDraft },
+      { onSuccess: () => setRestartDraft(null) },
+    )
+  }
+
+  function cancel() {
+    setDraft(null)
+    setRestartDraft(null)
+    update.reset()
+    restart.reset()
+  }
+
+  /** Enter commits and Escape abandons, so a correction never needs the pointer. */
+  function keys(commit: () => void) {
+    return (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        commit()
+      }
+      if (event.key === 'Escape') cancel()
+    }
+  }
+
+  const amountCell = (
+    <td className="numeric">
+      <span className={row.direction === 'Income' ? 'money money--rise' : 'money'}>
+        {row.direction === 'Income' ? '+' : '−'}
+        {formatDecimal(row.amount)}
+        <span className="money__code">{row.currency}</span>
+      </span>
+    </td>
+  )
+
+  // -- Editing a running template -------------------------------------------
+  if (draft !== null) {
+    // A deactivated category still names this template, so it stays in the
+    // list. Dropping it would open the select on a blank, and saving would then
+    // refile a template the user only meant to reprice.
+    const selectable = options.filter(
+      (option) => option.is_active || option.id === row.category_id,
+    )
+    const chosen = selectable.find((option) => String(option.id) === draft.category_id)
+
+    return (
+      <>
+        <tr onKeyDown={keys(save)}>
+          <td>{row.name}</td>
+          {/* Follows the select beside it, as on a transaction row: a template
+              is filed against a subcategory, which already knows its parent. */}
+          <td className="secondary">{chosen?.parentName ?? row.parent}</td>
+          <td>
+            <select
+              className="input input--grid"
+              aria-label="Subcategory"
+              value={draft.category_id}
+              onChange={(event) => setDraft({ ...draft, category_id: event.target.value })}
+            >
+              {groupByParent(selectable).map(([parent, children]) => (
+                <optgroup key={parent} label={parent}>
+                  {children.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                      {option.is_active ? '' : ' (deactivated)'}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </td>
+          <td className="secondary">{row.frequency}</td>
+          <td>
+            <input
+              type="date"
+              className="input input--grid mono"
+              aria-label="Anchor"
+              value={draft.anchor_date}
+              onChange={(event) =>
+                event.target.value && setDraft({ ...draft, anchor_date: event.target.value })
+              }
+            />
+          </td>
+          <td className="mono secondary">
+            {row.end_date ? formatDate(row.end_date) : '—'}
+          </td>
+          <td>
+            <div className="cashflow__amount-cell">
+              <input
+                className="input input--grid mono numeric-input"
+                aria-label="Amount"
+                inputMode="decimal"
+                value={draft.amount}
+                onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
+              />
+              <span className="money__code">{row.currency}</span>
+            </div>
+          </td>
+          <td>
+            <div className="cashflow__actions">
+              <button
+                type="button"
+                className="link-button link-button--commit"
+                onClick={save}
+                disabled={update.isPending}
+              >
+                {update.isPending ? 'Saving…' : 'Save'}
+              </button>
+              <button type="button" className="link-button" onClick={cancel}>
+                Cancel
+              </button>
+            </div>
+          </td>
+        </tr>
+        <RowMessages advisories={[]} error={error} span={TEMPLATE_COLUMNS} />
+      </>
+    )
+  }
+
+  // -- Restarting an ended template -----------------------------------------
+  if (restartDraft !== null) {
+    return (
+      <>
+        <tr onKeyDown={keys(saveRestart)}>
+          <td>{row.name}</td>
+          <td className="secondary">{row.parent}</td>
+          <td>{row.category}</td>
+          <td>
+            <select
+              className="input input--grid"
+              aria-label="Frequency"
+              value={restartDraft.frequency}
+              onChange={(event) =>
+                setRestartDraft({ ...restartDraft, frequency: event.target.value as Frequency })
+              }
+            >
+              {FREQUENCIES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </td>
+          <td>
+            <input
+              type="date"
+              className="input input--grid mono"
+              aria-label="New anchor"
+              min={row.end_date ? dayAfter(row.end_date) : undefined}
+              value={restartDraft.anchor_date}
+              onChange={(event) =>
+                event.target.value &&
+                setRestartDraft({ ...restartDraft, anchor_date: event.target.value })
+              }
+            />
+          </td>
+          {/* Cleared by the restart. Shown until then, because it is what the
+              new anchor has to come after. */}
+          <td className="mono secondary">
+            {row.end_date ? formatDate(row.end_date) : '—'}
+          </td>
+          {amountCell}
+          <td>
+            <div className="cashflow__actions">
+              <button
+                type="button"
+                className="link-button link-button--commit"
+                onClick={saveRestart}
+                disabled={restart.isPending}
+              >
+                {restart.isPending ? 'Restarting…' : 'Restart'}
+              </button>
+              <button type="button" className="link-button" onClick={cancel}>
+                Cancel
+              </button>
+            </div>
+          </td>
+        </tr>
+        <RowMessages advisories={[]} error={error} span={TEMPLATE_COLUMNS} />
+      </>
+    )
+  }
+
+  // -- At rest ----------------------------------------------------------------
+  return (
+    <tr>
+      <td>{row.name}</td>
+      <td className="secondary">{row.parent}</td>
+      <td>{row.category}</td>
+      <td className="secondary">{row.frequency}</td>
+      <td className="mono">{formatDate(row.anchor_date)}</td>
+      {/* The date it stops is the useful fact, on a running template known to
+          be ending as much as on one that has ended. */}
+      <td className="mono secondary">{row.end_date ? formatDate(row.end_date) : '—'}</td>
+      {amountCell}
+      <td>
+        {/* Hard against the right edge, like the register's own actions
+            column: the last thing on the row is the thing that acts on it. */}
+        <div className="cashflow__actions">
+          {onEnd ? (
+            <>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() =>
+                  setDraft({
+                    amount: row.amount,
+                    category_id: String(row.category_id),
+                    anchor_date: row.anchor_date,
+                  })
+                }
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="link-button link-button--breach"
+                onClick={() => onEnd(row)}
+                disabled={ending}
+              >
+                End
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                const earliest = row.end_date ? dayAfter(row.end_date) : today()
+                setRestartDraft({
+                  anchor_date: today() > earliest ? today() : earliest,
+                  frequency: row.frequency,
+                })
+              }}
+            >
+              Restart
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
   )
 }
 

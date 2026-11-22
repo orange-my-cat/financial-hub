@@ -627,6 +627,73 @@ def test_ending_a_template_stops_proposals_and_keeps_the_row(signed_in):
     assert signed_in.get("/api/cashflow/recurring/proposals/?month=2026-07").json()["data"] == []
 
 
+def _rent_template() -> RecurringTemplate:
+    return RecurringTemplate.objects.create(
+        name="Rent",
+        amount=Decimal("2200"),
+        currency="AUD",
+        direction=Direction.EXPENSE,
+        category_id=child_id("Rent"),
+        frequency=Frequency.MONTHLY,
+        anchor_date=date(2026, 6, 5),
+    )
+
+
+def test_editing_a_template_returns_the_amended_row(signed_in):
+    template = _rent_template()
+
+    response = signed_in.patch(
+        f"/api/cashflow/recurring/{template.pk}/",
+        data={"amount": "2400.00", "category_id": child_id("Groceries")},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    row = response.json()["data"]
+    assert row["amount"] == "2400.00"
+    assert row["category"] == "Groceries"
+
+
+def test_moving_an_anchor_behind_a_decision_is_refused(signed_in):
+    template = _rent_template()
+    signed_in.post(
+        "/api/cashflow/recurring/confirm/",
+        data={"template_id": template.pk, "occurrence": "2026-07-05"},
+        content_type="application/json",
+    )
+
+    response = signed_in.patch(
+        f"/api/cashflow/recurring/{template.pk}/",
+        data={"anchor_date": "2026-07-01"},
+        content_type="application/json",
+    )
+
+    assert response.status_code in (400, 409, 422)
+    assert response.json()["error"]["code"] == "anchor_before_decided_occurrence"
+
+
+def test_restarting_an_ended_template(signed_in):
+    template = _rent_template()
+    signed_in.post(
+        f"/api/cashflow/recurring/{template.pk}/end/",
+        data={"end_date": "2026-06-30"},
+        content_type="application/json",
+    )
+
+    response = signed_in.post(
+        f"/api/cashflow/recurring/{template.pk}/restart/",
+        data={"anchor_date": "2026-09-03", "frequency": Frequency.FORTNIGHTLY},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    row = response.json()["data"]
+    assert row["is_active"] is True
+    assert row["end_date"] is None
+    assert row["frequency"] == Frequency.FORTNIGHTLY
+    assert row["anchor_date"] == "2026-09-03"
+
+
 def test_ending_a_template_that_does_not_exist(signed_in):
     response = signed_in.post(
         "/api/cashflow/recurring/9999/end/", data={}, content_type="application/json"
