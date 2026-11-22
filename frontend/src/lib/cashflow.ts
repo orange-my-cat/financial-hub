@@ -473,8 +473,8 @@ export function useEndTemplate() {
 
 /**
  * Amend what a running template proposes. Confirmed transactions never change;
- * a moved anchor applies forward only, and the server refuses one that would
- * replace an occurrence already decided.
+ * a change of anchor or frequency applies forward only, and the server refuses
+ * one whose anchor falls on or before an occurrence already decided.
  */
 export function useUpdateTemplate() {
   const invalidate = useCashflowInvalidation()
@@ -484,9 +484,11 @@ export function useUpdateTemplate() {
       ...changes
     }: {
       id: number
+      name?: string
       amount?: string
       category_id?: number
       anchor_date?: string
+      frequency?: Frequency
     }) => api.patch<{ data: RecurringTemplate }>(`/cashflow/recurring/${id}/`, changes),
     onSuccess: invalidate,
   })

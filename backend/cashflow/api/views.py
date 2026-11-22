@@ -100,12 +100,15 @@ class TemplateSerializer(serializers.Serializer):
 
 
 class TemplateUpdateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, required=False)
     amount = serializers.DecimalField(
         max_digits=19, decimal_places=4, min_value=Decimal("0.0001"), required=False
     )
     category_id = serializers.IntegerField(required=False)
-    #: Moves forward only — the old rhythm keeps every date before it.
+    #: Anchor and frequency are the rhythm. A change to either moves forward
+    #: only — the old rhythm keeps every date before the anchor.
     anchor_date = serializers.DateField(required=False)
+    frequency = serializers.ChoiceField(choices=Frequency.choices, required=False)
 
 
 class RestartTemplateSerializer(serializers.Serializer):

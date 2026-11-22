@@ -615,51 +615,157 @@ def test_a_template_cannot_be_refiled_onto_a_parent(rent_template):
 
 
 def test_moving_the_anchor_applies_forward_only(rent_template):
-    """Rent moved from the 5th to the 10th in August. May to July stay on the 5th."""
+    """Rent moved from the 5th to the 10th from September. May to August stay on the 5th."""
     recurring.confirm(rent_template.pk, date(2026, 5, 5))
     recurring.dismiss(rent_template.pk, date(2026, 6, 5))
 
-    recurring.update_template(rent_template, anchor_date=date(2026, 8, 10), today=date(2026, 7, 20))
+    recurring.update_template(rent_template, anchor_date=date(2026, 9, 10), today=date(2026, 7, 20))
 
-    assert _statuses("2026-09") == [
+    assert _statuses("2026-10") == [
         ("2026-05-05", "Confirmed"),
         ("2026-06-05", "Skipped"),
         ("2026-07-05", "Outstanding"),
-        ("2026-08-10", "Outstanding"),
+        ("2026-08-05", "Outstanding"),
         ("2026-09-10", "Outstanding"),
+        ("2026-10-10", "Outstanding"),
     ]
 
 
-def test_moving_the_anchor_weekly_replaces_that_weeks_occurrence(db):
-    """Thursday pay moving to Friday 14 Aug: that week is paid once, on the Friday."""
+def test_a_decided_date_in_the_anchors_month_is_kept_not_replaced(rent_template):
+    """5 Aug was paid. Moving to the 10th from 10 Aug leaves it, and proposes 10 Aug too."""
+    recurring.confirm(rent_template.pk, date(2026, 8, 5))
+
+    recurring.update_template(rent_template, anchor_date=date(2026, 8, 10), today=date(2026, 8, 6))
+
+    assert [d.isoformat() for d in recurring.occurrences(rent_template, "2026-08")][-2:] == [
+        "2026-08-05",
+        "2026-08-10",
+    ]
+
+
+def test_changing_frequency_with_a_new_anchor_applies_forward_only(rent_template):
+    recurring.confirm(rent_template.pk, date(2026, 5, 5))
+
+    recurring.update_template(
+        rent_template,
+        frequency=Frequency.FORTNIGHTLY,
+        anchor_date=date(2026, 9, 4),
+        today=date(2026, 8, 20),
+    )
+
+    rent_template.refresh_from_db()
+    assert rent_template.frequency == Frequency.FORTNIGHTLY
+    assert [d.isoformat() for d in recurring.occurrences(rent_template, "2026-09")] == [
+        "2026-05-05",
+        "2026-06-05",
+        "2026-07-05",
+        "2026-08-05",
+        "2026-09-04",
+        "2026-09-18",
+    ]
+
+
+def test_changing_frequency_alone_on_an_unused_template_rederives_it(rent_template):
+    recurring.update_template(rent_template, frequency=Frequency.WEEKLY, today=date(2026, 5, 1))
+
+    assert not rent_template.rhythms.exists()
+    assert [d.isoformat() for d in recurring.occurrences(rent_template, "2026-05")] == [
+        "2026-05-05",
+        "2026-05-12",
+        "2026-05-19",
+        "2026-05-26",
+    ]
+
+
+def test_changing_frequency_alone_after_a_decision_asks_for_a_later_anchor(rent_template):
+    recurring.confirm(rent_template.pk, date(2026, 6, 5))
+
+    with pytest.raises(BusinessRuleError, match="anchor must come after 05 Jun 2026"):
+        recurring.update_template(rent_template, frequency=Frequency.WEEKLY)
+
+    rent_template.refresh_from_db()
+    assert rent_template.frequency == Frequency.MONTHLY
+
+
+def test_renaming_a_template(rent_template):
+    recurring.update_template(rent_template, name="  Flat rent ")
+
+    rent_template.refresh_from_db()
+    assert rent_template.name == "Flat rent"
+
+
+def test_a_template_cannot_be_renamed_to_nothing(rent_template):
+    with pytest.raises(BusinessRuleError, match="needs a name"):
+        recurring.update_template(rent_template, name="   ")
+
+
+def test_moving_the_anchor_after_the_last_confirmed_date_is_allowed(db):
+    """Monthly on the 21st, confirmed through 21 Nov, moving to the 5th from December."""
+    bill = RecurringTemplate.objects.create(
+        name="Bill",
+        amount=Decimal("80.00"),
+        currency="AUD",
+        direction=Direction.EXPENSE,
+        category=child("Rent"),
+        frequency=Frequency.MONTHLY,
+        anchor_date=date(2026, 8, 21),
+    )
+    for month in (8, 9, 10, 11):
+        recurring.confirm(bill.pk, date(2026, month, 21))
+
+    recurring.update_template(bill, anchor_date=date(2026, 12, 5), today=date(2026, 11, 22))
+
+    assert _statuses("2027-01") == [
+        ("2026-08-21", "Confirmed"),
+        ("2026-09-21", "Confirmed"),
+        ("2026-10-21", "Confirmed"),
+        ("2026-11-21", "Confirmed"),
+        ("2026-12-05", "Outstanding"),
+        ("2027-01-05", "Outstanding"),
+    ]
+
+
+def test_moving_weekly_pay_a_day_later_replaces_that_weeks_thursday(db):
+    """Thursday pay moving to Fridays from 21 Aug: that week is paid once, on the 21st."""
     salary = _salary(Frequency.WEEKLY, date(2026, 7, 30))
 
-    recurring.update_template(salary, anchor_date=date(2026, 8, 14), today=date(2026, 8, 1))
+    recurring.update_template(salary, anchor_date=date(2026, 8, 21), today=date(2026, 8, 1))
 
     assert [d.isoformat() for d in recurring.occurrences(salary, "2026-08")] == [
         "2026-07-30",
         "2026-08-06",
-        "2026-08-14",
+        "2026-08-13",
         "2026-08-21",
         "2026-08-28",
     ]
 
 
-def test_the_anchor_cannot_replace_a_decided_occurrence(rent_template):
-    """5 Aug is confirmed; an anchor of 10 Aug would replace it and orphan it."""
+def test_moving_weekly_pay_a_day_earlier_keeps_the_thursday_before(db):
+    """Thursday pay moving to Wednesdays from 19 Aug: 13 Aug was a week earlier."""
+    salary = _salary(Frequency.WEEKLY, date(2026, 7, 30))
+
+    recurring.update_template(salary, anchor_date=date(2026, 8, 19), today=date(2026, 8, 1))
+
+    assert [d.isoformat() for d in recurring.occurrences(salary, "2026-08")] == [
+        "2026-07-30",
+        "2026-08-06",
+        "2026-08-13",
+        "2026-08-19",
+        "2026-08-26",
+    ]
+
+
+def test_the_anchor_cannot_land_on_a_decided_occurrence(rent_template):
+    """5 Aug is confirmed on the old rhythm; an anchor on it would orphan it."""
     recurring.confirm(rent_template.pk, date(2026, 8, 5))
 
     with pytest.raises(BusinessRuleError, match="05 Aug 2026"):
         recurring.update_template(
-            rent_template, anchor_date=date(2026, 8, 10), today=date(2026, 8, 6)
+            rent_template, anchor_date=date(2026, 8, 5), today=date(2026, 8, 6)
         )
 
-    # A full period later is fine: August stays on the 5th.
-    recurring.update_template(rent_template, anchor_date=date(2026, 9, 10), today=date(2026, 8, 6))
-    assert [d.isoformat() for d in recurring.occurrences(rent_template, "2026-09")][-2:] == [
-        "2026-08-05",
-        "2026-09-10",
-    ]
+    # The day after is fine.
+    recurring.update_template(rent_template, anchor_date=date(2026, 8, 6), today=date(2026, 8, 6))
 
 
 def test_moving_the_anchor_earlier_before_anything_falls_keeps_no_history(rent_template):

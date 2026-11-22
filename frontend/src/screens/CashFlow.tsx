@@ -1951,9 +1951,13 @@ function TemplateTable({
 
 /** What the edit row holds. Only what changed is sent. */
 interface TemplateDraft {
-  amount: string
+  name: string
+  /** Narrows the subcategory select. Never sent: the subcategory knows its parent. */
+  parent_id: string
   category_id: string
+  frequency: Frequency
   anchor_date: string
+  amount: string
 }
 
 /** What the restart row holds: the rhythm the template resumes on. */
@@ -1973,9 +1977,10 @@ function dayAfter(key: string): string {
  * One template, amendable in place while it runs and restartable once ended.
  *
  * Like a transaction row, the edit commits on Save rather than field by field,
- * and Enter and Escape save and abandon. The anchor change is forward only and
- * the server says so when it refuses one: an anchor that would replace an
- * occurrence already confirmed or skipped is refused, and nothing is saved.
+ * and Enter and Escape save and abandon. Anchor and frequency are the rhythm,
+ * and a change to either is forward only; the server says so when it refuses
+ * one whose anchor falls on or before an occurrence already decided, and
+ * nothing is saved.
  *
  * A restart asks for the rhythm afresh — a new anchor and a cadence — rather
  * than reopening the old one, because nothing ran in between and nothing is
@@ -2000,14 +2005,28 @@ function TemplateRowView({
 
   const error = update.error ?? restart.error
 
-  function save() {
-    if (draft === null) return
-    if (!draft.amount.trim() || !draft.category_id || !draft.anchor_date) return
+  const complete =
+    draft !== null &&
+    draft.name.trim() !== '' &&
+    draft.amount.trim() !== '' &&
+    draft.category_id !== '' &&
+    draft.anchor_date !== ''
 
-    const changes: { amount?: string; category_id?: number; anchor_date?: string } = {}
+  function save() {
+    if (draft === null || !complete) return
+
+    const changes: {
+      name?: string
+      amount?: string
+      category_id?: number
+      frequency?: Frequency
+      anchor_date?: string
+    } = {}
+    if (draft.name.trim() !== row.name) changes.name = draft.name.trim()
     if (draft.amount.trim() !== row.amount) changes.amount = draft.amount.trim()
     if (Number(draft.category_id) !== row.category_id)
       changes.category_id = Number(draft.category_id)
+    if (draft.frequency !== row.frequency) changes.frequency = draft.frequency
     if (draft.anchor_date !== row.anchor_date) changes.anchor_date = draft.anchor_date
 
     if (Object.keys(changes).length === 0) {
@@ -2061,15 +2080,42 @@ function TemplateRowView({
     const selectable = options.filter(
       (option) => option.is_active || option.id === row.category_id,
     )
-    const chosen = selectable.find((option) => String(option.id) === draft.category_id)
+    // Parents with something to file against, in the order the API sent them.
+    const parents = [
+      ...new Map(selectable.map((option) => [option.parentId, option.parentName])),
+    ]
+    const children = selectable.filter((option) => String(option.parentId) === draft.parent_id)
 
     return (
       <>
         <tr onKeyDown={keys(save)}>
-          <td>{row.name}</td>
-          {/* Follows the select beside it, as on a transaction row: a template
-              is filed against a subcategory, which already knows its parent. */}
-          <td className="secondary">{chosen?.parentName ?? row.parent}</td>
+          <td>
+            <input
+              className="input input--grid"
+              aria-label="Name"
+              value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+            />
+          </td>
+          <td>
+            <select
+              className="input input--grid"
+              aria-label="Category"
+              value={draft.parent_id}
+              // Changing the parent abandons the subcategory, as on the add form:
+              // a child kept under a parent that does not own it would disagree
+              // with what gets saved. Save waits until one is chosen.
+              onChange={(event) =>
+                setDraft({ ...draft, parent_id: event.target.value, category_id: '' })
+              }
+            >
+              {parents.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </td>
           <td>
             <select
               className="input input--grid"
@@ -2077,19 +2123,31 @@ function TemplateRowView({
               value={draft.category_id}
               onChange={(event) => setDraft({ ...draft, category_id: event.target.value })}
             >
-              {groupByParent(selectable).map(([parent, children]) => (
-                <optgroup key={parent} label={parent}>
-                  {children.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                      {option.is_active ? '' : ' (deactivated)'}
-                    </option>
-                  ))}
-                </optgroup>
+              <option value="">Choose…</option>
+              {children.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                  {option.is_active ? '' : ' (deactivated)'}
+                </option>
               ))}
             </select>
           </td>
-          <td className="secondary">{row.frequency}</td>
+          <td>
+            <select
+              className="input input--grid"
+              aria-label="Frequency"
+              value={draft.frequency}
+              onChange={(event) =>
+                setDraft({ ...draft, frequency: event.target.value as Frequency })
+              }
+            >
+              {FREQUENCIES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </td>
           <td>
             <input
               type="date"
@@ -2122,7 +2180,7 @@ function TemplateRowView({
                 type="button"
                 className="link-button link-button--commit"
                 onClick={save}
-                disabled={update.isPending}
+                disabled={update.isPending || !complete}
               >
                 {update.isPending ? 'Saving…' : 'Save'}
               </button>
@@ -2224,9 +2282,14 @@ function TemplateRowView({
                 className="link-button"
                 onClick={() =>
                   setDraft({
-                    amount: row.amount,
+                    name: row.name,
+                    parent_id: String(
+                      options.find((option) => option.id === row.category_id)?.parentId ?? '',
+                    ),
                     category_id: String(row.category_id),
+                    frequency: row.frequency,
                     anchor_date: row.anchor_date,
+                    amount: row.amount,
                   })
                 }
               >

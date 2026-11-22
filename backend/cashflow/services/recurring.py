@@ -396,10 +396,50 @@ def _last_decided_on_or_after(template: RecurringTemplate, moment: date) -> date
     return max((d for d in (confirmed, skipped) if d is not None), default=None)
 
 
-def _start_new_rhythm(template: RecurringTemplate, anchor: date, *, closes_on: date) -> None:
-    """Close the current rhythm on `closes_on`, so `anchor` can start the next.
+def _is_decided(template: RecurringTemplate, moment: date) -> bool:
+    return (
+        Transaction.objects.filter(
+            recurring_template=template, recurring_occurrence=moment
+        ).exists()
+        or RecurringDismissal.objects.filter(template=template, occurrence=moment).exists()
+    )
 
-    Refused where the move would orphan history. A decision after `closes_on`
+
+def _replaced_by(template: RecurringTemplate, anchor: date) -> date | None:
+    """The old rhythm's date that a new anchor stands in for, if any.
+
+    Only one candidate: the old rhythm's last date before the new anchor, and
+    only where it falls in the same period as the anchor — the same calendar
+    month for a monthly item, the nearer half of the step for a weekly or
+    fortnightly one. Rent moved from the 5th to 10 Sep is due once in
+    September; a 21st-of-the-month item moved to 5 Dec still fell due on 21
+    Nov, which is in another month.
+
+    A date already confirmed or skipped is never replaced. It happened, and the
+    period simply holds a second date for the user to decide.
+    """
+    before = _walk(template.anchor_date, template.frequency, anchor - timedelta(days=1))
+    if not before:
+        return None
+    last = before[-1]
+
+    step = _STEP_DAYS.get(template.frequency)
+    same_period = (
+        (last.year, last.month) == (anchor.year, anchor.month)
+        if step is None
+        else (anchor - last).days * 2 < step
+    )
+    if not same_period or _is_decided(template, last):
+        return None
+    return last
+
+
+def _start_new_rhythm(
+    template: RecurringTemplate, anchor: date, frequency: str, *, closes_on: date
+) -> None:
+    """Close the current rhythm on `closes_on`, so the next starts at `anchor`.
+
+    Refused where the change would orphan history. A decision after `closes_on`
     was matched to a date the old rhythm no longer produces, and the new rhythm
     need not fall on it; and a new anchor inside an earlier closed rhythm would
     run two rhythms over the same days.
@@ -407,9 +447,11 @@ def _start_new_rhythm(template: RecurringTemplate, anchor: date, *, closes_on: d
     decided = _last_decided_on_or_after(template, closes_on + timedelta(days=1))
     if decided is not None:
         raise BusinessRuleError(
-            f"{template.name} already has a decision for {decided:%d %b %Y}, which "
-            f"the new anchor would replace. Choose an anchor a full period after "
-            f"it, or undo that decision first. Nothing was saved.",
+            f"{template.name} was already confirmed or skipped for "
+            f"{decided:%d %b %Y} on its current rhythm. A change of anchor or "
+            f"frequency applies from the anchor onward, so the anchor must come "
+            f"after {decided:%d %b %Y} — or undo that decision first. Nothing was "
+            f"saved.",
             code="anchor_before_decided_occurrence",
             field="anchor_date",
         )
@@ -433,30 +475,45 @@ def _start_new_rhythm(template: RecurringTemplate, anchor: date, *, closes_on: d
             end_date=closes_on,
         )
     template.anchor_date = anchor
+    template.frequency = frequency
 
 
 @transaction.atomic
 def update_template(
     template: RecurringTemplate,
     *,
+    name: str | None = None,
     amount: Decimal | None = None,
     category_id: int | None = None,
     anchor_date: date | None = None,
+    frequency: str | None = None,
     today: date | None = None,
 ) -> RecurringTemplate:
     """Amend what a running template proposes. Confirmed history never changes.
 
-    Amount and category apply to every occurrence still undecided, past ones
-    included — those were never transactions, and confirming one now files it
-    as the template now says. A confirmed occurrence is its own transaction and
-    is untouched (`confirm` already made it independent).
+    Name, amount and category apply to every occurrence still undecided, past
+    ones included — those were never transactions, and confirming one now files
+    it as the template now says. A confirmed occurrence is its own transaction
+    and is untouched (`confirm` already made it independent).
 
-    The anchor moves **forward only**: the old rhythm keeps its dates and the
-    new one starts at the new anchor. See `RecurringRhythm`. The new anchor
-    takes the place of the old rhythm's last date before it — rent moved from
-    the 5th to the 10th "from August" is due on 10 Aug, not on 5 Aug *and* 10
-    Aug — so the old rhythm closes the day before that date.
+    Anchor and frequency together are the rhythm, and a change to either moves
+    it **forward only**: the old rhythm keeps every date before the anchor, and
+    the new one starts there (see `RecurringRhythm`). A frequency changed with
+    the anchor left alone starts the new rhythm from the current anchor, which
+    is refused once anything on it has been decided — choose a later anchor.
+    The one old date in the anchor's own period is replaced while it is still
+    undecided (see `_replaced_by`).
     """
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise BusinessRuleError(
+                "A recurring item needs a name. Nothing was saved.",
+                code="name_required",
+                field="name",
+            )
+        template.name = name
+
     if amount is not None:
         template.amount = amount
 
@@ -467,26 +524,26 @@ def update_template(
         # made. A template refiled from rent to salary is now income.
         template.direction = category.direction
 
-    if anchor_date is not None and anchor_date != template.anchor_date:
+    new_anchor = anchor_date or template.anchor_date
+    new_frequency = frequency or template.frequency
+    if new_anchor != template.anchor_date or new_frequency != template.frequency:
         if has_ended(template, today=today):
             raise BusinessRuleError(
-                f"{template.name} has ended. Restart it on a new anchor instead. "
-                f"Nothing was saved.",
+                f"{template.name} has ended. Restart it on a new anchor and "
+                f"frequency instead. Nothing was saved.",
                 code="template_ended",
                 field="anchor_date",
             )
-        if template.end_date is not None and anchor_date > template.end_date:
+        if template.end_date is not None and new_anchor > template.end_date:
             raise BusinessRuleError(
                 f"{template.name} ends on {template.end_date:%d %b %Y}, before that "
                 f"anchor would fall. Nothing was saved.",
                 code="anchor_after_end",
                 field="anchor_date",
             )
-        before = _walk(
-            template.anchor_date, template.frequency, anchor_date - timedelta(days=1)
-        )
-        replaced = before[-1] if before else anchor_date
-        _start_new_rhythm(template, anchor_date, closes_on=replaced - timedelta(days=1))
+        replaced = _replaced_by(template, new_anchor)
+        closes_on = (replaced or new_anchor) - timedelta(days=1)
+        _start_new_rhythm(template, new_anchor, new_frequency, closes_on=closes_on)
 
     template.save()
     return template
@@ -520,8 +577,7 @@ def restart_template(
             field="anchor_date",
         )
 
-    _start_new_rhythm(template, anchor_date, closes_on=template.end_date)
-    template.frequency = frequency
+    _start_new_rhythm(template, anchor_date, frequency, closes_on=template.end_date)
     template.end_date = None
     template.is_active = True
     template.save()
